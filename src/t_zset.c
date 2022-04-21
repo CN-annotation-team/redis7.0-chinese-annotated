@@ -3032,6 +3032,7 @@ static void zrangeResultHandlerDestinationKeySet (zrange_result_handler *handler
 }
 
 /* This command implements ZRANGE, ZREVRANGE. */
+/* 该函数是zrange,zevrange的实现 */
 void genericZrangebyrankCommand(zrange_result_handler *handler,
     robj *zobj, long start, long end, int withscores, int reverse) {
 
@@ -3041,6 +3042,7 @@ void genericZrangebyrankCommand(zrange_result_handler *handler,
     size_t result_cardinality;
 
     /* Sanitize indexes. */
+    /* 令llen等于zobj的长度，并转换输入为负数的start和end，以及start小于0强制等于0 */
     llen = zsetLength(zobj);
     if (start < 0) start = llen+start;
     if (end < 0) end = llen+end;
@@ -3049,6 +3051,7 @@ void genericZrangebyrankCommand(zrange_result_handler *handler,
 
     /* Invariant: start >= 0, so this test will be true when end < 0.
      * The range is empty when start > end or start >= length. */
+    /* 起点大于终点或起点大于总长度则范围内没有成员，在这里返回 */
     if (start > end || start >= llen) {
         handler->beginResultEmission(handler, 0);
         handler->finalizeResultEmission(handler, 0);
@@ -3067,13 +3070,14 @@ void genericZrangebyrankCommand(zrange_result_handler *handler,
         long long vlong;
         double score = 0.0;
 
+        /* 定位start的位置，eptr指向start节点，同时也是指向了成员 */
         if (reverse)
             eptr = lpSeek(zl,-2-(2*start));
         else
             eptr = lpSeek(zl,2*start);
 
         serverAssertWithInfo(c,zobj,eptr != NULL);
-        sptr = lpNext(zl,eptr);
+        sptr = lpNext(zl,eptr); /* sptr指向eptr的下一个位置，也就是eptr所指向成员的score */
 
         while (rangelen--) {
             serverAssertWithInfo(c,zobj,eptr != NULL && sptr != NULL);
@@ -3082,12 +3086,14 @@ void genericZrangebyrankCommand(zrange_result_handler *handler,
             if (withscores) /* don't bother to extract the score if it's gonna be ignored. */
                 score = zzlGetScore(sptr);
 
+            /* 如果vstr == NULL，说明该成员的保存方式是整数，把vlong加入handler，否则加入vstr */
             if (vstr == NULL) {
                 handler->emitResultFromLongLong(handler, vlong, score);
             } else {
                 handler->emitResultFromCBuffer(handler, vstr, vlen, score);
             }
 
+            /* reverse则向前定位，否则向后定位 */
             if (reverse)
                 zzlPrev(zl,&eptr,&sptr);
             else
@@ -3100,6 +3106,7 @@ void genericZrangebyrankCommand(zrange_result_handler *handler,
         zskiplistNode *ln;
 
         /* Check if starting point is trivial, before doing log(N) lookup. */
+        /* 判断方向，并在跳表中找到范围的第一个节点 */
         if (reverse) {
             ln = zsl->tail;
             if (start > 0)
@@ -3110,6 +3117,7 @@ void genericZrangebyrankCommand(zrange_result_handler *handler,
                 ln = zslGetElementByRank(zsl,start+1);
         }
 
+        /* 循环将rangelen个成员加入handler */
         while(rangelen--) {
             serverAssertWithInfo(c,zobj,ln != NULL);
             sds ele = ln->ele;
@@ -3120,6 +3128,7 @@ void genericZrangebyrankCommand(zrange_result_handler *handler,
         serverPanic("Unknown sorted set encoding");
     }
 
+    /* 将范围内成员数加入到handler中 */
     handler->finalizeResultEmission(handler, result_cardinality);
 }
 
@@ -3565,6 +3574,16 @@ void zrevrangebylexCommand(client *c) {
  * The argc_start points to the src key argument, so following syntax is like:
  * <src> <min> <max> [BYSCORE | BYLEX] [REV] [WITHSCORES] [LIMIT offset count]
  */
+
+/*
+* 这个函数处理ZRANGE和ZRANGESTORE，以及不推荐使用的Z[REV]RANGE[BYPOS|BYLEX]命令
+* 
+* 对于简单的ZRANGE和ZRANGESTORE可以在rangetype和direction参数上使用_AUTO，
+* 对于其他的命令需要明确的参数值
+* 
+* argc_start为客户端输入的命令中src key的下标，用于定位key的位置，
+* 这是因为不同命令的输入顺序可能是不同的，比如zrangestore dst {src}和zrange {key}
+*/
 void zrangeGenericCommand(zrange_result_handler *handler, int argc_start, int store,
                           zrange_type rangetype, zrange_direction direction)
 {
@@ -3577,6 +3596,7 @@ void zrangeGenericCommand(zrange_result_handler *handler, int argc_start, int st
     int maxidx = argc_start + 2;
 
     /* Options common to all */
+    /* 与所有的可选参数相关的变量 */
     long opt_start = 0;
     long opt_end = 0;
     int opt_withscores = 0;
@@ -3584,21 +3604,30 @@ void zrangeGenericCommand(zrange_result_handler *handler, int argc_start, int st
     long opt_limit = -1;
 
     /* Step 1: Skip the <src> <min> <max> args and parse remaining optional arguments. */
+    /* 第一步： 跳过<src> <min> <max>，解析之后的可选参数 */
     for (int j=argc_start + 3; j < c->argc; j++) {
-        int leftargs = c->argc-j-1;
+        int leftargs = c->argc-j-1; /* 剩余未解析参数个数 */
+
+        /* strcasecmp用于比较两个字符串，两个字符串相等时返回0，这里的if条件为“非zrangestore命令且解析到withscores” */
         if (!store && !strcasecmp(c->argv[j]->ptr,"withscores")) {
             opt_withscores = 1;
+
+          /* 条件：解析到limit且剩余未解析参数个数 >= 2（因为limit至少要跟两个参数offset和count）*/
         } else if (!strcasecmp(c->argv[j]->ptr,"limit") && leftargs >= 2) {
             if ((getLongFromObjectOrReply(c, c->argv[j+1], &opt_offset, NULL) != C_OK) ||
                 (getLongFromObjectOrReply(c, c->argv[j+2], &opt_limit, NULL) != C_OK))
             {
                 return;
             }
-            j += 2;
+            j += 2; /* 跳过offset和count因为上面if里的两个getLongFromObjectOrReply已经解析过 */
+
+          /* 条件：使用zrange命令解析到rev参数，则更改方向相关变量direction为ZRANGE_DIRECTION_REVERSE */
         } else if (direction == ZRANGE_DIRECTION_AUTO &&
                    !strcasecmp(c->argv[j]->ptr,"rev"))
         {
             direction = ZRANGE_DIRECTION_REVERSE;
+
+          /* 条件：使用zrange命令解析到bylex参数，则更改与范围类型相关变量rangetype为ZRANGE_LEX ，下方类似*/
         } else if (rangetype == ZRANGE_AUTO &&
                    !strcasecmp(c->argv[j]->ptr,"bylex"))
         {
@@ -3614,12 +3643,14 @@ void zrangeGenericCommand(zrange_result_handler *handler, int argc_start, int st
     }
 
     /* Use defaults if not overridden by arguments. */
+    /* 如果代码执行到这direction或rangetype还是AUTO，则使用默认值 */
     if (direction == ZRANGE_DIRECTION_AUTO)
         direction = ZRANGE_DIRECTION_FORWARD;
     if (rangetype == ZRANGE_AUTO)
         rangetype = ZRANGE_RANK;
 
     /* Check for conflicting arguments. */
+    /* 检查是否有冲突的参数（算语法错误），具体什么错误请看下方报错返回的字符串信息就可以理解了 */
     if (opt_limit != -1 && rangetype == ZRANGE_RANK) {
         addReplyError(c,"syntax error, LIMIT is only supported in combination with either BYSCORE or BYLEX");
         return;
@@ -3629,6 +3660,7 @@ void zrangeGenericCommand(zrange_result_handler *handler, int argc_start, int st
         return;
     }
 
+    /* 当direction是ZRANGE_DIRECTION_REVERSE，将原来输入参数的min和max做个交换 */
     if (direction == ZRANGE_DIRECTION_REVERSE &&
         ((ZRANGE_SCORE == rangetype) || (ZRANGE_LEX == rangetype)))
     {
@@ -3639,6 +3671,7 @@ void zrangeGenericCommand(zrange_result_handler *handler, int argc_start, int st
     }
 
     /* Step 2: Parse the range. */
+    /* 第二步：解析范围类型，以下会根据你输入的命令参数分AUTO/RANK,SCORE,LEX三种情况来解析入参min,max */
     switch (rangetype) {
     case ZRANGE_AUTO:
     case ZRANGE_RANK:
@@ -3672,7 +3705,10 @@ void zrangeGenericCommand(zrange_result_handler *handler, int argc_start, int st
     }
 
     /* Step 3: Lookup the key and get the range. */
+    /* 第三步： 查找key */
     zobj = lookupKeyRead(c->db, key);
+
+    /* key不存在 */
     if (zobj == NULL) {
         if (store) {
             handler->beginResultEmission(handler, -1);
@@ -3683,9 +3719,11 @@ void zrangeGenericCommand(zrange_result_handler *handler, int argc_start, int st
         goto cleanup;
     }
 
+    /* key存在，但类型不为ZSET */
     if (checkType(c,zobj,OBJ_ZSET)) goto cleanup;
 
     /* Step 4: Pass this to the command-specific handler. */
+    /* 第四步：根据范围类型，调用专门的处理函数进行处理 */
     switch (rangetype) {
     case ZRANGE_AUTO:
     case ZRANGE_RANK:
@@ -3707,7 +3745,9 @@ void zrangeGenericCommand(zrange_result_handler *handler, int argc_start, int st
     /* Instead of returning here, we'll just fall-through the clean-up. */
 
 cleanup:
-
+    
+    /* 如果范围类型为ZRANGE_LEX，则需要清理内存，
+     * 因为zlexrangespec结构体中有两个sds成员，它们创建时是动态分配 */
     if (rangetype == ZRANGE_LEX) {
         zslFreeLexRange(&lexrange);
     }
