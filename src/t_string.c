@@ -951,7 +951,7 @@ void lcsCommand(client *c) {
             "The specified keys must contain string values");
         /* Don't cleanup the objects, we need to do that
          * only after calling getDecodedObject(). */
-        /* 不要清理这些对象，我们只在调用 getDecodedObject() 之后才用做这种事 */
+        /* 不要清理这些对象，我们只在调用 getDecodedObject() 之后才用做清理 */
         obja = NULL;
         objb = NULL;
         goto cleanup;
@@ -1012,8 +1012,8 @@ void lcsCommand(client *c) {
      * LCS A0..i-1, B0..j-1. Note that we have a linear array here, so
      * we index it as LCS[j+(blen+1)*j] */
 
-    /* 设置一个uint32_t数组，在LCS [i,j] 存储 LCS A0...i-1, B0...j-1 的长度
-     * 请注意,我们这里有一个线性数组,所以我们的索引是LCS[j+(blen+1)*j] */
+    /* 设置一个 uint32_t 数组，在LCS [i,j] 存储 LCS A0...i-1, B0...j-1 的长度
+     * 请注意,我们这里有一个线性数组,所以我们的索引是 LCS[j+(blen+1)*i] */
     #define LCS(A,B) lcs[(B)+((A)*(blen+1))]
 
     /* Try to allocate the LCS table, and abort on overflow or insufficient memory. */
@@ -1210,3 +1210,4 @@ cleanup:
  * 所以Redis内存维护一个0到9999的整数对象池,用于节约内存 
  * 当然redis不止有0到9999这些整数共享对象
  * redis维护的共享对象在server.h文件中的sharedObjectsStruct定义中可以查看 */
+
