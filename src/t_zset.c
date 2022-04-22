@@ -3619,7 +3619,7 @@ void zrangeGenericCommand(zrange_result_handler *handler, int argc_start, int st
             {
                 return;
             }
-            j += 2; /* 跳过offset和count因为上面if里的两个getLongFromObjectOrReply已经解析过 */
+            j += 2; /* 跳过offset和count */
 
           /* 条件：使用zrange命令解析到rev参数，则更改方向相关变量direction为ZRANGE_DIRECTION_REVERSE */
         } else if (direction == ZRANGE_DIRECTION_AUTO &&
