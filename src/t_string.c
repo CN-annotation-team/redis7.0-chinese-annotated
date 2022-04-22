@@ -31,7 +31,7 @@
 #include <math.h> /* isnan(), isinf() */
 
 /* Forward declarations */
-/* 函数提前声明 */
+/* 前向声明 */
 int getGenericCommand(client *c);
 
 /*-----------------------------------------------------------------------------
