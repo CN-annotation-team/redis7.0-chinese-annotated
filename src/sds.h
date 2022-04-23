@@ -40,36 +40,36 @@ extern const char *SDS_NOINIT;
 #include <stdarg.h>
 #include <stdint.h>
 
-typedef char *sds;
+typedef char *sds; /* Simple Dynamic String 简单动态字符串 */
 
-/* Note: sdshdr5 is never used, we just access the flags byte directly.
- * However is here to document the layout of type 5 SDS strings. */
+/* 注意: sdshdr5 从未被使用, 我们仅访问 flags 字节.
+ * 虽说如此, 这里还是记录一下 SDS5 字符串的空间布局. */
 struct __attribute__ ((__packed__)) sdshdr5 {
-    unsigned char flags; /* 3 lsb of type, and 5 msb of string length */
+    unsigned char flags; /* 3 个最低有效位表示类型, 同时 5 个最高有效位表示字符串长度 */
     char buf[];
 };
 struct __attribute__ ((__packed__)) sdshdr8 {
-    uint8_t len; /* used */
-    uint8_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    uint8_t len; /* 已使用的长度 */
+    uint8_t alloc; /* 不包含头部和空终止符号(\0) */
+    unsigned char flags; /* 3位最低有效位表示类型, 其余5个比特位未被使用 */
     char buf[];
 };
 struct __attribute__ ((__packed__)) sdshdr16 {
-    uint16_t len; /* used */
-    uint16_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    uint16_t len; /* 已使用的长度 */
+    uint16_t alloc; /* 不包含头部和空终止符号 */
+    unsigned char flags; /* 3位最低有效位表示类型, 其余5个比特位未被使用 */
     char buf[];
 };
 struct __attribute__ ((__packed__)) sdshdr32 {
-    uint32_t len; /* used */
-    uint32_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    uint32_t len; /* 已使用的长度 */
+    uint32_t alloc; /* 不包含头部和空终止符号 */
+    unsigned char flags; /* 3位最低有效位表示类型, 其余5个比特位未被使用 */
     char buf[];
 };
 struct __attribute__ ((__packed__)) sdshdr64 {
-    uint64_t len; /* used */
-    uint64_t alloc; /* excluding the header and null terminator */
-    unsigned char flags; /* 3 lsb of type, 5 unused bits */
+    uint64_t len; /* 已使用的长度 */
+    uint64_t alloc; /* 不包含头部和空终止符号 */
+    unsigned char flags; /* 3位最低有效位表示类型, 其余5个比特位未被使用 */
     char buf[];
 };
 
@@ -78,15 +78,18 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 #define SDS_TYPE_16 2
 #define SDS_TYPE_32 3
 #define SDS_TYPE_64 4
-#define SDS_TYPE_MASK 7
+#define SDS_TYPE_MASK 7 /* 0b0111 三位最低有效位的 SDS 类型掩码 */
 #define SDS_TYPE_BITS 3
+/* 获取指向 SDS 头部的指针并将其复制给相应 SDS 类型的指针变量 sh */
 #define SDS_HDR_VAR(T,s) struct sdshdr##T *sh = (void*)((s)-(sizeof(struct sdshdr##T)));
+/* HDR header 这个宏的作用是获取SDS的头部的指针 */
 #define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))
 #define SDS_TYPE_5_LEN(f) ((f)>>SDS_TYPE_BITS)
 
+/* 获取 SDS 的长度 */
 static inline size_t sdslen(const sds s) {
-    unsigned char flags = s[-1];
-    switch(flags&SDS_TYPE_MASK) {
+    unsigned char flags = s[-1]; /* 取出 s 的前一个字节, 用作类型判断 (仔细观测sds数据结构的定义) */
+    switch(flags&SDS_TYPE_MASK) { /* & 0b0111 取出3位低有效位中的类型 */
         case SDS_TYPE_5:
             return SDS_TYPE_5_LEN(flags);
         case SDS_TYPE_8:
@@ -101,10 +104,11 @@ static inline size_t sdslen(const sds s) {
     return 0;
 }
 
+/* 剩余可用的柔性数组的大小 */
 static inline size_t sdsavail(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
-        case SDS_TYPE_5: {
+        case SDS_TYPE_5: { /* 暂未使用 buf 字段 */
             return 0;
         }
         case SDS_TYPE_8: {
@@ -127,6 +131,7 @@ static inline size_t sdsavail(const sds s) {
     return 0;
 }
 
+/* 为一个 SDS 的变量 s 设置新的一个长度值 newlen */
 static inline void sdssetlen(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -151,6 +156,7 @@ static inline void sdssetlen(sds s, size_t newlen) {
     }
 }
 
+/* 将一个 SDS 变量 s 的长度增加 inc */
 static inline void sdsinclen(sds s, size_t inc) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -177,6 +183,7 @@ static inline void sdsinclen(sds s, size_t inc) {
 }
 
 /* sdsalloc() = sdsavail() + sdslen() */
+/* 获取分配给 SDS 类型变量 s 的空间大小 */
 static inline size_t sdsalloc(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -194,11 +201,12 @@ static inline size_t sdsalloc(const sds s) {
     return 0;
 }
 
+/* 将一个 SDS 变量 s 记录的分配空间大小设置为 newlen */
 static inline void sdssetalloc(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
-            /* Nothing to do, this type has no total allocation info. */
+            /* 什么也不做, 这个类型没有总空间分配记录. */
             break;
         case SDS_TYPE_8:
             SDS_HDR(8,s)->alloc = newlen;
@@ -255,15 +263,14 @@ sds sdsjoin(char **argv, int argc, char *sep);
 sds sdsjoinsds(sds *argv, int argc, const char *sep, size_t seplen);
 int sdsneedsrepr(const sds s);
 
-/* Callback for sdstemplate. The function gets called by sdstemplate
- * every time a variable needs to be expanded. The variable name is
- * provided as variable, and the callback is expected to return a
- * substitution value. Returning a NULL indicates an error.
+/* 为 sdstemplate 设置的回调函数. 每次, 当一个变量需要扩充自身时,
+ * sdstemplate 都会调用该函数.
+ * 变量名是作为变量提供的, 回调函数将返回一个替换值. 返回NULL表示错误.
  */
 typedef sds (*sdstemplate_callback_t)(const sds variable, void *arg);
 sds sdstemplate(const char *template, sdstemplate_callback_t cb_func, void *cb_arg);
 
-/* Low level functions exposed to the user API */
+/* 暴露给用户的底层接口 */
 sds sdsMakeRoomFor(sds s, size_t addlen);
 sds sdsMakeRoomForNonGreedy(sds s, size_t addlen);
 void sdsIncrLen(sds s, ssize_t incr);
@@ -272,10 +279,9 @@ sds sdsResize(sds s, size_t size);
 size_t sdsAllocSize(sds s);
 void *sdsAllocPtr(sds s);
 
-/* Export the allocator used by SDS to the program using SDS.
- * Sometimes the program SDS is linked to, may use a different set of
- * allocators, but may want to allocate or free things that SDS will
- * respectively free or allocate. */
+/* 将SDS使用的分配器导出到使用SDS的程序中.
+ * 有时链接到SDS的程序，可能使用了一组不同的分配器，但可能其想要完成的分配或释放任务是可以由SDS分别释放或分配的。
+ */
 void *sds_malloc(size_t size);
 void *sds_realloc(void *ptr, size_t size);
 void sds_free(void *ptr);
