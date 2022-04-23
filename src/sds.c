@@ -221,18 +221,15 @@ void sdsclear(sds s) {
     s[0] = '\0';
 }
 
-/* Enlarge the free space at the end of the sds string so that the caller
- * is sure that after calling this function can overwrite up to addlen
- * bytes after the end of the string, plus one more byte for nul term.
- * If there's already sufficient free space, this function returns without any
- * action, if there isn't sufficient free space, it'll allocate what's missing,
- * and possibly more:
- * When greedy is 1, enlarge more than needed, to avoid need for future reallocs
- * on incremental growth.
- * When greedy is 0, enlarge just enough so that there's free space for 'addlen'.
+/* 扩大 sds字符串末端的空闲空间,
+ * 这样, 调用者就可以确定在调用这个函数之后,
+ * 字符串末尾的 addlen 字节是可覆写的, 然后再加上 nul项的一个字节.
+ * 如果已经有足够的空闲空间, 这个函数会返回且不做任何动作,
+ * 如果没有足够的空闲空间, 它将分配不足的部分, 甚至比不足部分更多:
+ * 当 greedy 为 1时, 会分配比所需更多的空间, 以避免在增量增长上需要未来的再分配.
+ * 当 greedy 为 0时, 仅分配 addlen 所需要的空间.
  *
- * Note: this does not change the *length* of the sds string as returned
- * by sdslen(), but only the free buffer space we have. */
+ * 注意: 这不会改变 sdslen() 返回的 SDS字符串的 *长度*, 而只改变我们拥有的空闲缓冲区空间. */
 sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     void *sh, *newsh;
     size_t avail = sdsavail(s);
@@ -241,13 +238,13 @@ sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     int hdrlen;
     size_t usable;
 
-    /* Return ASAP if there is enough space left. */
+    /* 空间足够时的优化. */
     if (avail >= addlen) return s;
 
     len = sdslen(s);
     sh = (char*)s-sdsHdrSize(oldtype);
     reqlen = newlen = (len+addlen);
-    assert(newlen > len);   /* Catch size_t overflow */
+    assert(newlen > len);   /* 处理 size_t溢出 */
     if (greedy == 1) {
         if (newlen < SDS_MAX_PREALLOC)
             newlen *= 2;
@@ -257,20 +254,18 @@ sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
 
     type = sdsReqType(newlen);
 
-    /* Don't use type 5: the user is appending to the string and type 5 is
-     * not able to remember empty space, so sdsMakeRoomFor() must be called
-     * at every appending operation. */
+    /* 不要使用 sds5: 用户正在向字符串添加内容,
+     * sds5 没有记录空闲空间, 所以必须在每次追加操作时调用 sdsMakeRoomFor(). */
     if (type == SDS_TYPE_5) type = SDS_TYPE_8;
 
     hdrlen = sdsHdrSize(type);
-    assert(hdrlen + newlen + 1 > reqlen);  /* Catch size_t overflow */
+    assert(hdrlen + newlen + 1 > reqlen);  /* 处理 size_t溢出 */
     if (oldtype==type) {
         newsh = s_realloc_usable(sh, hdrlen+newlen+1, &usable);
         if (newsh == NULL) return NULL;
         s = (char*)newsh+hdrlen;
     } else {
-        /* Since the header size changes, need to move the string forward,
-         * and can't use realloc */
+        /* 由于头部大小改变，需要将字符串向前移动，不能使用realloc */
         newsh = s_malloc_usable(hdrlen+newlen+1, &usable);
         if (newsh == NULL) return NULL;
         memcpy((char*)newsh+hdrlen, s, len+1);
@@ -286,8 +281,8 @@ sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     return s;
 }
 
-/* Enlarge the free space at the end of the sds string more than needed,
- * This is useful to avoid repeated re-allocations when repeatedly appending to the sds. */
+/* 扩展 sds字符串末尾的空闲空间时, 分配比所需更大的空间,
+ * 这有助于避免在多次追加 sds时重复的再分配. */
 sds sdsMakeRoomFor(sds s, size_t addlen) {
     return _sdsMakeRoomFor(s, addlen, 1);
 }
@@ -485,11 +480,9 @@ sds sdsgrowzero(sds s, size_t len) {
     return s;
 }
 
-/* Append the specified binary-safe string pointed by 't' of 'len' bytes to the
- * end of the specified sds string 's'.
+/* 将长度为 'len' 由 't' 指指向的二进制安全字符串添加到指定的 sds字符串 's' 的末尾.
  *
- * After the call, the passed sds string is no longer valid and all the
- * references must be substituted with the new pointer returned by the call. */
+ * 调用之后, 传入的 sds字符串不再有效, 所有相关引用都必须被替换为调用后返回的新指针. */
 sds sdscatlen(sds s, const void *t, size_t len) {
     size_t curlen = sdslen(s);
 
@@ -509,10 +502,10 @@ sds sdscat(sds s, const char *t) {
     return sdscatlen(s, t, strlen(t));
 }
 
-/* Append the specified sds 't' to the existing sds 's'.
+/* 将指定的sds 't' 追加到现有的sds 's' 之后。
  *
- * After the call, the modified sds string is no longer valid and all the
- * references must be substituted with the new pointer returned by the call. */
+ * 调用之后, 被修改过的sds字符串将不再有效,
+ * 所有对其的引用都必须被替换为本次调用返回的新指针. */
 sds sdscatsds(sds s, const sds t) {
     return sdscatlen(s, t, sdslen(t));
 }
