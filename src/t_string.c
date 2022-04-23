@@ -139,7 +139,7 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
 
     /* dirty 计数+1，
      * dirty 记录服务器对本地存储而言的数据变动次数，
-     * 持久化时将会削减计数，主动使用 SAVE 或 BGSAVE 成功保存将会清零 */
+     * 持久化时将会削减计数（削减值为保存到本地的数据量），主动使用 SAVE 或 BGSAVE 成功保存将会清零 */
     server.dirty++;
 
     /* 发送事件通知 */
