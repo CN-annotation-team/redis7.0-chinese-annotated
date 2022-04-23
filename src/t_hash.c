@@ -43,7 +43,7 @@ void hashTypeTryConversion(robj *o, robj **argv, int start, int end) {
     int i;
     size_t sum = 0;
 
-    /* 如果内部编码类型不是 listpack ,就不用转换了 */
+    /* 如果内部编码类型不是 listpack,就不用转换了 */
     if (o->encoding != OBJ_ENCODING_LISTPACK) return;
 
     /* 使用给定的 start 到 end 范围读取 argv 参数 */
@@ -372,7 +372,7 @@ int hashTypeDelete(robj *o, sds field) {
             fptr = lpFind(zl, fptr, (unsigned char*)field, sdslen(field), 1);
             if (fptr != NULL) {
                 /* Delete both of the key and the value. */
-                /* 将field 和 value 一并删除 */
+                /* 将 field 和 value 一并删除 */
                 zl = lpDeleteRangeWithEntry(zl,&fptr,2);
                 o->ptr = zl;
                 deleted = 1;
@@ -440,7 +440,7 @@ void hashTypeReleaseIterator(hashTypeIterator *hi) {
 /* Move to the next entry in the hash. Return C_OK when the next entry
  * could be found and C_ERR when the iterator reaches the end. */
 
-/* 移动到哈希表的下一个 entry。当找到下一个 entry 时返回C_OK，当迭代器到达终点时返回C_ERR */
+/* 移动到哈希表的下一个 entry。当找到下一个 entry 时返回 C_OK，当迭代器到达终点时返回 C_ERR */
 int hashTypeNext(hashTypeIterator *hi) {
 
     /* 编码类型为 listpack */
@@ -459,7 +459,7 @@ int hashTypeNext(hashTypeIterator *hi) {
             fptr = lpFirst(zl);
         } else {
             /* Advance cursor */
-            /* 游标前进，即令 fptr 等于 vptr 的下一个entry */
+            /* 游标前进，即令 fptr 等于 vptr 的下一个 entry */
             serverAssert(vptr != NULL);
             fptr = lpNext(zl, vptr);
         }
@@ -1252,7 +1252,7 @@ void hrandfieldWithCountCommand(client *c, long l, int withvalues) {
             /* 检查 count 是否超过限制值，若超过则强制等于限制值 */
             limit = count > HRANDFIELD_RANDOM_SAMPLE_LIMIT ? HRANDFIELD_RANDOM_SAMPLE_LIMIT : count;
 
-            /* 给keys分配内存空间 */
+            /* 给 keys 分配内存空间 */
             keys = zmalloc(sizeof(listpackEntry)*limit);
 
             /* 若命令带有 withvalues 参数则给 vals 分配内存空间 */
@@ -1318,7 +1318,7 @@ void hrandfieldWithCountCommand(client *c, long l, int withvalues) {
      * 哈希对象内的元素数量不超过 HRANDFIELD_SUB_STRATEGY_MUL 与 count 的乘积
      * 在这种情况下，我们创建一个哈希对象的副本，然后减去一些随机元素以达到要求的数量
      * 这样做是因为如果 count 只是比哈希对象中的元素数量小一点，
-     * 如果使用在CASE 4中用的普通方法是非常低效的 */
+     * 如果使用在 CASE 4 中用的普通方法是非常低效的 */
     if (count*HRANDFIELD_SUB_STRATEGY_MUL > size) {
         dict *d = dictCreate(&sdsReplyDictType);
         dictExpand(d, size);
