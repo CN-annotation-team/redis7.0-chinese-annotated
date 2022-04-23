@@ -22,9 +22,10 @@ redis仓库链接：https://github.com/redis/redis
 | t_list.c | 完成 | 
 | t_set.c | 完成 | 
 | t_zset.c | 完成 | 
+| sds.h | 完成 | 
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/4/21
+更新日期：2022/4/23
 
   
 ## 关于提交PR的方法：
