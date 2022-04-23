@@ -87,33 +87,31 @@ static inline size_t sdsTypeMaxSize(char type) {
     return -1; /* this is equivalent to the max SDS_TYPE_64 or SDS_TYPE_32 */
 }
 
-/* Create a new sds string with the content specified by the 'init' pointer
- * and 'initlen'.
- * If NULL is used for 'init' the string is initialized with zero bytes.
- * If SDS_NOINIT is used, the buffer is left uninitialized;
+/* 使用 'init' 指针和 'initlen' 指定的内容创建一个新的 sds字符串.
+ * 'init' 如果是 NULL, 字符串初始化为 0字节.
+ * 如果使用了 SDS_NOINIT, 那么缓冲区不会被初始化.
  *
- * The string is always null-terminated (all the sds strings are, always) so
- * even if you create an sds string with:
+ * 字符串总是以空终结符结束 (所有的 sds字符串都是),
+ * 即使你使用如下方式创建一个 sds字符串也是如此:
  *
  * mystring = sdsnewlen("abc",3);
  *
- * You can print the string with printf() as there is an implicit \0 at the
- * end of the string. However the string is binary safe and can contain
- * \0 characters in the middle, as the length is stored in the sds header. */
+ * 您可以使用 printf() 打印字符串, 因为字符串末尾有一个隐式的 \0.
+ * 不过, 字符串是二进制安全的, 中间可以包含 \0字符, 因为长度存储在 sds头部信息中 */
 sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
     void *sh;
     sds s;
     char type = sdsReqType(initlen);
-    /* Empty strings are usually created in order to append. Use type 8
-     * since type 5 is not good at this. */
+    /* 创建空字符串通常是为了之后扩展.
+     * 因为 sds5不擅长扩展, 所以会被转化为 sds8 */
     if (type == SDS_TYPE_5 && initlen == 0) type = SDS_TYPE_8;
-    int hdrlen = sdsHdrSize(type);
-    unsigned char *fp; /* flags pointer. */
+    int hdrlen = sdsHdrSize(type); /* 计算不同头部所需的长度 */
+    unsigned char *fp; /* 指向 flags的指针. */
     size_t usable;
 
-    assert(initlen + hdrlen + 1 > initlen); /* Catch size_t overflow */
+    assert(initlen + hdrlen + 1 > initlen); /* 处理 size_t溢出情形 */
     sh = trymalloc?
-        s_trymalloc_usable(hdrlen+initlen+1, &usable) :
+        s_trymalloc_usable(hdrlen+initlen+1, &usable) : /* +1 是为了结束符 \0 */
         s_malloc_usable(hdrlen+initlen+1, &usable);
     if (sh == NULL) return NULL;
     if (init==SDS_NOINIT)
@@ -121,7 +119,7 @@ sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
     else if (!init)
         memset(sh, 0, hdrlen+initlen+1);
     s = (char*)sh+hdrlen;
-    fp = ((unsigned char*)s)-1;
+    fp = ((unsigned char*)s)-1; /* 柔性数组 buf的前面一个字节就是 flags */
     usable = usable-hdrlen-1;
     if (usable > sdsTypeMaxSize(type))
         usable = sdsTypeMaxSize(type);
@@ -190,7 +188,7 @@ sds sdsdup(const sds s) {
     return sdsnewlen(s, sdslen(s));
 }
 
-/* Free an sds string. No operation is performed if 's' is NULL. */
+/* 释放一个 sds字符串. 如果 's' 为 NULL, 则不执行任何操作. */
 void sdsfree(sds s) {
     if (s == NULL) return;
     s_free((char*)s-sdsHdrSize(s[-1]));
@@ -215,10 +213,9 @@ void sdsupdatelen(sds s) {
     sdssetlen(s, reallen);
 }
 
-/* Modify an sds string in-place to make it empty (zero length).
- * However all the existing buffer is not discarded but set as free space
- * so that next append operations will not require allocations up to the
- * number of bytes previously available. */
+/* 在其原位置把一个 sds变量 's' 设为空字符串 (将其 len 设为 0).
+ * 注意, 旧的缓冲区不会被释放, 而是被设置为空闲状态,
+ * 这样的话, 下一次的扩展就不需要把之前已分配缓冲区再分配一次 */
 void sdsclear(sds s) {
     sdssetlen(s, 0);
     s[0] = '\0';
