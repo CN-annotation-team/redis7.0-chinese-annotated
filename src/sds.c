@@ -196,7 +196,7 @@ void sdsfree(sds s) {
 /* 将 sds 字符串长度设置为使用 strlen() 获得的长度,
  * 因此实际内容为到达第一个 null 项字符前的内容.
  *
- * 当以某种方式手动处理sds字符串时, 这个函数很有用, 如下面的示例所示:
+ * 当以某种方式手动处理 sds 字符串时, 这个函数很有用, 如下面的示例所示:
  *
  * s = sdsnew("foobar");
  * s[2] = '\0';
@@ -210,7 +210,7 @@ void sdsupdatelen(sds s) {
     sdssetlen(s, reallen);
 }
 
-/* 在其原位置把一个 sds变量 's' 设为空字符串 (将其 len 设为 0).
+/* 在其原位置把一个 sds 变量 's' 设为空字符串 (将其 len 设为 0).
  * 注意, 旧的缓冲区不会被释放, 而是被设置为空闲状态,
  * 这样的话, 下一次的扩展就不需要把之前已分配缓冲区再分配一次 */
 void sdsclear(sds s) {
@@ -226,7 +226,7 @@ void sdsclear(sds s) {
  * 当 greedy 为 1 时, 会分配比所需更多的空间, 以避免在增量增长上需要未来的再分配.
  * 当 greedy 为 0 时, 仅分配 addlen 所需要的空间.
  *
- * 注意: 这不会改变 sdslen() 返回的 SDS字符串的 *长度*, 而只改变我们拥有的空闲缓冲区空间. */
+ * 注意: 这不会改变 sdslen() 返回的 SDS 字符串的 *长度*, 而只改变我们拥有的空闲缓冲区空间. */
 sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     void *sh, *newsh;
     size_t avail = sdsavail(s);
