@@ -1010,7 +1010,7 @@ void lcsCommand(client *c) {
 
     /* Setup an uint32_t array to store at LCS[i,j] the length of the
      * LCS A0..i-1, B0..j-1. Note that we have a linear array here, so
-     * we index it as LCS[j+(blen+1)*j] */
+     * we index it as LCS[j+(blen+1)*i] */
 
     /* 设置一个 uint32_t 数组，在LCS [i,j] 存储 LCS A0...i-1, B0...j-1 的长度
      * 请注意,我们这里有一个线性数组,所以我们的索引是 LCS[j+(blen+1)*i] */
