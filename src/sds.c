@@ -332,8 +332,8 @@ sds sdsRemoveFreeSpace(sds s) {
     return s;
 }
 
-/* Resize the allocation, this can make the allocation bigger or smaller,
- * if the size is smaller than currently used len, the data will be truncated */
+/* 改变现有分配内存的规格, 可能会使其更大, 也有可能更小,
+ * 如果缩小且比之前已使用的字符串的长度还要小, 数据部分将会被截断 */
 sds sdsResize(sds s, size_t size) {
     void *sh, *newsh;
     char type, oldtype = s[-1] & SDS_TYPE_MASK;
@@ -341,24 +341,23 @@ sds sdsResize(sds s, size_t size) {
     size_t len = sdslen(s);
     sh = (char*)s-oldhdrlen;
 
-    /* Return ASAP if the size is already good. */
+    /*  如果之前的大小就恰好, 直接返回. */
     if (sdsalloc(s) == size) return s;
 
-    /* Truncate len if needed. */
+    /* 必要时进行截断. */
     if (size < len) len = size;
 
-    /* Check what would be the minimum SDS header that is just good enough to
-     * fit this string. */
+    /* 找出可以适配字符串的最小的 sds 头部 */
     type = sdsReqType(size);
-    /* Don't use type 5, it is not good for strings that are resized. */
+    /* 不使用 sds5, 其不适用于改变大小的字符串. */
     if (type == SDS_TYPE_5) type = SDS_TYPE_8;
     hdrlen = sdsHdrSize(type);
 
-    /* If the type is the same, or can hold the size in it with low overhead
-     * (larger than SDS_TYPE_8), we just realloc(), letting the allocator
-     * to do the copy only if really needed. Otherwise if the change is
-     * huge, we manually reallocate the string to use the different header
-     * type. */
+    /* 如果适配类型和之前相同, 或者可以以更低的开销适配大小, (最低开销为 sds8 类型)
+     * 那么只会进行 realloc(),
+     * 只有真正需要这么做时, 分配器才会进行拷贝.
+     * 此外, 如果变动十分巨大 (else)
+     * 我们会亲自去分配构造一个使用了不同的头部类型的字符串. */
     if (oldtype==type || (type < oldtype && type > SDS_TYPE_8)) {
         newsh = s_realloc(sh, oldhdrlen+size+1);
         if (newsh == NULL) return NULL;
@@ -377,20 +376,20 @@ sds sdsResize(sds s, size_t size) {
     return s;
 }
 
-/* Return the total size of the allocation of the specified sds string,
- * including:
- * 1) The sds header before the pointer.
- * 2) The string.
- * 3) The free buffer at the end if any.
- * 4) The implicit null term.
+/* 返回被指定的 sds 字符串中分配空间的总大小,
+ * 包括:
+ * 1) 指针前的 sds 头部信息.
+ * 2) 字符串.
+ * 3) (如果有) 尾部的空闲空间.
+ * 4) 隐式的空终结符.
  */
 size_t sdsAllocSize(sds s) {
     size_t alloc = sdsalloc(s);
     return sdsHdrSize(s[-1])+alloc+1;
 }
 
-/* Return the pointer of the actual SDS allocation (normally SDS strings
- * are referenced by the start of the string buffer). */
+/* 返回指向 SDS 全部分配空间的指针
+ * (一般都是返回指向其 buf 缓冲区的指针) */
 void *sdsAllocPtr(sds s) {
     return (void*) (s-sdsHdrSize(s[-1]));
 }
