@@ -175,7 +175,7 @@ typedef struct quicklistIter {
  * 'node' 指向 entry 所在的节点 
  * 'zi' 指向一个元素 
  * 'value' 元素的值（如果是字符串类型）
- * 'vlong' 元素的值（如果是整型）
+ * 'longval' 元素的值（如果是整型）
  * 'sz' 元素的字节数（如果元素是字符串类型） 
  * 'offset' 元素在所在 listpack 的偏移量 */
 typedef struct quicklistEntry {
