@@ -84,7 +84,7 @@ static inline size_t sdsTypeMaxSize(char type) {
     if (type == SDS_TYPE_32)
         return (1ll<<32) - 1;
 #endif
-    return -1; /* this is equivalent to the max SDS_TYPE_64 or SDS_TYPE_32 */
+    return -1; /* 该值和 SDS_TYPE_64 或 SDS_TYPE_32 类型的最大值相等 */
 }
 
 /* 使用 'init' 指针和 'initlen' 指定的内容创建一个新的 sds 字符串.
@@ -393,27 +393,23 @@ void *sdsAllocPtr(sds s) {
     return (void*) (s-sdsHdrSize(s[-1]));
 }
 
-/* Increment the sds length and decrements the left free space at the
- * end of the string according to 'incr'. Also set the null term
- * in the new end of the string.
+/* 增加该 sds 字符串的长度, 同时根据 'incr' 缩短尾部空闲空间的大小.
+ * 该函数的调用也会在字符串的尾部设置 null 终结符.
  *
- * This function is used in order to fix the string length after the
- * user calls sdsMakeRoomFor(), writes something after the end of
- * the current string, and finally needs to set the new length.
+ * 在用户调用 sdsMakeRoomFor() 函数并追加部分内容到字符串后, 需要为其设置新的长度.
+ * 该函数主要作用便是在上述场景中修复字符串的长度.
  *
- * Note: it is possible to use a negative increment in order to
- * right-trim the string.
+ * 注意: 可以使用负增长来从右侧对字符串进行裁剪
  *
- * Usage example:
+ * 使用示例:
  *
- * Using sdsIncrLen() and sdsMakeRoomFor() it is possible to mount the
- * following schema, to cat bytes coming from the kernel to the end of an
- * sds string without copying into an intermediate buffer:
+ * 使用 sdsIncrLen() 和 sdsMakeRoomFor() 函数时, 可以通过以下范式,
+ * 在无需中间缓冲区的情况下, 将来自内核的字节拼接到一个 sds 字符串的尾部:
  *
  * oldlen = sdslen(s);
  * s = sdsMakeRoomFor(s, BUFFER_SIZE);
  * nread = read(fd, s+oldlen, BUFFER_SIZE);
- * ... check for nread <= 0 and handle it ...
+ * ... 检查 nread <= 0 然后处理它 ...
  * sdsIncrLen(s, nread);
  */
 void sdsIncrLen(sds s, ssize_t incr) {
@@ -452,7 +448,7 @@ void sdsIncrLen(sds s, ssize_t incr) {
             len = (sh->len += incr);
             break;
         }
-        default: len = 0; /* Just to avoid compilation warnings. */
+        default: len = 0; /* 这里是为了避免编译时的警告信息. */
     }
     s[len] = '\0';
 }
