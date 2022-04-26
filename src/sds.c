@@ -284,15 +284,16 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
     return _sdsMakeRoomFor(s, addlen, 1);
 }
 
-/* 不像 sdsMakeRoomFor(), 这个函数只会增加必要的尺寸. */
+/* 不像 sdsMakeRoomFor(), 这个函数只会扩充字符串所需要的空间. */
 sds sdsMakeRoomForNonGreedy(sds s, size_t addlen) {
     return _sdsMakeRoomFor(s, addlen, 0);
 }
 
-/* 再分配 sds 字符串, 分配后移出未使用的尾部空闲空间.
+/* 再分配 sds 字符串, 分配目的是移出未使用的尾部空闲空间.
  * 所包含的字符串并没有被改变, 但是下一次拼接时将会需要再分配.
  *
- * 在这次调用后, 传入的字符串将会失效, 所有相关引用的指针都需要被替换成本次调用的返回的新的指针 */
+ * 在这次调用后, 传入的字符串将会失效,
+ * 所有相关引用的指针都需要被替换成本次调用返回的新指针 */
 sds sdsRemoveFreeSpace(sds s) {
     void *sh, *newsh;
     char type, oldtype = s[-1] & SDS_TYPE_MASK;
@@ -466,13 +467,13 @@ sds sdsgrowzero(sds s, size_t len) {
     s = sdsMakeRoomFor(s,len-curlen);
     if (s == NULL) return NULL;
 
-    /* 确保添加的区域内不包含垃圾 */
+    /* 确保添加的区域内全部被初始化 */
     memset(s+curlen,0,(len-curlen+1)); /* 仍要添加 \0 字节 */
     sdssetlen(s, len);
     return s;
 }
 
-/* 将长度为 'len' 由 't' 指指向的二进制安全字符串添加到指定的 sds 字符串 's' 的末尾.
+/* 将长度为 'len' 由 't' 指向的二进制安全字符串添加到指定的 sds 字符串 's' 的末尾.
  *
  * 该函数调用之后, 传入的 sds 字符串不再有效, 所有相关引用都必须被替换为调用后返回的新指针. */
 sds sdscatlen(sds s, const void *t, size_t len) {
@@ -530,7 +531,7 @@ int sdsll2str(char *s, long long value) {
 
     /* 生成字符串一种表现形式, 这个方法会制造一个反向的字符串. */
     if (value < 0) {
-        /* 因为 v 是无符号的, 如果它的大小等于 LLONG_MIN, 它的负数将会溢出. */
+        /* 因为 v 是无符号的, 如果它的大小等于 LLONG_MIN, 它的相反数将会溢出. */
         if (value != LLONG_MIN) {
             v = -value;
         } else {
