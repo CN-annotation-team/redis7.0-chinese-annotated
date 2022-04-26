@@ -284,17 +284,15 @@ sds sdsMakeRoomFor(sds s, size_t addlen) {
     return _sdsMakeRoomFor(s, addlen, 1);
 }
 
-/* Unlike sdsMakeRoomFor(), this one just grows to the necessary size. */
+/* 不像 sdsMakeRoomFor(), 这个函数只会增加必要的尺寸. */
 sds sdsMakeRoomForNonGreedy(sds s, size_t addlen) {
     return _sdsMakeRoomFor(s, addlen, 0);
 }
 
-/* Reallocate the sds string so that it has no free space at the end. The
- * contained string remains not altered, but next concatenation operations
- * will require a reallocation.
+/* 再分配 sds 字符串, 分配后移出未使用的尾部空闲空间.
+ * 所包含的字符串并没有被改变, 但是下一次拼接时将会需要再分配.
  *
- * After the call, the passed sds string is no longer valid and all the
- * references must be substituted with the new pointer returned by the call. */
+ * 在这次调用后, 传入的字符串将会失效, 所有相关引用的指针都需要被替换成本次调用的返回的新的指针 */
 sds sdsRemoveFreeSpace(sds s) {
     void *sh, *newsh;
     char type, oldtype = s[-1] & SDS_TYPE_MASK;
@@ -303,18 +301,18 @@ sds sdsRemoveFreeSpace(sds s) {
     size_t avail = sdsavail(s);
     sh = (char*)s-oldhdrlen;
 
-    /* Return ASAP if there is no space left. */
+    /* 如果没有空闲空间, 直接返回. */
     if (avail == 0) return s;
 
-    /* Check what would be the minimum SDS header that is just good enough to
-     * fit this string. */
+    /* 找出可以适配字符串的最小的 sds 头部. */
     type = sdsReqType(len);
     hdrlen = sdsHdrSize(type);
 
-    /* If the type is the same, or at least a large enough type is still
-     * required, we just realloc(), letting the allocator to do the copy
-     * only if really needed. Otherwise if the change is huge, we manually
-     * reallocate the string to use the different header type. */
+    /* 如果适配类型和之前相同, 或者至少这个类型足够大满足所需
+     * 那么只会进行 realloc(),
+     * 只有真正需要这么做时, 分配器才会进行拷贝.
+     * 此外, 如果变动十分巨大 (else)
+     * 我们会亲自去分配构造一个使用了不同的头部类型的字符串. */
     if (oldtype==type || type > SDS_TYPE_8) {
         newsh = s_realloc(sh, oldhdrlen+len+1);
         if (newsh == NULL) return NULL;
@@ -458,11 +456,9 @@ void sdsIncrLen(sds s, ssize_t incr) {
     s[len] = '\0';
 }
 
-/* Grow the sds to have the specified length. Bytes that were not part of
- * the original length of the sds will be set to zero.
+/* 扩展 sds 到指定的长度, 扩展部分会使用 0 初始化
  *
- * if the specified length is smaller than the current length, no operation
- * is performed. */
+ * 如果指定的长度小于当前长度, 将不会采取任何动作 */
 sds sdsgrowzero(sds s, size_t len) {
     size_t curlen = sdslen(s);
 
@@ -470,8 +466,8 @@ sds sdsgrowzero(sds s, size_t len) {
     s = sdsMakeRoomFor(s,len-curlen);
     if (s == NULL) return NULL;
 
-    /* Make sure added region doesn't contain garbage */
-    memset(s+curlen,0,(len-curlen+1)); /* also set trailing \0 byte */
+    /* 确保添加的区域内不包含垃圾 */
+    memset(s+curlen,0,(len-curlen+1)); /* 仍要添加 \0 字节 */
     sdssetlen(s, len);
     return s;
 }
