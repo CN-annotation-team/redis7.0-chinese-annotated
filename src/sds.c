@@ -474,7 +474,7 @@ sds sdsgrowzero(sds s, size_t len) {
 
 /* 将长度为 'len' 由 't' 指指向的二进制安全字符串添加到指定的 sds 字符串 's' 的末尾.
  *
- * 调用之后, 传入的 sds 字符串不再有效, 所有相关引用都必须被替换为调用后返回的新指针. */
+ * 该函数调用之后, 传入的 sds 字符串不再有效, 所有相关引用都必须被替换为调用后返回的新指针. */
 sds sdscatlen(sds s, const void *t, size_t len) {
     size_t curlen = sdslen(s);
 
@@ -486,10 +486,9 @@ sds sdscatlen(sds s, const void *t, size_t len) {
     return s;
 }
 
-/* Append the specified null terminated C string to the sds string 's'.
+/* 追加一个以 null 结尾的 c 字符串到 sds 字符串 's' 后面
  *
- * After the call, the passed sds string is no longer valid and all the
- * references must be substituted with the new pointer returned by the call. */
+ * 该函数调用之后, 传入的 sds 字符串不再有效, 所有相关引用都必须被替换为调用后返回的新指针. */
 sds sdscat(sds s, const char *t) {
     return sdscatlen(s, t, strlen(t));
 }
@@ -502,8 +501,7 @@ sds sdscatsds(sds s, const sds t) {
     return sdscatlen(s, t, sdslen(t));
 }
 
-/* Destructively modify the sds string 's' to hold the specified binary
- * safe string pointed by 't' of length 'len' bytes. */
+/* 破坏性地去修改 sds 字符串 's', 让其指向 't' 指向的, 类型安全且长度为 'len' 的字符串 */
 sds sdscpylen(sds s, const char *t, size_t len) {
     if (sdsalloc(s) < len) {
         s = sdsMakeRoomFor(s,len-sdslen(s));
