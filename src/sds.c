@@ -513,28 +513,24 @@ sds sdscpylen(sds s, const char *t, size_t len) {
     return s;
 }
 
-/* Like sdscpylen() but 't' must be a null-terminated string so that the length
- * of the string is obtained with strlen(). */
+/* 和 sdscpylen() 很像, 但是 't' 必须是一个以空终结符结尾的字符串, 这样才可以通过 strlen() 获取它的长度 */
 sds sdscpy(sds s, const char *t) {
     return sdscpylen(s, t, strlen(t));
 }
 
-/* Helper for sdscatlonglong() doing the actual number -> string
- * conversion. 's' must point to a string with room for at least
- * SDS_LLSTR_SIZE bytes.
+/* 帮助 sdscatlonglong() 完成真正的 数字 -> 字符串 的转换.
+ * 's' 指向的字符串, 至少要含有 SDS_LLSTR_SIZE 字节的空间.
  *
- * The function returns the length of the null-terminated string
- * representation stored at 's'. */
+ * 这个函数返回存储在 's' 中的以空终结符结尾的字符串的长度 */
 #define SDS_LLSTR_SIZE 21
 int sdsll2str(char *s, long long value) {
     char *p, aux;
     unsigned long long v;
     size_t l;
 
-    /* Generate the string representation, this method produces
-     * a reversed string. */
+    /* 生成字符串一种表现形式, 这个方法会制造一个反向的字符串. */
     if (value < 0) {
-        /* Since v is unsigned, if value==LLONG_MIN, -LLONG_MIN will overflow. */
+        /* 因为 v 是无符号的, 如果它的大小等于 LLONG_MIN, 它的负数将会溢出. */
         if (value != LLONG_MIN) {
             v = -value;
         } else {
@@ -551,11 +547,11 @@ int sdsll2str(char *s, long long value) {
     } while(v);
     if (value < 0) *p++ = '-';
 
-    /* Compute length and add null term. */
+    /* 计算长度, 添加 null. */
     l = p-s;
     *p = '\0';
 
-    /* Reverse the string. */
+    /* 翻转字符串. */
     p--;
     while(s < p) {
         aux = *s;
