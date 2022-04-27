@@ -640,19 +640,17 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
     return t;
 }
 
-/* Append to the sds string 's' a string obtained using printf-alike format
- * specifier.
+/* 在 sds 字符串 's' 后面追加一个字符串, 这个字符串是通过类似于 printf 函数那样的格式说明符得到的
  *
- * After the call, the modified sds string is no longer valid and all the
- * references must be substituted with the new pointer returned by the call.
+ * 在本次函数调用后, 被修改的 sds 字符串不再有效, 所有对其引用的指针都要替换成本次函数返回的新指针.
  *
- * Example:
+ * 示例:
  *
  * s = sdsnew("Sum is: ");
  * s = sdscatprintf(s,"%d+%d = %d",a,b,a+b).
  *
- * Often you need to create a string from scratch with the printf-alike
- * format. When this is the need, just use sdsempty() as the target string:
+ * 通常, 你需要使用类 printf 格式新建一个字符串.
+ * 当需要这种场景时, 可以使用 sdsempty() 函数的返回值作为目标字符串
  *
  * s = sdscatprintf(sdsempty(), "... your format ...", args);
  */
