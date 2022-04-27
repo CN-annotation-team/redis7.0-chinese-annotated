@@ -560,7 +560,7 @@ int sdsll2str(char *s, long long value) {
     return l;
 }
 
-/* 和 sdsll2str() 完全相同, 只不过这是用于无符号数版本的. */
+/* 和 sdsll2str() 完全相同, 只不过这是用于无符号数类型的版本. */
 int sdsull2str(char *s, unsigned long long v) {
     char *p, aux;
     size_t l;
@@ -615,7 +615,7 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
         buflen = sizeof(staticbuf);
     }
 
-    /* 如果当前字符串空间不能满足需求, 为缺失的空间和尾部的 |0 终结符分配空间 */
+    /* 如果当前字符串空间不能满足需求, 为缺失的空间和尾部的 \0 终结符分配空间 */
     while(1) {
         va_copy(cpy,ap);
         bufstrlen = vsnprintf(buf, buflen, fmt, cpy);
@@ -953,7 +953,7 @@ cleanup:
     }
 }
 
-/* Free the result returned by sdssplitlen(), or do nothing if 'tokens' is NULL. */
+/* 释放 sdssplitlen() 函数调用所产生的字符串, 如果 'tokens' 为 NULL 的话, 不采取任何动作. */
 void sdsfreesplitres(sds *tokens, int count) {
     if (!tokens) return;
     while(count--)
@@ -1012,15 +1012,13 @@ int sdsneedsrepr(const sds s) {
     return 0;
 }
 
-/* Helper function for sdssplitargs() that returns non zero if 'c'
- * is a valid hex digit. */
+/* sdssplitargs() 的辅助函数, 如果 'c' 是合法的十六进制数的话, 返回非零值 */
 int is_hex_digit(char c) {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
            (c >= 'A' && c <= 'F');
 }
 
-/* Helper function for sdssplitargs() that converts a hex digit into an
- * integer from 0 to 15 */
+/* sdssplitargs() 的辅助函数, 把一个十六进制数转换为 0 到 15 的十进制数 */
 int hex_digit_to_int(char c) {
     switch(c) {
     case '0': return 0;
