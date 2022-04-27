@@ -560,24 +560,23 @@ int sdsll2str(char *s, long long value) {
     return l;
 }
 
-/* Identical sdsll2str(), but for unsigned long long type. */
+/* 和 sdsll2str() 完全相同, 只不过这是用于无符号数版本的. */
 int sdsull2str(char *s, unsigned long long v) {
     char *p, aux;
     size_t l;
 
-    /* Generate the string representation, this method produces
-     * a reversed string. */
+    /* 将其转换成字符串, 该方法产生的字符串是倒序的 */
     p = s;
     do {
         *p++ = '0'+(v%10);
         v /= 10;
     } while(v);
 
-    /* Compute length and add null term. */
+    /* 计算字符串长度, 并添加空终结符. */
     l = p-s;
     *p = '\0';
 
-    /* Reverse the string. */
+    /* 将字符串翻转. */
     p--;
     while(s < p) {
         aux = *s;
@@ -589,7 +588,7 @@ int sdsull2str(char *s, unsigned long long v) {
     return l;
 }
 
-/* Create an sds string from a long long value. It is much faster than:
+/* 从一个 long long 类型的数值中生成一个字符串. 这个方法比下列方式快很多:
  *
  * sdscatprintf(sdsempty(),"%lld\n", value);
  */
@@ -600,15 +599,15 @@ sds sdsfromlonglong(long long value) {
     return sdsnewlen(buf,len);
 }
 
-/* Like sdscatprintf() but gets va_list instead of being variadic. */
+/* 该函数和 sdscatprintf() 几乎一样, 除了接受的是 va_list 而不是一个变参列表. */
 sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
     va_list cpy;
     char staticbuf[1024], *buf = staticbuf, *t;
     size_t buflen = strlen(fmt)*2;
     int bufstrlen;
 
-    /* We try to start using a static buffer for speed.
-     * If not possible we revert to heap allocation. */
+    /* 我们正在尝试使用静态数组来提升处理速度.
+     * 如果失败的话, 我们会换回在堆上进行分配. */
     if (buflen > sizeof(staticbuf)) {
         buf = s_malloc(buflen);
         if (buf == NULL) return NULL;
@@ -616,8 +615,7 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
         buflen = sizeof(staticbuf);
     }
 
-    /* Alloc enough space for buffer and \0 after failing to
-     * fit the string in the current buffer size. */
+    /* 如果当前字符串空间不能满足需求, 为缺失的空间和尾部的 |0 终结符分配空间 */
     while(1) {
         va_copy(cpy,ap);
         bufstrlen = vsnprintf(buf, buflen, fmt, cpy);
@@ -636,7 +634,7 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
         break;
     }
 
-    /* Finally concat the obtained string to the SDS string and return it. */
+    /* 在最后, 拼接获取到的字符串到 sds 字符串中, 然后将其返回. */
     t = sdscatlen(s, buf, bufstrlen);
     if (buf != staticbuf) s_free(buf);
     return t;
