@@ -663,21 +663,20 @@ sds sdscatprintf(sds s, const char *fmt, ...) {
     return t;
 }
 
-/* This function is similar to sdscatprintf, but much faster as it does
- * not rely on sprintf() family functions implemented by the libc that
- * are often very slow. Moreover directly handling the sds string as
- * new data is concatenated provides a performance improvement.
+/* 这个函数和 sdscatprintf 很相似, 但是比它快很多. 因为该函数不依赖于 sprintf() 函数体系.
+ * 那个函数体系是由 libc 实现的, 而 libc 通常很慢.
+ * 在此之外, 在拼接新数据时直接处理字符串也带来了一定的性能提升.
  *
- * However this function only handles an incompatible subset of printf-alike
- * format specifiers:
+ * 不过, 这个函数不兼容类 printf 格式说明符, 只能处理一些子集.
  *
- * %s - C String
- * %S - SDS string
- * %i - signed int
+ * %s - C 风格字符串
+ * %S - SDS 字符串
+ * %i - 有符号整型
  * %I - 64 bit signed integer (long long, int64_t)
- * %u - unsigned int
- * %U - 64 bit unsigned integer (unsigned long long, uint64_t)
- * %% - Verbatim "%" character.
+ * %I - 64 位有符号整型 (long long, int64_t)
+ * %u - 无符号整型
+ * %U - 64 位无符号整型 (unsigned long long, uint64_t)
+ * %% - 用来表示 "%" 字符.
  */
 sds sdscatfmt(sds s, char const *fmt, ...) {
     size_t initlen = sdslen(s);
@@ -685,20 +684,19 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
     long i;
     va_list ap;
 
-    /* To avoid continuous reallocations, let's start with a buffer that
-     * can hold at least two times the format string itself. It's not the
-     * best heuristic but seems to work in practice. */
+    /* 为了避免连续进行内存分配, 再开始的时候就使用一个至少可以容纳两倍格式字符串的缓存空间
+     * 这可能不是目前最好的, 但是看上去也很高效. */
     s = sdsMakeRoomFor(s, strlen(fmt)*2);
     va_start(ap,fmt);
-    f = fmt;    /* Next format specifier byte to process. */
-    i = initlen; /* Position of the next byte to write to dest str. */
+    f = fmt;    /* 下一个需要处理的格式说明字节. */
+    i = initlen; /* 下一个需要写入的字节. */
     while(*f) {
         char next, *str;
         size_t l;
         long long num;
         unsigned long long unum;
 
-        /* Make sure there is always space for at least 1 char. */
+        /* 确保至少有一字符的空间. */
         if (sdsavail(s)==0) {
             s = sdsMakeRoomFor(s,1);
         }
@@ -754,7 +752,7 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
                     i += l;
                 }
                 break;
-            default: /* Handle %% and generally %<unknown>. */
+            default: /* 处理 %% 和其他 %<unknown>. */
                 s[i++] = next;
                 sdsinclen(s,1);
                 break;
@@ -769,7 +767,7 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
     }
     va_end(ap);
 
-    /* Add null-term */
+    /* 添加 null 终结符 */
     s[i] = '\0';
     return s;
 }
