@@ -84,7 +84,7 @@ static inline size_t sdsTypeMaxSize(char type) {
     if (type == SDS_TYPE_32)
         return (1ll<<32) - 1;
 #endif
-    return -1; /* this is equivalent to the max SDS_TYPE_64 or SDS_TYPE_32 */
+    return -1; /* 该值和 SDS_TYPE_64 或 SDS_TYPE_32 类型的最大值相等 */
 }
 
 /* 使用 'init' 指针和 'initlen' 指定的内容创建一个新的 sds 字符串.
@@ -393,27 +393,23 @@ void *sdsAllocPtr(sds s) {
     return (void*) (s-sdsHdrSize(s[-1]));
 }
 
-/* Increment the sds length and decrements the left free space at the
- * end of the string according to 'incr'. Also set the null term
- * in the new end of the string.
+/* 增加该 sds 字符串的长度, 同时根据 'incr' 缩短尾部空闲空间的大小.
+ * 该函数的调用也会在字符串的尾部设置 null 终结符.
  *
- * This function is used in order to fix the string length after the
- * user calls sdsMakeRoomFor(), writes something after the end of
- * the current string, and finally needs to set the new length.
+ * 在用户调用 sdsMakeRoomFor() 函数并追加部分内容到字符串后, 需要为其设置新的长度.
+ * 该函数主要作用便是在上述场景中修复字符串的长度.
  *
- * Note: it is possible to use a negative increment in order to
- * right-trim the string.
+ * 注意: 可以使用负增长来从右侧对字符串进行裁剪
  *
- * Usage example:
+ * 使用示例:
  *
- * Using sdsIncrLen() and sdsMakeRoomFor() it is possible to mount the
- * following schema, to cat bytes coming from the kernel to the end of an
- * sds string without copying into an intermediate buffer:
+ * 使用 sdsIncrLen() 和 sdsMakeRoomFor() 函数时, 可以通过以下范式,
+ * 在无需中间缓冲区的情况下, 将来自内核的字节拼接到一个 sds 字符串的尾部:
  *
  * oldlen = sdslen(s);
  * s = sdsMakeRoomFor(s, BUFFER_SIZE);
  * nread = read(fd, s+oldlen, BUFFER_SIZE);
- * ... check for nread <= 0 and handle it ...
+ * ... 检查 nread <= 0 然后处理它 ...
  * sdsIncrLen(s, nread);
  */
 void sdsIncrLen(sds s, ssize_t incr) {
@@ -452,7 +448,7 @@ void sdsIncrLen(sds s, ssize_t incr) {
             len = (sh->len += incr);
             break;
         }
-        default: len = 0; /* Just to avoid compilation warnings. */
+        default: len = 0; /* 这里是为了避免编译时的警告信息. */
     }
     s[len] = '\0';
 }
@@ -564,24 +560,23 @@ int sdsll2str(char *s, long long value) {
     return l;
 }
 
-/* Identical sdsll2str(), but for unsigned long long type. */
+/* 和 sdsll2str() 完全相同, 只不过这是用于无符号数类型的版本. */
 int sdsull2str(char *s, unsigned long long v) {
     char *p, aux;
     size_t l;
 
-    /* Generate the string representation, this method produces
-     * a reversed string. */
+    /* 将其转换成字符串, 该方法产生的字符串是倒序的 */
     p = s;
     do {
         *p++ = '0'+(v%10);
         v /= 10;
     } while(v);
 
-    /* Compute length and add null term. */
+    /* 计算字符串长度, 并添加空终结符. */
     l = p-s;
     *p = '\0';
 
-    /* Reverse the string. */
+    /* 将字符串翻转. */
     p--;
     while(s < p) {
         aux = *s;
@@ -593,7 +588,7 @@ int sdsull2str(char *s, unsigned long long v) {
     return l;
 }
 
-/* Create an sds string from a long long value. It is much faster than:
+/* 从一个 long long 类型的数值中生成一个字符串. 这个方法比下列方式快很多:
  *
  * sdscatprintf(sdsempty(),"%lld\n", value);
  */
@@ -604,15 +599,15 @@ sds sdsfromlonglong(long long value) {
     return sdsnewlen(buf,len);
 }
 
-/* Like sdscatprintf() but gets va_list instead of being variadic. */
+/* 该函数和 sdscatprintf() 几乎一样, 除了接受的是 va_list 而不是一个变参列表. */
 sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
     va_list cpy;
     char staticbuf[1024], *buf = staticbuf, *t;
     size_t buflen = strlen(fmt)*2;
     int bufstrlen;
 
-    /* We try to start using a static buffer for speed.
-     * If not possible we revert to heap allocation. */
+    /* 我们正在尝试使用静态数组来提升处理速度.
+     * 如果失败的话, 我们会换回在堆上进行分配. */
     if (buflen > sizeof(staticbuf)) {
         buf = s_malloc(buflen);
         if (buf == NULL) return NULL;
@@ -620,8 +615,7 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
         buflen = sizeof(staticbuf);
     }
 
-    /* Alloc enough space for buffer and \0 after failing to
-     * fit the string in the current buffer size. */
+    /* 如果当前字符串空间不能满足需求, 为缺失的空间和尾部的 \0 终结符分配空间 */
     while(1) {
         va_copy(cpy,ap);
         bufstrlen = vsnprintf(buf, buflen, fmt, cpy);
@@ -640,25 +634,23 @@ sds sdscatvprintf(sds s, const char *fmt, va_list ap) {
         break;
     }
 
-    /* Finally concat the obtained string to the SDS string and return it. */
+    /* 在最后, 拼接获取到的字符串到 sds 字符串中, 然后将其返回. */
     t = sdscatlen(s, buf, bufstrlen);
     if (buf != staticbuf) s_free(buf);
     return t;
 }
 
-/* Append to the sds string 's' a string obtained using printf-alike format
- * specifier.
+/* 在 sds 字符串 's' 后面追加一个字符串, 这个字符串是通过类似于 printf 函数那样的格式说明符得到的
  *
- * After the call, the modified sds string is no longer valid and all the
- * references must be substituted with the new pointer returned by the call.
+ * 在本次函数调用后, 被修改的 sds 字符串不再有效, 所有对其引用的指针都要替换成本次函数返回的新指针.
  *
- * Example:
+ * 示例:
  *
  * s = sdsnew("Sum is: ");
  * s = sdscatprintf(s,"%d+%d = %d",a,b,a+b).
  *
- * Often you need to create a string from scratch with the printf-alike
- * format. When this is the need, just use sdsempty() as the target string:
+ * 通常, 你需要使用类 printf 格式新建一个字符串.
+ * 当需要这种场景时, 可以使用 sdsempty() 函数的返回值作为目标字符串
  *
  * s = sdscatprintf(sdsempty(), "... your format ...", args);
  */
@@ -671,21 +663,20 @@ sds sdscatprintf(sds s, const char *fmt, ...) {
     return t;
 }
 
-/* This function is similar to sdscatprintf, but much faster as it does
- * not rely on sprintf() family functions implemented by the libc that
- * are often very slow. Moreover directly handling the sds string as
- * new data is concatenated provides a performance improvement.
+/* 这个函数和 sdscatprintf 很相似, 但是比它快很多. 因为该函数不依赖于 sprintf() 函数体系.
+ * 那个函数体系是由 libc 实现的, 而 libc 通常很慢.
+ * 在此之外, 在拼接新数据时直接处理字符串也带来了一定的性能提升.
  *
- * However this function only handles an incompatible subset of printf-alike
- * format specifiers:
+ * 不过, 这个函数不兼容类 printf 格式说明符, 只能处理一些子集.
  *
- * %s - C String
- * %S - SDS string
- * %i - signed int
+ * %s - C 风格字符串
+ * %S - SDS 字符串
+ * %i - 有符号整型
  * %I - 64 bit signed integer (long long, int64_t)
- * %u - unsigned int
- * %U - 64 bit unsigned integer (unsigned long long, uint64_t)
- * %% - Verbatim "%" character.
+ * %I - 64 位有符号整型 (long long, int64_t)
+ * %u - 无符号整型
+ * %U - 64 位无符号整型 (unsigned long long, uint64_t)
+ * %% - 用来表示 "%" 字符.
  */
 sds sdscatfmt(sds s, char const *fmt, ...) {
     size_t initlen = sdslen(s);
@@ -693,20 +684,19 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
     long i;
     va_list ap;
 
-    /* To avoid continuous reallocations, let's start with a buffer that
-     * can hold at least two times the format string itself. It's not the
-     * best heuristic but seems to work in practice. */
+    /* 为了避免连续进行内存分配, 再开始的时候就使用一个至少可以容纳两倍格式字符串的缓存空间
+     * 这可能不是目前最好的, 但是看上去也很高效. */
     s = sdsMakeRoomFor(s, strlen(fmt)*2);
     va_start(ap,fmt);
-    f = fmt;    /* Next format specifier byte to process. */
-    i = initlen; /* Position of the next byte to write to dest str. */
+    f = fmt;    /* 下一个需要处理的格式说明字节. */
+    i = initlen; /* 下一个需要写入的字节. */
     while(*f) {
         char next, *str;
         size_t l;
         long long num;
         unsigned long long unum;
 
-        /* Make sure there is always space for at least 1 char. */
+        /* 确保至少有一字符的空间. */
         if (sdsavail(s)==0) {
             s = sdsMakeRoomFor(s,1);
         }
@@ -762,7 +752,7 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
                     i += l;
                 }
                 break;
-            default: /* Handle %% and generally %<unknown>. */
+            default: /* 处理 %% 和其他 %<unknown>. */
                 s[i++] = next;
                 sdsinclen(s,1);
                 break;
@@ -777,24 +767,23 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
     }
     va_end(ap);
 
-    /* Add null-term */
+    /* 添加 null 终结符 */
     s[i] = '\0';
     return s;
 }
 
-/* Remove the part of the string from left and from right composed just of
- * contiguous characters found in 'cset', that is a null terminated C string.
+/* 在字符串的左右两边开始移出字符, 直到出现第一个不存在于 'cset' 中的字符.
+ * 'cset' 是一个以 null 结尾的 C 风格字符串.
  *
- * After the call, the modified sds string is no longer valid and all the
- * references must be substituted with the new pointer returned by the call.
+ * 调用之后, 被修改过的sds字符串将不再有效, 所有对其的引用都必须被替换为本次调用返回的新指针.
  *
- * Example:
+ * 演示代码:
  *
  * s = sdsnew("AA...AA.a.aa.aHelloWorld     :::");
  * s = sdstrim(s,"Aa. :");
  * printf("%s\n", s);
  *
- * Output will be just "HelloWorld".
+ * 这段代码最终的输出为 "HelloWorld".
  */
 sds sdstrim(sds s, const char *cset) {
     char *end, *sp, *ep;
@@ -811,16 +800,15 @@ sds sdstrim(sds s, const char *cset) {
     return s;
 }
 
-/* Changes the input string to be a subset of the original.
- * It does not release the free space in the string, so a call to
- * sdsRemoveFreeSpace may be wise after. */
+/* 把字符串缩短为它的子集.
+ * 这个函数并不会释放字符串中的空闲内存, 所以最好再之后调用 sdsRemoveFreeSpace 函数. */
 void sdssubstr(sds s, size_t start, size_t len) {
-    /* Clamp out of range input */
+    /* 限制缩小范围 */
     size_t oldlen = sdslen(s);
     if (start >= oldlen) start = len = 0;
     if (len > oldlen-start) len = oldlen-start;
 
-    /* Move the data */
+    /* 移出数据 */
     if (len) memmove(s, s+start, len);
     s[len] = 0;
     sdssetlen(s,len);
@@ -959,7 +947,7 @@ cleanup:
     }
 }
 
-/* Free the result returned by sdssplitlen(), or do nothing if 'tokens' is NULL. */
+/* 释放 sdssplitlen() 函数调用所产生的字符串, 如果 'tokens' 为 NULL 的话, 不采取任何动作. */
 void sdsfreesplitres(sds *tokens, int count) {
     if (!tokens) return;
     while(count--)
@@ -1018,15 +1006,13 @@ int sdsneedsrepr(const sds s) {
     return 0;
 }
 
-/* Helper function for sdssplitargs() that returns non zero if 'c'
- * is a valid hex digit. */
+/* sdssplitargs() 的辅助函数, 如果 'c' 是合法的十六进制数的话, 返回非零值 */
 int is_hex_digit(char c) {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
            (c >= 'A' && c <= 'F');
 }
 
-/* Helper function for sdssplitargs() that converts a hex digit into an
- * integer from 0 to 15 */
+/* sdssplitargs() 的辅助函数, 把一个十六进制数转换为 0 到 15 的十进制数 */
 int hex_digit_to_int(char c) {
     switch(c) {
     case '0': return 0;
