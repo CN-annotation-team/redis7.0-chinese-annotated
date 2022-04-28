@@ -137,8 +137,8 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
     /* 在数据库中设置键值 */
     setKey(c,c->db,key,val,setkey_flags);
 
-    /* dirty 计数+1，
-     * dirty 记录服务器对本地存储而言的数据变动次数，
+    /* 脏数据 + 1，
+     * dirty 记录缓存对本地存储而言的数据变动次数，
      * 持久化时将会削减计数（削减值为保存到本地的数据量），主动使用 SAVE 或 BGSAVE 成功保存将会清零 */
     server.dirty++;
 
