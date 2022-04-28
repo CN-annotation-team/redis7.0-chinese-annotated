@@ -38,7 +38,7 @@ redis仓库链接：https://github.com/redis/redis
 ### Step3:
 在你的本地对代码进行一番精心修改吧！🍉🍉<br>
 ### Step4:
-修改完后，是时候该上传你的改动到你fork来的远程仓库上了。你可以用git bash，也可以使用IDE里的git来操作。对于git不熟的用户建议使用IDE，IDE也更方便写commit信息，别忘了写commit信息哦！🤔🤔<br>
+修改完后，是时候该上传你的改动到你fork来的远程仓库上了。你可以用git bash，也可以使用IDE里的git来操作。对于git不熟的用户建议使用IDE，IDE也更方便写commit信息，别忘了写commit信息哦！当然我们只是增删改中文注释，如果要直接在 github 上编辑也可以。🤔🤔<br>
 ### Step5:
 上传之后，点进你的仓库主页，会出现一个"Contribute"，点击它，选择"Open pull request"，选择好你仓库的分支和你想要在这里合并的分支后，点击"Create pull request"，之后填写你的PR标题和正文内容，就成功提交一个PR啦！🍭🍭
 
