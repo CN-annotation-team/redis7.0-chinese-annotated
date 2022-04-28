@@ -24,10 +24,10 @@ redis仓库链接：https://github.com/redis/redis<br>
 | t_zset.c | 完成 | 
 | sds.h | 完成 | 
 | quicklist.h | 完成 | 
-| sds.c | 低于一半 | 
+| sds.c | 过半 | 
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/4/23
+更新日期：2022/4/28
 
   
 ## 关于提交PR的方法：
