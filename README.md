@@ -6,8 +6,8 @@
 ### 本项目很可能会成为你第一个参与的开源项目！
 你只需要翻译源码里某个有较详细英文注释的函数，你就可以发起PR并成为contributor！更好的是你还能带上你自己的理解。除此之外还有更简单的如：修改错别字、修改格式错误或者修改意思错误的注释，你也可以成为contributor。该项目目前仍处于初期，还有很多未完成注释的源码，希望大家能够一起合力把注释填满整个项目！✨✨<br>
 本项目灵感来源于《Redis设计与实现》作者黄建宏的redis3.0注释仓库：https://github.com/huangz1990/redis-3.0-annotated<br>
-redis仓库链接：https://github.com/redis/redis
-
+redis仓库链接：https://github.com/redis/redis<br>
+点击右上角的star⭐，可以持续关注我们仓库接下来的更新哦!
 ## 项目进度：
 完成度标准介绍：
 <li>完成：文件中的每个有必要注释的结构体定义和每个函数都有中文注释。
@@ -38,7 +38,7 @@ redis仓库链接：https://github.com/redis/redis
 ### Step3:
 在你的本地对代码进行一番精心修改吧！🍉🍉<br>
 ### Step4:
-修改完后，是时候该上传你的改动到你fork来的远程仓库上了。你可以用git bash，也可以使用IDE里的git来操作。对于git不熟的用户建议使用IDE，IDE也更方便写commit信息，别忘了写commit信息哦！🤔🤔<br>
+修改完后，是时候该上传你的改动到你fork来的远程仓库上了。你可以用git bash，也可以使用IDE里的git来操作。对于git不熟的用户建议使用IDE，IDE也更方便写commit信息，别忘了写commit信息哦！当然我们只是增删改中文注释，如果要直接在 github 上编辑也可以。🤔🤔<br>
 ### Step5:
 上传之后，点进你的仓库主页，会出现一个"Contribute"，点击它，选择"Open pull request"，选择好你仓库的分支和你想要在这里合并的分支后，点击"Create pull request"，之后填写你的PR标题和正文内容，就成功提交一个PR啦！🍭🍭
 
