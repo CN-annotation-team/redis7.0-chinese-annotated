@@ -772,19 +772,18 @@ sds sdscatfmt(sds s, char const *fmt, ...) {
     return s;
 }
 
-/* Remove the part of the string from left and from right composed just of
- * contiguous characters found in 'cset', that is a null terminated C string.
+/* 在字符串的左右两边开始移出字符, 直到出现第一个不存在于 'cset' 中的字符.
+ * 'cset' 是一个以 null 结尾的 C 风格字符串.
  *
- * After the call, the modified sds string is no longer valid and all the
- * references must be substituted with the new pointer returned by the call.
+ * 调用之后, 被修改过的sds字符串将不再有效, 所有对其的引用都必须被替换为本次调用返回的新指针.
  *
- * Example:
+ * 演示代码:
  *
  * s = sdsnew("AA...AA.a.aa.aHelloWorld     :::");
  * s = sdstrim(s,"Aa. :");
  * printf("%s\n", s);
  *
- * Output will be just "HelloWorld".
+ * 这段代码最终的输出为 "HelloWorld".
  */
 sds sdstrim(sds s, const char *cset) {
     char *end, *sp, *ep;
@@ -801,16 +800,15 @@ sds sdstrim(sds s, const char *cset) {
     return s;
 }
 
-/* Changes the input string to be a subset of the original.
- * It does not release the free space in the string, so a call to
- * sdsRemoveFreeSpace may be wise after. */
+/* 把字符串缩短为它的子集.
+ * 这个函数并不会释放字符串中的空闲内存, 所以最好再之后调用 sdsRemoveFreeSpace 函数. */
 void sdssubstr(sds s, size_t start, size_t len) {
-    /* Clamp out of range input */
+    /* 限制缩小范围 */
     size_t oldlen = sdslen(s);
     if (start >= oldlen) start = len = 0;
     if (len > oldlen-start) len = oldlen-start;
 
-    /* Move the data */
+    /* 移出数据 */
     if (len) memmove(s, s+start, len);
     s[len] = 0;
     sdssetlen(s,len);
