@@ -39,9 +39,14 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
 /* Factory method to return a set that *can* hold "value". When the object has
  * an integer-encodable value, an intset will be returned. Otherwise a regular
  * hash table. */
+/* 工厂方法，返回一个能容纳 "value" 的集合。当对象有一个可编码成整数编码的值时，
+ * 将返回一个intset（整数集合）。否则就是一个普通的 hashtable（哈希表）。 */
 robj *setTypeCreate(sds value) {
+    /* 如果 value 能转换为 longlong 型的整数，说明可以使用整数编码，则创建一个整数集合 */
     if (isSdsRepresentableAsLongLong(value,NULL) == C_OK)
         return createIntsetObject();
+    
+    /* 创建一个普通的哈希表集合 */
     return createSetObject();
 }
 
@@ -49,12 +54,24 @@ robj *setTypeCreate(sds value) {
  *
  * If the value was already member of the set, nothing is done and 0 is
  * returned, otherwise the new element is added and 1 is returned. */
+
+/* 将指定的元素(value) 添加到一个集合里。
+ *
+ * 如果该值已经是该集合的成员，则不做任何事，返回0，否则将添加新元素，返回1。*/
 int setTypeAdd(robj *subject, sds value) {
     long long llval;
+
+    /* 对象编码类型为 hashtable */
     if (subject->encoding == OBJ_ENCODING_HT) {
+
+        /* 获取对象的哈希表（集合） */
         dict *ht = subject->ptr;
+
+        /* 将元素加入到哈希表中，若已经存在会返回 NULL */
         dictEntry *de = dictAddRaw(ht,value,NULL);
         if (de) {
+            
+            /* 给元素所在的 entry 设置 key 和 value */
             dictSetKey(ht,de,sdsdup(value));
             dictSetVal(ht,de,NULL);
             return 1;
@@ -66,19 +83,29 @@ int setTypeAdd(robj *subject, sds value) {
             if (success) {
                 /* Convert to regular set when the intset contains
                  * too many entries. */
+
+                /* 当整数集合中的元素数量超出限制值时，转换为普通（hashtable）集合 */
                 size_t max_entries = server.set_max_intset_entries;
+
                 /* limit to 1G entries due to intset internals. */
+                /* 由于整数集合内部结构的原因，限制整数集合最大限制为 1073741824(1<<30) 个 元素 */
                 if (max_entries >= 1<<30) max_entries = 1<<30;
+
+                /* 整数集合元素数量超过限制 */
                 if (intsetLen(subject->ptr) > max_entries)
+
+                    /* 转换集合内部编码为 hashtable */
                     setTypeConvert(subject,OBJ_ENCODING_HT);
                 return 1;
             }
         } else {
             /* Failed to get integer from object, convert to regular set. */
+            /* 从对象中获取整数失败，转换内部编码为 hashtable */
             setTypeConvert(subject,OBJ_ENCODING_HT);
 
             /* The set *was* an intset and this value is not integer
              * encodable, so dictAdd should always work. */
+            /* 该集合之前是一个整数集合，参数 value 不可被编码为整数，所以这里调用 dictAdd 总是有效的 */
             serverAssert(dictAdd(subject->ptr,sdsdup(value),NULL) == DICT_OK);
             return 1;
         }
@@ -88,31 +115,56 @@ int setTypeAdd(robj *subject, sds value) {
     return 0;
 }
 
+/* 删除集合中的元素 */
 int setTypeRemove(robj *setobj, sds value) {
     long long llval;
+
+    /* 对象编码类型为 hashtable */
     if (setobj->encoding == OBJ_ENCODING_HT) {
+
+        /* 删除元素 */
         if (dictDelete(setobj->ptr,value) == DICT_OK) {
+
+            /* 检查删除元素后是否能够缩容 */
             if (htNeedsResize(setobj->ptr)) dictResize(setobj->ptr);
             return 1;
         }
+    
+    /* 对象编码类型为 intset */
     } else if (setobj->encoding == OBJ_ENCODING_INTSET) {
+
+        /* 检查 value 是否能转换为 longlong 型的整数，若不能则不会做任何操作（因为 intset 中不会有字符串编码的元素） */
         if (isSdsRepresentableAsLongLong(value,&llval) == C_OK) {
-            int success;
+            int success; /* 用于记录是否删除元素成功 */
+
+            /* 删除元素 */
             setobj->ptr = intsetRemove(setobj->ptr,llval,&success);
             if (success) return 1;
         }
+    
+    /* 对象类型不是集合，报错 */
     } else {
         serverPanic("Unknown set encoding");
     }
     return 0;
 }
 
+/* 检查元素是否存在集合中 */
 int setTypeIsMember(robj *subject, sds value) {
     long long llval;
+
+    /* 对象编码类型为 hashtable */ 
     if (subject->encoding == OBJ_ENCODING_HT) {
+        /* 使用查找函数，找不到会返回 NULL，不为 NULL 返回 1，NULL 返回 0 */
         return dictFind((dict*)subject->ptr,value) != NULL;
+    
+    /* 对象编码类型为 intset */
     } else if (subject->encoding == OBJ_ENCODING_INTSET) {
+
+         /* 检查 value 是否能转换为 longlong 型的整数，若不能则不会做任何操作（因为 intset 中不会有字符串编码的元素） */
         if (isSdsRepresentableAsLongLong(value,&llval) == C_OK) {
+
+            /* 使用查找函数，查找成功返回 1，失败返回 0 */
             return intsetFind((intset*)subject->ptr,llval);
         }
     } else {
@@ -121,13 +173,26 @@ int setTypeIsMember(robj *subject, sds value) {
     return 0;
 }
 
+/* 初始化迭代器函数 */
 setTypeIterator *setTypeInitIterator(robj *subject) {
+
+    /* 分配内存空间 */
     setTypeIterator *si = zmalloc(sizeof(setTypeIterator));
+
+    /* 迭代器指向的对象和对象编码类型 设置为 所输入的对象和对象编码类型 */
     si->subject = subject;
     si->encoding = subject->encoding;
+
+    /* 编码类型为 hashtable */
     if (si->encoding == OBJ_ENCODING_HT) {
+
+        /* 初始化迭代器成员 di（字典（或称哈希表）迭代器） */
         si->di = dictGetIterator(subject->ptr);
+    
+    /* 编码类型为 intset */
     } else if (si->encoding == OBJ_ENCODING_INTSET) {
+        
+        /* 初始化迭代器成员 li 为 0，li 的值代表了迭代器所在的元素在 intset 里的位置 */
         si->ii = 0;
     } else {
         serverPanic("Unknown set encoding");
@@ -135,7 +200,10 @@ setTypeIterator *setTypeInitIterator(robj *subject) {
     return si;
 }
 
+/* 释放迭代器 */
 void setTypeReleaseIterator(setTypeIterator *si) {
+
+    /* 如果编码类型是 hashtable ，还要额外释放字典迭代器 di */
     if (si->encoding == OBJ_ENCODING_HT)
         dictReleaseIterator(si->di);
     zfree(si);
@@ -154,19 +222,49 @@ void setTypeReleaseIterator(setTypeIterator *si) {
  * used field with values which are easy to trap if misused.
  *
  * When there are no longer elements -1 is returned. */
+
+/* 移动到集合中的下一个 entry。返回当前位置的对象
+ *
+ * 由于集合元素在内部可以被存储为 SDS字符串 或简单的整数数组，
+ * setTypeNext 返回正在迭代的集合对象的编码，
+ * 并将相应地填充适当的指针（sdsele）或（llele）。
+ * 
+ * 注意，sdsele 和 llele 指针都应该被传递，而且不能为空，
+ * 该函数将尝试用一些被误用时能容易捕获到的值（是特殊的且出现概率极低的值）来防御性地填充未使用的字段。
+ *
+ * 当不再有元素时，将返回 -1 */
 int setTypeNext(setTypeIterator *si, sds *sdsele, int64_t *llele) {
+
+    /* 编码类型为 hashtable */
     if (si->encoding == OBJ_ENCODING_HT) {
+
+        /* 获取下一个位置的 entry */
         dictEntry *de = dictNext(si->di);
+
+        /* 若 de 为空即不存在下一个位置，返回 -1 */
         if (de == NULL) return -1;
+
+        /* 获取下一个位置的元素（字符串值） */
         *sdsele = dictGetKey(de);
+
+        /* llele 代表获取到的是整数值，编码类型为 hashtable 元素都是以字符串编码形式保存，
+         * 所以这里用 -123456789 进行防御性填充 */
         *llele = -123456789; /* Not needed. Defensive. */
+
+    /* 编码类型为 intset */
     } else if (si->encoding == OBJ_ENCODING_INTSET) {
+
+        /* 获取下一个位置的元素 */
         if (!intsetGet(si->subject->ptr,si->ii++,llele))
             return -1;
+
+        /* 整数集合中的元素都是整数编码，所以代表字符串值的 sdsele 用 NULL 进行防御性填充 */
         *sdsele = NULL; /* Not needed. Defensive. */
     } else {
         serverPanic("Wrong set encoding in setTypeNext");
     }
+
+    /* 返回集合对象的编码类型 */
     return si->encoding;
 }
 
@@ -177,12 +275,18 @@ int setTypeNext(setTypeIterator *si, sds *sdsele, int64_t *llele) {
  *
  * This function is the way to go for write operations where COW is not
  * an issue. */
+
+/* setTypeNext() 的一个对写时复制不友好的，但容易使用的版本是 setTypeNextObject()，
+ * 返回新的 SDS 字符串。所以如果你不保留这个对象的指针，你应该对它调用sdsfree() 来将它释放 */
 sds setTypeNextObject(setTypeIterator *si) {
     int64_t intele;
     sds sdsele;
     int encoding;
 
+    /* 调用 setTypeNext 函数获取下一个元素值以及集合编码类型 */
     encoding = setTypeNext(si,&sdsele,&intele);
+
+    /* 根据集合编码类型选择返回值 */
     switch(encoding) {
         case -1:    return NULL;
         case OBJ_ENCODING_INTSET:
@@ -203,17 +307,37 @@ sds setTypeNextObject(setTypeIterator *si) {
  * The caller provides both pointers to be populated with the right
  * object. The return value of the function is the object->encoding
  * field of the object and is used by the caller to check if the
- * int64_t pointer or the redis object pointer was populated.
+ * int64_t pointer or the sds object pointer was populated.
  *
  * Note that both the sdsele and llele pointers should be passed and cannot
  * be NULL since the function will try to defensively populate the non
  * used field with values which are easy to trap if misused. */
+
+/* 如果集合编码类型为 intset ，则返回的元素是一个 int64_t 值，
+ * 如果集合是一个普通集合（hashtable），则返回一个 SDS字符串。
+ *
+ * 调用者提供两个指针，以填充正确的对象。
+ * 该函数的返回值是对象的 object->encoding 字段，
+ * 被调用者用它来检查 int64_t 指针或 sds 指针是否被填充。
+ *
+ * 注意，sdsele 和 llele 指针都应该被传递，而且不能为空，
+ * 该函数将尝试用一些被误用时能容易捕获到的值（是特殊的且出现概率极低的值）来防御性地填充未使用的字段。 */
 int setTypeRandomElement(robj *setobj, sds *sdsele, int64_t *llele) {
+
+    /* 编码类型为 hashtable */
     if (setobj->encoding == OBJ_ENCODING_HT) {
+
+        /* 在字典中获取随机一个 entry */
         dictEntry *de = dictGetFairRandomKey(setobj->ptr);
+
+        /* 获取元素的值（字符串值） */
         *sdsele = dictGetKey(de);
         *llele = -123456789; /* Not needed. Defensive. */
+
+    /* 编码类型为 intset */
     } else if (setobj->encoding == OBJ_ENCODING_INTSET) {
+
+        /* 在整数集合中获取随机一个元素 */
         *llele = intsetRandom(setobj->ptr);
         *sdsele = NULL; /* Not needed. Defensive. */
     } else {
