@@ -41,7 +41,7 @@ int getGenericCommand(client *c);
 /* 检查输入字符串长度，
  * 是由 master 发出的命令且字符串小于限制的最大长度 512MB 返回 C_OK，否则返回 C_ERR */
 static int checkStringLength(client *c, long long size) {
-    if (!(c->flags & CLIENT_MASTER) && size > server.proto_max_bulk_len) {
+    if (!mustObeyClient(c) && size > server.proto_max_bulk_len) {
         addReplyError(c,"string exceeds maximum allowed size (proto-max-bulk-len)");
         return C_ERR;
     }
