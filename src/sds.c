@@ -814,23 +814,19 @@ void sdssubstr(sds s, size_t start, size_t len) {
     sdssetlen(s,len);
 }
 
-/* Turn the string into a smaller (or equal) string containing only the
- * substring specified by the 'start' and 'end' indexes.
+/* 根据 'start' 和 'end' 下标缩小字符串, 使字符串只包含这部分子集.
  *
- * start and end can be negative, where -1 means the last character of the
- * string, -2 the penultimate character, and so forth.
+ * start 和 end 可以是负数, 此时 -1 代表是字符串的最后一个字符, -2 代表倒数第二个, 以此类推.
  *
- * The interval is inclusive, so the start and end characters will be part
- * of the resulting string.
+ * 这段区间是闭区间, 所以 start 和 end 处的字符也会成为结果字符串的一部分.
  *
- * The string is modified in-place.
+ * 这个字符串是被原地修改的.
  *
- * NOTE: this function can be misleading and can have unexpected behaviour,
- * specifically when you want the length of the new string to be 0.
- * Having start==end will result in a string with one character.
- * please consider using sdssubstr instead.
+ * 注意: 这个函数有一处容易被误解, 容易导致发生一些意想不到的事情.
+ * 尤其是当您想把新字符串的长度设为 0 时, 此时如果 start == end, 结果字符串仍有一个字符.
+ * 此时请使用 sdssubstr 函数来代替.
  *
- * Example:
+ * 代码示例:
  *
  * s = sdsnew("Hello World");
  * sdsrange(s,1,-1); => "ello World"
@@ -846,14 +842,14 @@ void sdsrange(sds s, ssize_t start, ssize_t end) {
     sdssubstr(s, start, newlen);
 }
 
-/* Apply tolower() to every character of the sds string 's'. */
+/* 对 sds字符串 's' 中的每个字符应用 tolower() 函数. */
 void sdstolower(sds s) {
     size_t len = sdslen(s), j;
 
     for (j = 0; j < len; j++) s[j] = tolower(s[j]);
 }
 
-/* Apply toupper() to every character of the sds string 's'. */
+/* 对 sds字符串 's' 中的每个字符应用 toupper() 函数. */
 void sdstoupper(sds s) {
     size_t len = sdslen(s), j;
 
