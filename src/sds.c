@@ -856,17 +856,15 @@ void sdstoupper(sds s) {
     for (j = 0; j < len; j++) s[j] = toupper(s[j]);
 }
 
-/* Compare two sds strings s1 and s2 with memcmp().
+/* 使用 memcmp() 比较两个 sds字符串 s1 和 s2.
  *
- * Return value:
+ * 返回值:
  *
- *     positive if s1 > s2.
- *     negative if s1 < s2.
- *     0 if s1 and s2 are exactly the same binary string.
+ *     如果 s1 > s2 返回正数.
+ *     如果 s1 < s2 返回负数.
+ *     如果 s1 和 s2 完全相同, 返回 0.
  *
- * If two strings share exactly the same prefix, but one of the two has
- * additional characters, the longer string is considered to be greater than
- * the smaller one. */
+ * 如果两个字符串拥有同样的前缀, 但其中一个含有更多的字符, 那么认为, 长字符比短字符更大. */
 int sdscmp(const sds s1, const sds s2) {
     size_t l1, l2, minlen;
     int cmp;
@@ -879,21 +877,18 @@ int sdscmp(const sds s1, const sds s2) {
     return cmp;
 }
 
-/* Split 's' with separator in 'sep'. An array
- * of sds strings is returned. *count will be set
- * by reference to the number of tokens returned.
+/* 使用 'sep' 中的分隔符对 's' 进行分割.
+ * 返回一个 sds字符串的数组.
+ * *count 中的值将被设置为返回的的词组的数量.
  *
- * On out of memory, zero length string, zero length
- * separator, NULL is returned.
+ * 在内存不足, 或者字符串长度为 0, 没有分隔符时, 返回 NULL.
  *
- * Note that 'sep' is able to split a string using
- * a multi-character separator. For example
- * sdssplit("foo_-_bar","_-_"); will return two
- * elements "foo" and "bar".
+ * 注意: 在分割字符串时, 'sep' 可以是多字符的分隔符.
+ * 例如, sdssplit("foo_-_bar","_-_");
+ * 将会返回两个元素 "foo" 和 "bar".
  *
- * This version of the function is binary-safe but
- * requires length arguments. sdssplit() is just the
- * same function but for zero-terminated strings.
+ * 该版本的这个函数是类型安全的, 但是也需要 length 作为参数.
+ * sdssplit() 函数与该函数相同, 只不过是为使用 0 作为终结符的字符串准备的.
  */
 sds *sdssplitlen(const char *s, ssize_t len, const char *sep, int seplen, int *count) {
     int elements = 0, slots = 5;
