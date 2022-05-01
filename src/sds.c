@@ -903,7 +903,7 @@ sds *sdssplitlen(const char *s, ssize_t len, const char *sep, int seplen, int *c
     if (tokens == NULL) return NULL;
 
     for (j = 0; j < (len-(seplen-1)); j++) {
-        /* make sure there is room for the next element and the final one */
+        /* 确保留有下一个元素和最后一个元素的空间 */
         if (slots < elements+2) {
             sds *newtokens;
 
@@ -912,16 +912,16 @@ sds *sdssplitlen(const char *s, ssize_t len, const char *sep, int seplen, int *c
             if (newtokens == NULL) goto cleanup;
             tokens = newtokens;
         }
-        /* search the separator */
+        /* 查找分割符 */
         if ((seplen == 1 && *(s+j) == sep[0]) || (memcmp(s+j,sep,seplen) == 0)) {
             tokens[elements] = sdsnewlen(s+start,j-start);
             if (tokens[elements] == NULL) goto cleanup;
             elements++;
             start = j+seplen;
-            j = j+seplen-1; /* skip the separator */
+            j = j+seplen-1; /* 越过这个分隔符 */
         }
     }
-    /* Add the final element. We are sure there is room in the tokens array. */
+    /* 添加最后一个元素. 已确保在这个符号数组中仍有空间. */
     tokens[elements] = sdsnewlen(s+start,len-start);
     if (tokens[elements] == NULL) goto cleanup;
     elements++;
@@ -946,12 +946,10 @@ void sdsfreesplitres(sds *tokens, int count) {
     s_free(tokens);
 }
 
-/* Append to the sds string "s" an escaped string representation where
- * all the non-printable characters (tested with isprint()) are turned into
- * escapes in the form "\n\r\a...." or "\x<hex-number>".
+/* 在 sds字符串 "s" 后面追加一个转义字符串表达形式, 其中所有不可打印的字符 (可以通过 isprint() 函数检测)
+ * 会被转换成 "\n\r\a...." 或者 "\x<hex-number>" 的转义形式.
  *
- * After the call, the modified sds string is no longer valid and all the
- * references must be substituted with the new pointer returned by the call. */
+ * 该函数调用之后, 传入的 sds 字符串不再有效, 所有相关引用都必须被替换为调用后返回的新指针. */
 sds sdscatrepr(sds s, const char *p, size_t len) {
     s = sdscatlen(s,"\"",1);
     while(len--) {
@@ -977,12 +975,10 @@ sds sdscatrepr(sds s, const char *p, size_t len) {
     return sdscatlen(s,"\"",1);
 }
 
-/* Returns one if the string contains characters to be escaped
- * by sdscatrepr(), zero otherwise.
+/* 如果字符串包含要被 sdscatrepr() 转义的字符, 则返回 1, 否则返回0.
  *
- * Typically, this should be used to help protect aggregated strings in a way
- * that is compatible with sdssplitargs(). For this reason, also spaces will be
- * treated as needing an escape.
+ * 一个典型例子, 这应该用于帮助保护聚合字符串, 这种方式要与 sdssplitargs() 函数兼容.
+ * 出于这个原因，空格也将被视为需要转义。
  */
 int sdsneedsrepr(const sds s) {
     size_t len = sdslen(s);
@@ -1026,24 +1022,19 @@ int hex_digit_to_int(char c) {
     }
 }
 
-/* Split a line into arguments, where every argument can be in the
- * following programming-language REPL-alike form:
+/* 在一行中分割出参数, 每一个参数都应有类似编程语言 REPL 的格式.
  *
- * foo bar "newline are supported\n" and "\xff\x00otherstuff"
+ * foo bar "newline are supported\n" 和 "\xff\x00otherstuff"
  *
- * The number of arguments is stored into *argc, and an array
- * of sds is returned.
+ * 参数的个数存储在 *argc 中, 之后会返回一个 sds 的数组.
  *
- * The caller should free the resulting array of sds strings with
- * sdsfreesplitres().
+ * 调用者应该通过 sdsfreesplitres() 函数释放返回的字符串的空间.
  *
- * Note that sdscatrepr() is able to convert back a string into
- * a quoted string in the same format sdssplitargs() is able to parse.
+ * 注意, sdscatrepr() 函数可以将字符串转换回 sdssplitargs() 函数能够解析的引号字符串的格式.
  *
- * The function returns the allocated tokens on success, even when the
- * input string is empty, or NULL if the input contains unbalanced
- * quotes or closed quotes followed by non space characters
- * as in: "foo"bar or "foo'
+ * 如果成功, 函数返回已分配好空间的解析出的符号们, 就算输入的字符串为空或者是 NULL,
+ * 或者存在双引号不匹配的情况, 或双引号字符串后面有未被空格分隔的字符.
+ * 就像这样: "foo"bar or "foo'
  */
 sds *sdssplitargs(const char *line, int *argc) {
     const char *p = line;
@@ -1056,8 +1047,8 @@ sds *sdssplitargs(const char *line, int *argc) {
         while(*p && isspace(*p)) p++;
         if (*p) {
             /* get a token */
-            int inq=0;  /* set to 1 if we are in "quotes" */
-            int insq=0; /* set to 1 if we are in 'single quotes' */
+            int inq=0;  /* 设为 1 如果在 "quotes" 中 */
+            int insq=0; /* 设为 1 如果在 'single quotes' 中 */
             int done=0;
 
             if (current == NULL) current = sdsempty();
@@ -1087,12 +1078,11 @@ sds *sdssplitargs(const char *line, int *argc) {
                         }
                         current = sdscatlen(current,&c,1);
                     } else if (*p == '"') {
-                        /* closing quote must be followed by a space or
-                         * nothing at all. */
+                        /* 关闭的引号后面必须有一个空格, 或者没有根本后面. */
                         if (*(p+1) && !isspace(*(p+1))) goto err;
                         done=1;
                     } else if (!*p) {
-                        /* unterminated quotes */
+                        /* 未终止的双引号 */
                         goto err;
                     } else {
                         current = sdscatlen(current,p,1);
@@ -1134,13 +1124,13 @@ sds *sdssplitargs(const char *line, int *argc) {
                 }
                 if (*p) p++;
             }
-            /* add the token to the vector */
+            /* 把符号加入数组 */
             vector = s_realloc(vector,((*argc)+1)*sizeof(char*));
             vector[*argc] = current;
             (*argc)++;
             current = NULL;
         } else {
-            /* Even on empty input string return something not NULL. */
+            /* 即使输入为空字符串, 也不能返回 NULL. */
             if (vector == NULL) vector = s_malloc(sizeof(void*));
             return vector;
         }
