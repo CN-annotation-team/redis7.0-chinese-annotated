@@ -171,7 +171,7 @@ sds sdstrynewlen(const void *init, size_t initlen) {
     return _sdsnewlen(init, initlen, 1);
 }
 
-/* 创建一个空的 (长度为 0) sds 字符串. 即使在这种情况下，字符串也总是有一个隐式的空终结符项. */
+/* 创建一个空的 (长度为 0) sds 字符串. 即使在这种情况下, 字符串也总是有一个隐式的空终结符项. */
 sds sdsempty(void) {
     return sdsnewlen("",0);
 }
@@ -814,23 +814,19 @@ void sdssubstr(sds s, size_t start, size_t len) {
     sdssetlen(s,len);
 }
 
-/* Turn the string into a smaller (or equal) string containing only the
- * substring specified by the 'start' and 'end' indexes.
+/* 根据 'start' 和 'end' 下标缩小字符串, 使字符串只包含这部分子集.
  *
- * start and end can be negative, where -1 means the last character of the
- * string, -2 the penultimate character, and so forth.
+ * start 和 end 可以是负数, 此时 -1 代表是字符串的最后一个字符, -2 代表倒数第二个, 以此类推.
  *
- * The interval is inclusive, so the start and end characters will be part
- * of the resulting string.
+ * 这段区间是闭区间, 所以 start 和 end 处的字符也会成为结果字符串的一部分.
  *
- * The string is modified in-place.
+ * 这个字符串是被原地修改的.
  *
- * NOTE: this function can be misleading and can have unexpected behaviour,
- * specifically when you want the length of the new string to be 0.
- * Having start==end will result in a string with one character.
- * please consider using sdssubstr instead.
+ * 注意: 这个函数有一处容易被误解, 容易导致发生一些意想不到的事情.
+ * 尤其是当您想把新字符串的长度设为 0 时, 此时如果 start == end, 结果字符串仍有一个字符.
+ * 此时请使用 sdssubstr 函数来代替.
  *
- * Example:
+ * 代码示例:
  *
  * s = sdsnew("Hello World");
  * sdsrange(s,1,-1); => "ello World"
@@ -846,31 +842,29 @@ void sdsrange(sds s, ssize_t start, ssize_t end) {
     sdssubstr(s, start, newlen);
 }
 
-/* Apply tolower() to every character of the sds string 's'. */
+/* 对 sds字符串 's' 中的每个字符应用 tolower() 函数. */
 void sdstolower(sds s) {
     size_t len = sdslen(s), j;
 
     for (j = 0; j < len; j++) s[j] = tolower(s[j]);
 }
 
-/* Apply toupper() to every character of the sds string 's'. */
+/* 对 sds字符串 's' 中的每个字符应用 toupper() 函数. */
 void sdstoupper(sds s) {
     size_t len = sdslen(s), j;
 
     for (j = 0; j < len; j++) s[j] = toupper(s[j]);
 }
 
-/* Compare two sds strings s1 and s2 with memcmp().
+/* 使用 memcmp() 比较两个 sds字符串 s1 和 s2.
  *
- * Return value:
+ * 返回值:
  *
- *     positive if s1 > s2.
- *     negative if s1 < s2.
- *     0 if s1 and s2 are exactly the same binary string.
+ *     如果 s1 > s2 返回正数.
+ *     如果 s1 < s2 返回负数.
+ *     如果 s1 和 s2 完全相同, 返回 0.
  *
- * If two strings share exactly the same prefix, but one of the two has
- * additional characters, the longer string is considered to be greater than
- * the smaller one. */
+ * 如果两个字符串拥有同样的前缀, 但其中一个含有更多的字符, 那么认为, 长字符比短字符更大. */
 int sdscmp(const sds s1, const sds s2) {
     size_t l1, l2, minlen;
     int cmp;
@@ -883,21 +877,18 @@ int sdscmp(const sds s1, const sds s2) {
     return cmp;
 }
 
-/* Split 's' with separator in 'sep'. An array
- * of sds strings is returned. *count will be set
- * by reference to the number of tokens returned.
+/* 使用 'sep' 中的分隔符对 's' 进行分割.
+ * 返回一个 sds字符串的数组.
+ * *count 中的值将被设置为返回的的词组的数量.
  *
- * On out of memory, zero length string, zero length
- * separator, NULL is returned.
+ * 在内存不足, 或者字符串长度为 0, 没有分隔符时, 返回 NULL.
  *
- * Note that 'sep' is able to split a string using
- * a multi-character separator. For example
- * sdssplit("foo_-_bar","_-_"); will return two
- * elements "foo" and "bar".
+ * 注意: 在分割字符串时, 'sep' 可以是多字符的分隔符.
+ * 例如, sdssplit("foo_-_bar","_-_");
+ * 将会返回两个元素 "foo" 和 "bar".
  *
- * This version of the function is binary-safe but
- * requires length arguments. sdssplit() is just the
- * same function but for zero-terminated strings.
+ * 该版本的这个函数是类型安全的, 但是也需要 length 作为参数.
+ * sdssplit() 函数与该函数相同, 只不过是为使用 0 作为终结符的字符串准备的.
  */
 sds *sdssplitlen(const char *s, ssize_t len, const char *sep, int seplen, int *count) {
     int elements = 0, slots = 5;
@@ -912,7 +903,7 @@ sds *sdssplitlen(const char *s, ssize_t len, const char *sep, int seplen, int *c
     if (tokens == NULL) return NULL;
 
     for (j = 0; j < (len-(seplen-1)); j++) {
-        /* make sure there is room for the next element and the final one */
+        /* 确保留有下一个元素和最后一个元素的空间 */
         if (slots < elements+2) {
             sds *newtokens;
 
@@ -921,16 +912,16 @@ sds *sdssplitlen(const char *s, ssize_t len, const char *sep, int seplen, int *c
             if (newtokens == NULL) goto cleanup;
             tokens = newtokens;
         }
-        /* search the separator */
+        /* 查找分割符 */
         if ((seplen == 1 && *(s+j) == sep[0]) || (memcmp(s+j,sep,seplen) == 0)) {
             tokens[elements] = sdsnewlen(s+start,j-start);
             if (tokens[elements] == NULL) goto cleanup;
             elements++;
             start = j+seplen;
-            j = j+seplen-1; /* skip the separator */
+            j = j+seplen-1; /* 越过这个分隔符 */
         }
     }
-    /* Add the final element. We are sure there is room in the tokens array. */
+    /* 添加最后一个元素. 已确保在这个符号数组中仍有空间. */
     tokens[elements] = sdsnewlen(s+start,len-start);
     if (tokens[elements] == NULL) goto cleanup;
     elements++;
@@ -955,12 +946,10 @@ void sdsfreesplitres(sds *tokens, int count) {
     s_free(tokens);
 }
 
-/* Append to the sds string "s" an escaped string representation where
- * all the non-printable characters (tested with isprint()) are turned into
- * escapes in the form "\n\r\a...." or "\x<hex-number>".
+/* 在 sds字符串 "s" 后面追加一个转义字符串表达形式, 其中所有不可打印的字符 (可以通过 isprint() 函数检测)
+ * 会被转换成 "\n\r\a...." 或者 "\x<hex-number>" 的转义形式.
  *
- * After the call, the modified sds string is no longer valid and all the
- * references must be substituted with the new pointer returned by the call. */
+ * 该函数调用之后, 传入的 sds 字符串不再有效, 所有相关引用都必须被替换为调用后返回的新指针. */
 sds sdscatrepr(sds s, const char *p, size_t len) {
     s = sdscatlen(s,"\"",1);
     while(len--) {
@@ -986,12 +975,10 @@ sds sdscatrepr(sds s, const char *p, size_t len) {
     return sdscatlen(s,"\"",1);
 }
 
-/* Returns one if the string contains characters to be escaped
- * by sdscatrepr(), zero otherwise.
+/* 如果字符串包含要被 sdscatrepr() 转义的字符, 则返回 1, 否则返回 0.
  *
- * Typically, this should be used to help protect aggregated strings in a way
- * that is compatible with sdssplitargs(). For this reason, also spaces will be
- * treated as needing an escape.
+ * 一个典型例子, 这应该用于帮助保护聚合字符串, 这种方式要与 sdssplitargs() 函数兼容.
+ * 出于这个原因, 空格也将被视为需要转义.
  */
 int sdsneedsrepr(const sds s) {
     size_t len = sdslen(s);
@@ -1035,24 +1022,19 @@ int hex_digit_to_int(char c) {
     }
 }
 
-/* Split a line into arguments, where every argument can be in the
- * following programming-language REPL-alike form:
+/* 在一行中分割出参数, 每一个参数都应有类似编程语言 REPL 的格式.
  *
- * foo bar "newline are supported\n" and "\xff\x00otherstuff"
+ * foo bar "newline are supported\n" 和 "\xff\x00otherstuff"
  *
- * The number of arguments is stored into *argc, and an array
- * of sds is returned.
+ * 参数的个数存储在 *argc 中, 之后会返回一个 sds 的数组.
  *
- * The caller should free the resulting array of sds strings with
- * sdsfreesplitres().
+ * 调用者应该通过 sdsfreesplitres() 函数释放返回的字符串的空间.
  *
- * Note that sdscatrepr() is able to convert back a string into
- * a quoted string in the same format sdssplitargs() is able to parse.
+ * 注意, sdscatrepr() 函数可以将字符串转换回 sdssplitargs() 函数能够解析的引号字符串的格式.
  *
- * The function returns the allocated tokens on success, even when the
- * input string is empty, or NULL if the input contains unbalanced
- * quotes or closed quotes followed by non space characters
- * as in: "foo"bar or "foo'
+ * 如果成功, 函数返回已分配好空间的解析出的符号们, 就算输入的字符串为空或者是 NULL,
+ * 或者存在双引号不匹配的情况, 或双引号字符串后面有未被空格分隔的字符.
+ * 就像这样: "foo"bar or "foo'
  */
 sds *sdssplitargs(const char *line, int *argc) {
     const char *p = line;
@@ -1065,8 +1047,8 @@ sds *sdssplitargs(const char *line, int *argc) {
         while(*p && isspace(*p)) p++;
         if (*p) {
             /* get a token */
-            int inq=0;  /* set to 1 if we are in "quotes" */
-            int insq=0; /* set to 1 if we are in 'single quotes' */
+            int inq=0;  /* 设为 1 如果在 "quotes" 中 */
+            int insq=0; /* 设为 1 如果在 'single quotes' 中 */
             int done=0;
 
             if (current == NULL) current = sdsempty();
@@ -1096,12 +1078,11 @@ sds *sdssplitargs(const char *line, int *argc) {
                         }
                         current = sdscatlen(current,&c,1);
                     } else if (*p == '"') {
-                        /* closing quote must be followed by a space or
-                         * nothing at all. */
+                        /* 关闭的引号后面必须有一个空格, 或者没有根本后面. */
                         if (*(p+1) && !isspace(*(p+1))) goto err;
                         done=1;
                     } else if (!*p) {
-                        /* unterminated quotes */
+                        /* 未终止的双引号 */
                         goto err;
                     } else {
                         current = sdscatlen(current,p,1);
@@ -1143,13 +1124,13 @@ sds *sdssplitargs(const char *line, int *argc) {
                 }
                 if (*p) p++;
             }
-            /* add the token to the vector */
+            /* 把符号加入数组 */
             vector = s_realloc(vector,((*argc)+1)*sizeof(char*));
             vector[*argc] = current;
             (*argc)++;
             current = NULL;
         } else {
-            /* Even on empty input string return something not NULL. */
+            /* 即使输入为空字符串, 也不能返回 NULL. */
             if (vector == NULL) vector = s_malloc(sizeof(void*));
             return vector;
         }
@@ -1164,15 +1145,12 @@ err:
     return NULL;
 }
 
-/* Modify the string substituting all the occurrences of the set of
- * characters specified in the 'from' string to the corresponding character
- * in the 'to' array.
+/* 修改字符串, 将' from' 字符串中指定的所有字符集合替换为 'to' 数组中相应的字符.
  *
- * For instance: sdsmapchars(mystring, "ho", "01", 2)
- * will have the effect of turning the string "hello" into "0ell1".
+ * 例如: sdsmapchars(mystring, "ho", "01", 2)
+ * 最终, 字符串 "hello" 被转化成 "0ell1".
  *
- * The function returns the sds string pointer, that is always the same
- * as the input pointer since no resize is needed. */
+ * 这个函数会返回 sds字符串 的指针, 如果中间没有发生再分配, 这个指针和传入的指针相同. */
 sds sdsmapchars(sds s, const char *from, const char *to, size_t setlen) {
     size_t j, i, l = sdslen(s);
 
@@ -1187,8 +1165,7 @@ sds sdsmapchars(sds s, const char *from, const char *to, size_t setlen) {
     return s;
 }
 
-/* Join an array of C strings using the specified separator (also a C string).
- * Returns the result as an sds string. */
+/* 使用指定的分隔符 (也是 C字符串 ) 拼接 C字符串 的数组. 返回的是 sds字符串. */
 sds sdsjoin(char **argv, int argc, char *sep) {
     sds join = sdsempty();
     int j;
@@ -1200,7 +1177,7 @@ sds sdsjoin(char **argv, int argc, char *sep) {
     return join;
 }
 
-/* Like sdsjoin, but joins an array of SDS strings. */
+/* 和 sdsjoin 函数很像, 但这个函数拼接的是 sds字符串. */
 sds sdsjoinsds(sds *argv, int argc, const char *sep, size_t seplen) {
     sds join = sdsempty();
     int j;
@@ -1212,20 +1189,17 @@ sds sdsjoinsds(sds *argv, int argc, const char *sep, size_t seplen) {
     return join;
 }
 
-/* Wrappers to the allocators used by SDS. Note that SDS will actually
- * just use the macros defined into sdsalloc.h in order to avoid to pay
- * the overhead of function calls. Here we define these wrappers only for
- * the programs SDS is linked to, if they want to touch the SDS internals
- * even if they use a different allocator. */
+/* 包装 SDS 所使用的分配器. 注意, SDS将只会使用定义在 sdsalloc.h 中的宏, 目的是减少函数调用的开销.
+ * 我们在这定义装饰器只是为了那些 SDS 被链接的程序, 如果那些程序想要触及 SDS 内部的话,
+ * 虽然他们使用了不同的分配器. */
 void *sds_malloc(size_t size) { return s_malloc(size); }
 void *sds_realloc(void *ptr, size_t size) { return s_realloc(ptr,size); }
 void sds_free(void *ptr) { s_free(ptr); }
 
-/* Perform expansion of a template string and return the result as a newly
- * allocated sds.
+/* 对模板字符串进行展开, 并将结果作为新分配的 sds 返回.
  *
- * Template variables are specified using curly brackets, e.g. {variable}.
- * An opening bracket can be quoted by repeating it twice.
+ * 模板字符串由花括号指定, 例如 {variable}.
+ * 开括号可通过重复两次来引用.
  */
 sds sdstemplate(const char *template, sdstemplate_callback_t cb_func, void *cb_arg)
 {
@@ -1233,39 +1207,38 @@ sds sdstemplate(const char *template, sdstemplate_callback_t cb_func, void *cb_a
     const char *p = template;
 
     while (*p) {
-        /* Find next variable, copy everything until there */
+        /* 寻找下一个变量, 拷贝到那之前的一切字符 */
         const char *sv = strchr(p, '{');
         if (!sv) {
-            /* Not found: copy till rest of template and stop */
+            /* 未找到: 拷贝剩余模板之后停止 */
             res = sdscat(res, p);
             break;
         } else if (sv > p) {
-            /* Found: copy anything up to the beginning of the variable */
+            /* 找到: 复制变量开头之前的所有内容 */
             res = sdscatlen(res, p, sv - p);
         }
 
-        /* Skip into variable name, handle premature end or quoting */
+        /* 切换到变量名, 处理提前结束或引用 */
         sv++;
-        if (!*sv) goto error;       /* Premature end of template */
+        if (!*sv) goto error;       /* 模板提前结束 */
         if (*sv == '{') {
-            /* Quoted '{' */
+            /* 被引用的 '{' */
             p = sv + 1;
             res = sdscat(res, "{");
             continue;
         }
 
-        /* Find end of variable name, handle premature end of template */
+        /* 找到变量名的末尾, 处理模板的过早结束 */
         const char *ev = strchr(sv, '}');
         if (!ev) goto error;
 
-        /* Pass variable name to callback and obtain value. If callback failed,
-         * abort. */
+        /* 将变量名传递给回调函数并获取值. 如果回调失败, 那么终止. */
         sds varname = sdsnewlen(sv, ev - sv);
         sds value = cb_func(varname, cb_arg);
         sdsfree(varname);
         if (!value) goto error;
 
-        /* Append value to result and continue */
+        /* 把值附加到结果后面, 继续运行 */
         res = sdscat(res, value);
         sdsfree(value);
         p = ev + 1;
