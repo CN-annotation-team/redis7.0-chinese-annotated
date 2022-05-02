@@ -975,7 +975,7 @@ sds sdscatrepr(sds s, const char *p, size_t len) {
     return sdscatlen(s,"\"",1);
 }
 
-/* 如果字符串包含要被 sdscatrepr() 转义的字符, 则返回 1, 否则返回0.
+/* 如果字符串包含要被 sdscatrepr() 转义的字符, 则返回 1, 否则返回 0.
  *
  * 一个典型例子, 这应该用于帮助保护聚合字符串, 这种方式要与 sdssplitargs() 函数兼容.
  * 出于这个原因, 空格也将被视为需要转义.
