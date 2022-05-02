@@ -35,8 +35,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <hiredis.h>
-#include <sdscompat.h> /* Use hiredis' sds compat header that maps sds calls to their hi_ variants */
-#include <sds.h> /* use sds.h from hiredis, so that only one set of sds functions will be present in the binary */
+#include <sdscompat.h> /* 使用 hiredis 的 sds 兼容头文件将 sds 调用映射到对应的以 "hi_" 为前缀的变种 */
+#include <sds.h> /* 使用 hiredis 中的 sds.h, 使程序中只存在一套 sds 函数 */
 #include <unistd.h>
 #include <string.h>
 #include <ctype.h>
@@ -133,7 +133,7 @@ error:
  * (像调用 read()/wirte() 一样调用它们).
  */
 
-/* 将一段裸数据写入上下文 'redisContext' 中.
+/* 将一段原始数据写入上下文 'redisContext' 中.
  * 如果 hiredis 内部的缓冲区中仍有数据(由 hiredis 留下的)
  * 我们会将这些数据先写入.
  */
@@ -162,7 +162,7 @@ ssize_t cliWriteConn(redisContext *c, const char *buf, size_t buf_len)
     }
 
     /* 如果我们成功写入了整个缓冲区, 则释放整个缓冲区.
-     * 我们可能写入了比 'buf_len' 更多的数据 (如果 'c->obuf' 在调用开始时是空的),
+     * 我们可能写入了比 'buf_len' 更多的数据 (如果 'c->obuf' 在最初时不是空的),
      * 但我们不用告知调用者.
      */
     if (done) {
@@ -171,7 +171,7 @@ ssize_t cliWriteConn(redisContext *c, const char *buf, size_t buf_len)
     }
 
     /* 写入成功了,
-     * 但还有一些需要我们将它们从缓冲区中移除的数据剩下.
+     * 但还有一些剩下的数据,我们需要将它们从缓冲区中移除.
      *
      * 是否还有遗留在我们的 'buf' 之前的数据?
      * 如果有, 将我们的数据从缓冲区中移除, 并报告没有写入新的数据.
@@ -181,8 +181,8 @@ ssize_t cliWriteConn(redisContext *c, const char *buf, size_t buf_len)
         return 0;
     }
 
-    /* 现在我们确定没有先前的数据留着缓冲区中.
-     * 我们清空缓冲区, 并报告我们写入了多少数据.
+    /* 现在我们确定没有先前的数据留在缓冲区中.
+     * 我们清空缓冲区, 并报告写入了多少数据.
      */
     size_t left = sdslen(c->obuf);
     sdsclear(c->obuf);
@@ -219,10 +219,17 @@ sds readArgFromStdin(void) {
     return arg;
 }
 
-/* Create an sds array from argv, either as-is or by dequoting every
+/*
+ * 从命令行参数 'argv' 创建一个 sds 字符串数组,
+ * 如果 'quoted' 为 false, 直接存储 'avgv' 中每一个参数.
+ * 如果 'quoted' 为 true, 则将每一个参数视为被引号包裹的字符串,
+ * 进行解析后存入数组,
+ * 遇到无效的引号包裹的字符串则返回 NULL.
+ * Create an sds array from argv, either as-is or by dequoting every
  * element. When quoted is non-zero, may return a NULL to indicate an
  * invalid quoted string.
  *
+ * 调用者应当使用 sdsfreesplitres() 释放返回的 sds 字符串数组.
  * The caller should free the resulting array of sds strings with
  * sdsfreesplitres().
  */
@@ -246,7 +253,9 @@ sds *getSdsArrayFromArgv(int argc,char **argv, int quoted) {
     return res;
 }
 
-/* Unquote a null-terminated string and return it as a binary-safe sds. */
+/* 解析一个零终止的字符串, 以二进制安全的 sds 返回.
+ * Unquote a null-terminated string and return it as a binary-safe sds.
+ */
 sds unquoteCString(char *str) {
     int count;
     sds *unquoted = sdssplitargs(str, &count);
@@ -264,7 +273,9 @@ sds unquoteCString(char *str) {
 }
 
 
-/* URL-style percent decoding. */
+/* URL 风格的 % 解码, 例如: "%F2" -> '\xF2'
+ * URL-style percent decoding.
+ */
 #define isHexChar(c) (isdigit(c) || ((c) >= 'a' && (c) <= 'f'))
 #define decodeHexChar(c) (isdigit(c) ? (c) - '0' : (c) - 'a' + 10)
 #define decodeHex(h, l) ((decodeHexChar(h) << 4) + decodeHexChar(l))
@@ -298,7 +309,14 @@ static sds percentDecode(const char *pe, size_t len) {
     return ret;
 }
 
-/* Parse a URI and extract the server connection information.
+/* 解析一个 URI, 提取链接的信息.
+ * URI 协议基于现有的规格[1], 但排除对查询参数的支持.
+ * 有效的 URIs 如下:
+ *   协议:  "redis://"
+ *   认证:  [[用户名] ":"] <密码> "@"] [<主机名> [":" <端口>]]
+ *   路径:  ["/" [<数据库索引>]]
+ *
+ * Parse a URI and extract the server connection information.
  * URI scheme is based on the provisional specification[1] excluding support
  * for query parameters. Valid URIs are:
  *   scheme:    "redis://"
@@ -319,7 +337,9 @@ void parseRedisUri(const char *uri, const char* tool_name, cliConnInfo *connInfo
     const char *end = uri + strlen(uri);
     const char *userinfo, *username, *port, *host, *path;
 
-    /* URI must start with a valid scheme. */
+    /* URL 必须以一个有效的协议开头.
+     * URI must start with a valid scheme.
+     */
     if (!strncasecmp(tlsscheme, curr, strlen(tlsscheme))) {
 #ifdef USE_OPENSSL
         *tls_flag = 1;
@@ -336,7 +356,9 @@ void parseRedisUri(const char *uri, const char* tool_name, cliConnInfo *connInfo
     }
     if (curr == end) return;
 
-    /* Extract user info. */
+    /* 提取用户信息.
+     * Extract user info.
+     */
     if ((userinfo = strchr(curr,'@'))) {
         if ((username = strchr(curr, ':')) && username < userinfo) {
             connInfo->user = percentDecode(curr, username - curr);
@@ -348,7 +370,9 @@ void parseRedisUri(const char *uri, const char* tool_name, cliConnInfo *connInfo
     }
     if (curr == end) return;
 
-    /* Extract host and port. */
+    /* 提取主机和端口.
+     * Extract host and port.
+     */
     path = strchr(curr, '/');
     if (*curr != '/') {
         host = path ? path - 1 : end;
@@ -362,7 +386,9 @@ void parseRedisUri(const char *uri, const char* tool_name, cliConnInfo *connInfo
     curr = path ? path + 1 : end;
     if (curr == end) return;
 
-    /* Extract database number. */
+    /* 提取数据库的索引.
+     * Extract database number.
+     */
     connInfo->input_dbnum = atoi(curr);
 }
 
@@ -373,6 +399,9 @@ void freeCliConnInfo(cliConnInfo connInfo){
 }
 
 /*
+ * 将一个 Unicode 字符串转义为 JSON 字符串 (--json), 遵从 RFC 7159.
+ * (此处采用的是 UTF-32)
+ *
  * Escape a Unicode string for JSON output (--json), following RFC 7159:
  * https://datatracker.ietf.org/doc/html/rfc7159#section-7
 */
