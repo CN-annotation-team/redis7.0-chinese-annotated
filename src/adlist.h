@@ -33,27 +33,43 @@
 
 /* Node, List, and Iterator are the only data structures used currently. */
 
+/* 双端链表节点 */
 typedef struct listNode {
+    /* 指向前驱节点的指针 */
     struct listNode *prev;
+    /* 指向后继节点的指针 */
     struct listNode *next;
+    /* void * 指针，指向具体的元素，节点可以是任意类型 */
     void *value;
 } listNode;
 
+/* 双端链表迭代器 */
 typedef struct listIter {
+    /* 指向遍历的下一个节点的指针 */
     listNode *next;
+    /* 遍历的方向：从表头遍历还是从表尾遍历 */
     int direction;
 } listIter;
 
+/* 双端链表
+ * 有记录头尾两节点，支持从链表头部或者尾部进行遍历，是早期列表键 PUSH/POP 实现高效的关键
+ * 每个链表节点有记录前驱节点和后继节点的指针，可以使得列表键支持往后或者往前进行遍历
+ * 有额外用 len 存储链表长度，O(1) 的时间复杂度获取节点个数，是 LLEN 命令高效的关键 */
 typedef struct list {
+    /* 指向链表头节点的指针，支持从表头开始遍历 */
     listNode *head;
+    /* 指向链表尾节点的指针，支持从表尾开始遍历 */
     listNode *tail;
+    /* 各种类型的链表可以定义自己的复制函数 / 释放函数 / 比较函数 */
     void *(*dup)(void *ptr);
     void (*free)(void *ptr);
     int (*match)(void *ptr, void *key);
+    /* 链表长度，即链表节点数量，O(1) 时间复杂度获取 */
     unsigned long len;
 } list;
 
 /* Functions implemented as macros */
+/* 一些链表操作的辅助方法 */
 #define listLength(l) ((l)->len)
 #define listFirst(l) ((l)->head)
 #define listLast(l) ((l)->tail)
@@ -61,10 +77,12 @@ typedef struct list {
 #define listNextNode(n) ((n)->next)
 #define listNodeValue(n) ((n)->value)
 
+/* 设置链表的相关函数指针 */
 #define listSetDupMethod(l,m) ((l)->dup = (m))
 #define listSetFreeMethod(l,m) ((l)->free = (m))
 #define listSetMatchMethod(l,m) ((l)->match = (m))
 
+/* 获取链表的相关函数指针 */
 #define listGetDupMethod(l) ((l)->dup)
 #define listGetFreeMethod(l) ((l)->free)
 #define listGetMatchMethod(l) ((l)->match)
@@ -90,6 +108,7 @@ void listRotateHeadToTail(list *list);
 void listJoin(list *l, list *o);
 
 /* Directions for iterators */
+/* 在遍历迭代器中使用的方向 HEAD / TAIL */
 #define AL_START_HEAD 0
 #define AL_START_TAIL 1
 
