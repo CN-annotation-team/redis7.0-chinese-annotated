@@ -1,9 +1,9 @@
-/* 哈希表实现.
+/* 字典的实现 (使用哈希表)
  *
- * 本文件实现了一个带有 插入/删除/替换/查找/获取随机元素操作 的内存哈希表.
+ * 本文件通过内存哈希表实现了字典中 插入/删除/替换/查找/获取随机元素操作 的操作.
  * 哈希表的大小会在哈希表充满时以 2 的倍数扩充 (256, 512, 1024),
  * 并使用链表解决 hash 冲突.
- * 阅读源码以获得更多信息...... :)
+ * 阅读源码以获得更多信息. :)
  */
 
 /* Hash Tables Implementation.
@@ -61,7 +61,8 @@ typedef struct dictEntry {
         double d;
     } v;
     struct dictEntry *next;     /* Next entry in the same hash bucket. */
-                                /* 同一个 hash 桶中的下一个条目. */
+                                /* 同一个 hash 桶中的下一个条目.
+                                 * 通过形成一个链表解决桶内的哈希冲突. */
     void *metadata[];           /* An arbitrary number of bytes (starting at a
                                  * pointer-aligned address) of size as returned
                                  * by dictType's dictEntryMetadataBytes(). */
@@ -92,16 +93,24 @@ typedef struct dictType {
 
 struct dict {
     dictType *type;
-
+    /* 字典中使用了两个哈希表, (那些带有 '[2]' 的成员)
+     * 平时只使用下标为 0 的哈希表.
+     * 当需要进行 rehash 时 ('rehashidx' != -1),
+     * 下标为 1 的一组数据会作为一组新的哈希表,
+     * 逐步继续 rehash 避免 rehash 造成长时间的阻塞.
+     * 当 rehash 完成时, 将新的哈希表置入下标为 0 的组别中,
+     * 同时将 'rehashidx' 置为 -1.
+     */
     dictEntry **ht_table[2];
     unsigned long ht_used[2];
 
     long rehashidx; /* rehashing not in progress if rehashidx == -1 */
-                    /* 如果此变量值为 -1, 则当前未进行哈希表的重新生成. */
+                    /* rehash 的进度.
+                     * 如果此变量值为 -1, 则当前未进行 rehash. */
     /* Keep small vars at end for optimal (minimal) struct padding */
     /* 将小尺寸的变量置于结构体的尾部, 减少对齐产生的额外空间开销. */
     int16_t pauserehash; /* If >0 rehashing is paused (<0 indicates coding error) */
-                         /* 如果此变量值 >0 则暂停哈希表的重新生成
+                         /* 如果此变量值 >0 表示 rehash 暂停
                           * (<0 表示编写的代码出错了). */
     signed char ht_size_exp[2]; /* exponent of size. (size = 1<<exp) */
                                 /* 哈希表大小的指数表示.
