@@ -17,7 +17,7 @@ redis仓库链接：https://github.com/redis/redis<br>
 
 | 文件 | 完成度 |
 | - | :-: |
-| t_string.c |完成| 
+| t_string.c | 完成 | 
 | t_hash.c | 完成 |
 | t_list.c | 完成 | 
 | t_set.c | 完成 | 
@@ -27,9 +27,10 @@ redis仓库链接：https://github.com/redis/redis<br>
 | sds.c | 完成 | 
 | adlist.h | 完成 |
 | adlist.c | 完成 |
+| cli_common.c | 完成 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/5/2
+更新日期：2022/5/3
 
   
 ## 关于提交PR的方法：
