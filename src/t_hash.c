@@ -532,12 +532,9 @@ sds hashTypeCurrentFromHashTable(hashTypeIterator *hi, int what) {
  * can always check the function return by checking the return value
  * type checking if vstr == NULL. */
 
-/* 返回哈希值的HashTypeCurrent*（） 的更高级别函数 在当前迭代器位置。 
-`* 返回的元素通过 *vstr 和 *vlen 中的引用返回，如果它以字符串形式返回，如果返回为 *vll，则存储在 *vll 中 一个数字。
- * 如果填充了 *vll *vstr 设置为 NULL，则调用方始终可以通过检查返回值来检查函数返回 键入检查 vstr 是否为 NULL。
- * 如果填充了 *vll *vstr 设置为 NULL，则调用方始终可以通过检查返回值类型检查 vstr == NULL 来检查函数返回。*/
-
-/* hashTypeCurrent*()的高级函数，返回当前哈希迭代器位置的值 */
+/* hashTypeCurrent*()的高级函数，是返回当前哈希迭代器位置的值 
+ * 如果它返回了一个字符串的类型格式，或者它返回的是一个数字存储在 *vll 中,则返回的元素通过 *vstr 和 *vlen 中的引用返回
+ * 如果填充了 *vll 和 *vstr 是置为空的 则调用方能够始终通过检查函数返回的检查返回值的方式来检查是否 vstr == NULL。*/
 void hashTypeCurrentObject(hashTypeIterator *hi, int what, unsigned char **vstr, unsigned int *vlen, long long *vll) {
 
     /* 根据编码类型，调用不同的函数获取值 */
