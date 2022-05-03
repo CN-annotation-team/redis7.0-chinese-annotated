@@ -32,12 +32,19 @@
 #define __INTSET_H
 #include <stdint.h>
 
+/* 整数集合 
+ * 记录不包含重复元素的各个整数(由小到大的顺序) 
+ * 底层数组默认是 int16_t 类型, 可能随着新增元素的大小升级至 int32_t 或 int64_t 类型*/
 typedef struct intset {
+    /* 编码, 记录整数集合底层数组(contents)的类型*/
     uint32_t encoding;
+    /* 记录整数集合包含的元素个数 */
     uint32_t length;
+    /* 整数集合的底层实现, 虽声明为 int8_t 类型,但真正的类型取决于 encoding */
     int8_t contents[];
 } intset;
 
+/* Prototypes */
 intset *intsetNew(void);
 intset *intsetAdd(intset *is, int64_t value, uint8_t *success);
 intset *intsetRemove(intset *is, int64_t value, int *success);
