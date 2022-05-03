@@ -187,7 +187,8 @@ static uint8_t intsetSearch(intset *is, int64_t value, uint32_t *pos) {
 }
 
 /* Upgrades the intset to a larger encoding and inserts the given integer. */
-/* 将整数集合升级为更大的编码 并插入给定的整数 */
+/* 将整数集合的编码 类型升级,并插入给定的整数 
+ * 编码升级： 例如由 INTSET_ENC_INT16 升级为 INTSET_ENC_INT16 */
 static intset *intsetUpgradeAndAdd(intset *is, int64_t value) {
     /* 当前的编码 */
     uint8_t curenc = intrev32ifbe(is->encoding);
