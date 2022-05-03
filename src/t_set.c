@@ -1668,7 +1668,7 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
         /* If we have a target key where to store the resulting set
          * create this key with the result set inside */
 
-        /* 如果我们有一个用来存储结果集的目标 key，则创建这个 key，并将结果集给它 */*
+        /* 如果我们有一个用来存储结果集的目标 key，则创建这个 key，并将结果集给它 */
         if (setTypeSize(dstset) > 0) {
             setKey(c,c->db,dstkey,dstset,0);
             addReplyLongLong(c,setTypeSize(dstset));
