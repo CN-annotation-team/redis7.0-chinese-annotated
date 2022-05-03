@@ -1,4 +1,10 @@
-/* Hash Tables Implementation.
+/*  哈希表实现.
+ * Hash Tables Implementation.
+ *
+ * 本文件实现了一个带有 插入/删除/替换/查找/获取随机元素操作 的内存哈希表.
+ * 哈希表的大小会在哈希表充满时以 2 的倍数扩充 (256, 512, 1024),
+ * 并使用链表解决 hash 冲突.
+ * 阅读源码以获得更多信息...... :)
  *
  * This file implements in-memory hash tables with insert/del/replace/find/
  * get-random-element operations. Hash tables will auto-resize if needed
@@ -52,8 +58,13 @@ typedef struct dictEntry {
         int64_t s64;
         double d;
     } v;
-    struct dictEntry *next;     /* Next entry in the same hash bucket. */
-    void *metadata[];           /* An arbitrary number of bytes (starting at a
+    struct dictEntry *next;     /* 同一个 hash 桶中的下一个条目. */
+                                /* Next entry in the same hash bucket. */
+
+    void *metadata[];           /* 一块任意长度的数据 (按 void* 的大小对齐),
+                                 * 具体长度由 'dictType' 中的
+                                 * dictEntryMetadataBytes() 返回. */
+                                /* An arbitrary number of bytes (starting at a
                                  * pointer-aligned address) of size as returned
                                  * by dictType's dictEntryMetadataBytes(). */
 } dictEntry;
@@ -68,6 +79,8 @@ typedef struct dictType {
     void (*keyDestructor)(dict *d, void *key);
     void (*valDestructor)(dict *d, void *obj);
     int (*expandAllowed)(size_t moreMem, double usedRatio);
+    /* 允许调用者哈希表中的条目 (dictEntry) 中添加额外的元信息.
+     * 这段额外信息的内存会在条目分配时被零初始化. */
     /* Allow a dictEntry to carry extra caller-defined metadata.  The
      * extra memory is initialized to 0 when a dictEntry is allocated. */
     size_t (*dictEntryMetadataBytes)(dict *d);
@@ -82,13 +95,24 @@ struct dict {
     dictEntry **ht_table[2];
     unsigned long ht_used[2];
 
-    long rehashidx; /* rehashing not in progress if rehashidx == -1 */
+    long rehashidx; /* 如果此变量值为 -1, 则当前未进行散列表的重新生成. */
+                    /* rehashing not in progress if rehashidx == -1 */
 
+    /* 将小尺寸的变量置于结构体的尾部, 减少对齐产生的额外空间开销. */
     /* Keep small vars at end for optimal (minimal) struct padding */
-    int16_t pauserehash; /* If >0 rehashing is paused (<0 indicates coding error) */
-    signed char ht_size_exp[2]; /* exponent of size. (size = 1<<exp) */
-};
 
+    int16_t pauserehash; /* 如果此变量值 >0 则暂停散列表的重新生成
+                          * (<0 表示编写的代码出错了). */
+                         /* If >0 rehashing is paused
+                          * (<0 indicates coding error) */
+
+    signed char ht_size_exp[2]; /* 哈希表大小的指数表示.
+                                 * (以 2 为底, 大小 = 1 << 指数) */
+                                /* exponent of size. (size = 1<<exp) */
+};
+/* 如果 'safe' 为 1, 表明这是一个安全的迭代器,
+ * 你可以在遍历时哈希表时进行插入, 查找和其它操作, 而不用担心迭代器失效.
+ * 如果 'safe' 不为 1, 则是不安全的迭代器, 只能在遍历时调用 dictNext(). */
 /* If safe is set to 1 this is a safe iterator, that means, you can call
  * dictAdd, dictFind, and other functions against the dictionary even while
  * iterating. Otherwise it is a non safe iterator, and only dictNext()
@@ -98,6 +122,7 @@ typedef struct dictIterator {
     long index;
     int table, safe;
     dictEntry *entry, *nextEntry;
+    /* 指纹, 用于检查不安全迭代器的误用. */
     /* unsafe iterator fingerprint for misuse detection. */
     unsigned long long fingerprint;
 } dictIterator;
@@ -105,10 +130,12 @@ typedef struct dictIterator {
 typedef void (dictScanFunction)(void *privdata, const dictEntry *de);
 typedef void (dictScanBucketFunction)(dict *d, dictEntry **bucketref);
 
+/* 此处定义了每一个哈希表的初始大小: 4 (1<<2). */
 /* This is the initial size of every hash table */
 #define DICT_HT_INITIAL_EXP      2
 #define DICT_HT_INITIAL_SIZE     (1<<(DICT_HT_INITIAL_EXP))
 
+/* ------------------------------- 宏定义 ------------------------------------*/
 /* ------------------------------- Macros ------------------------------------*/
 #define dictFreeVal(d, entry) \
     if ((d)->type->valDestructor) \
@@ -162,6 +189,8 @@ typedef void (dictScanBucketFunction)(dict *d, dictEntry **bucketref);
 #define dictPauseRehashing(d) (d)->pauserehash++
 #define dictResumeRehashing(d) (d)->pauserehash--
 
+/* 如果 unsigned long 为 64位或更大,
+ * 则使用 64位的伪随机数生成器(PseudoRandom number generator, PRNG). */
 /* If our unsigned long type can store a 64 bit number, use a 64 bit PRNG. */
 #if ULONG_MAX >= 0xffffffffffffffff
 #define randomULong() ((unsigned long) genrand64_int64())
