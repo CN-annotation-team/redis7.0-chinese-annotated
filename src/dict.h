@@ -82,7 +82,7 @@ typedef struct dictType {
     int (*expandAllowed)(size_t moreMem, double usedRatio);
     /* Allow a dictEntry to carry extra caller-defined metadata.  The
      * extra memory is initialized to 0 when a dictEntry is allocated. */
-    /* 允许调用者哈希表中的条目 (dictEntry) 中添加额外的元信息.
+    /* 允许调用者向条目 (dictEntry) 中添加额外的元信息.
      * 这段额外信息的内存会在条目分配时被零初始化. */
     size_t (*dictEntryMetadataBytes)(dict *d);
 } dictType;
@@ -113,8 +113,8 @@ struct dict {
  * iterating. Otherwise it is a non safe iterator, and only dictNext()
  * should be called while iterating. */
 /* 如果 'safe' 为 1, 表明这是一个安全的迭代器,
- * 你可以在遍历时哈希表时进行插入, 查找和其它操作, 而不用担心迭代器失效.
- * 如果 'safe' 不为 1, 则是不安全的迭代器, 只能在遍历时调用 dictNext(). */
+ * 你可以在遍历哈希表时进行插入, 查找和其它操作, 而不用担心迭代器失效.
+ * 如果 'safe' 不为 1, 则是不安全的迭代器, 在遍历时应该只调用 dictNext(). */
 typedef struct dictIterator {
     dict *d;
     long index;
@@ -188,7 +188,7 @@ typedef void (dictScanBucketFunction)(dict *d, dictEntry **bucketref);
 #define dictResumeRehashing(d) (d)->pauserehash--
 
 /* If our unsigned long type can store a 64 bit number, use a 64 bit PRNG. */
-/* 如果 unsigned long 为 64位或更大,
+/* 如果 unsigned long 能够存储 64位的整数,
  * 则使用 64位的伪随机数生成器(PseudoRandom number generator, PRNG). */
 #if ULONG_MAX >= 0xffffffffffffffff
 #define randomULong() ((unsigned long) genrand64_int64())
