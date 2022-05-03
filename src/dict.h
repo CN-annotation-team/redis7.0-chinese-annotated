@@ -61,7 +61,7 @@ typedef struct dictEntry {
         double d;
     } v;
     struct dictEntry *next;     /* Next entry in the same hash bucket. */
-                                 /* 同一个 hash 桶中的下一个条目. */
+                                /* 同一个 hash 桶中的下一个条目. */
     void *metadata[];           /* An arbitrary number of bytes (starting at a
                                  * pointer-aligned address) of size as returned
                                  * by dictType's dictEntryMetadataBytes(). */
@@ -97,11 +97,11 @@ struct dict {
     unsigned long ht_used[2];
 
     long rehashidx; /* rehashing not in progress if rehashidx == -1 */
-                    /* 如果此变量值为 -1, 则当前未进行散列表的重新生成. */
+                    /* 如果此变量值为 -1, 则当前未进行哈希表的重新生成. */
     /* Keep small vars at end for optimal (minimal) struct padding */
     /* 将小尺寸的变量置于结构体的尾部, 减少对齐产生的额外空间开销. */
     int16_t pauserehash; /* If >0 rehashing is paused (<0 indicates coding error) */
-                         /* 如果此变量值 >0 则暂停散列表的重新生成
+                         /* 如果此变量值 >0 则暂停哈希表的重新生成
                           * (<0 表示编写的代码出错了). */
     signed char ht_size_exp[2]; /* exponent of size. (size = 1<<exp) */
                                 /* 哈希表大小的指数表示.
