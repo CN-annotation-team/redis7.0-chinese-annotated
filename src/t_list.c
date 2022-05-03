@@ -395,7 +395,7 @@ void pushGenericCommand(client *c, int where, int xx) {
 
     char *event = (where == LIST_HEAD) ? "lpush" : "rpush";
 
-    /* 通知数据库 key 被修改 */
+    /* 发送 key 被修改信号 */
     signalModifiedKey(c,c->db,c->argv[1]);
 
     /* 发送事件通知（用于发布/订阅功能） */
@@ -582,7 +582,7 @@ void lsetCommand(client *c) {
             /* 向客户端回复 "ok" */
             addReply(c,shared.ok);
 
-            /* 通知数据库有 key 被修改，发送事件通知，脏数据 + 1*/
+            /* 发送 key 被修改信号，发送事件通知，脏数据 + 1*/
             signalModifiedKey(c,c->db,c->argv[1]);
             notifyKeyspaceEvent(NOTIFY_LIST,"lset",c->argv[1],c->db->id);
             server.dirty++;
@@ -734,7 +734,7 @@ void listElementsRemoved(client *c, robj *key, int where, robj *o, long count, i
         if (deleted) *deleted = 0;
     }
     
-    /* 通知数据库 key 被修改，以及脏数据加上 count（被删除元素的数量） */
+    /* 发送 key 被修改信号，以及脏数据加上 count（被删除元素的数量） */
     signalModifiedKey(c, c->db, key);
     server.dirty += count;
 }
@@ -951,7 +951,7 @@ void ltrimCommand(client *c) {
         notifyKeyspaceEvent(NOTIFY_GENERIC,"del",c->argv[1],c->db->id);
     }
 
-    /* 通知数据库 key 被修改 */
+    /* 发送 key 被修改信号 */
     signalModifiedKey(c,c->db,c->argv[1]);
 
     /* 脏数据加上被弹出的元素个数 */
@@ -1145,7 +1145,7 @@ void lremCommand(client *c) {
 
     /* 有元素被删除 */
     if (removed) {
-        /* 通知数据库 key 被修改，发送事件通知 */
+        /* 发送 key 被修改信号，发送事件通知 */
         signalModifiedKey(c,c->db,c->argv[1]);
         notifyKeyspaceEvent(NOTIFY_LIST,"lrem",c->argv[1],c->db->id);
     }

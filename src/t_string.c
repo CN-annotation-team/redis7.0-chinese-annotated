@@ -443,20 +443,19 @@ void getCommand(client *c) {
 
 /* GETEX <key>[PERSIST][EX seconds][PX milliseconds][EXAT seconds - timestamp][PXAT milliseconds - timestamp]。
  *
- * getexCommand()函数实现了GET命令的扩展选项和变体。但不像GET命令，这个命令不是只读的
- *
- * 没有指定选项时的默认行为与GET相同，不会改变任何TTL（生存时间）
+ * getexCommand() 函数实现了 GET 命令的扩展选项和变体。但不像 GET 命令，这个命令不是只读的。
+ * 没有指定选项时的默认行为与 GET 相同，不会改变任何 TTL（对象的生存时间）
  *
  * 在一次命令内只能使用以下选项之一
  *
- * 1. PERSIST 删除任何与键相关的TTL
- * 2. EX 以秒为单位设置过期TTL
- * 3. PX 以毫秒为单位设置过期的TTL
- * 4. EXAT 与 EX 作用相同，但不是指定代表TTL的秒数,而是采用一个绝对的Unix时间戳
+ * 1. PERSIST 删除任何与键相关的 TTL
+ * 2. EX 以秒为单位设置过期 TTL
+ * 3. PX 以毫秒为单位设置过期的 TTL
+ * 4. EXAT 与 EX 作用相同，但不是指定代表TTL的秒数,而是采用一个绝对的 Unix 时间戳
  *
- * 5. PXAT 与 PX 作用相同，但不是指定代表TTL的毫秒数，而是采用一个绝对的Unix时间戳
+ * 5. PXAT 与 PX 作用相同，但不是指定代表TTL的毫秒数，而是采用一个绝对的 Unix 时间戳
  *
- * 命令将返回批量字符串、错误或nil
+ * 命令将返回批量字符串、错误或 nil
  */
 
 void getexCommand(client *c) {

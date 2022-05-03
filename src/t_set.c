@@ -481,7 +481,7 @@ void saddCommand(client *c) {
     /* 如果 added 不为 0，则说明有元素插入集合 */
     if (added) {
 
-        /* 通知数据库 key 被修改 */
+        /* 发送 key 被修改信号 */
         signalModifiedKey(c,c->db,c->argv[1]);
 
         /* 发送事件通知 */
@@ -529,7 +529,7 @@ void sremCommand(client *c) {
     /* 有元素被删除 */
     if (deleted) {
 
-        /* 通知数据库 key 被修改，发送事件通知 */
+        /* 发送 key 被修改信号，发送事件通知 */
         signalModifiedKey(c,c->db,c->argv[1]);
         notifyKeyspaceEvent(NOTIFY_SET,"srem",c->argv[1],c->db->id);
 
@@ -600,7 +600,7 @@ void smoveCommand(client *c) {
         dbAdd(c->db,c->argv[2],dstset);
     }
 
-    /* 通知数据库 key 被修改 */
+    /* 发送 key 被修改信号 */
     signalModifiedKey(c,c->db,c->argv[1]);
 
     /* 脏数据 + 1 */
@@ -677,7 +677,7 @@ void scardCommand(client *c) {
  * for us to use the "create new set" strategy? Read later in the
  * implementation for more info. */
 
-/* 处理 "SPOP key <count>" 变体（输入了 count 参数）。
+/* 处理 "SPOP key <count>" 命令（输入了 count 参数）。
  * 该命令的普通版本由 spopCommand() 函数本身处理 */
 
 /* 集合与剩余的大小相比应该大多少倍，我们才能使用 "创建新集合" 策略？请阅读后面的实现的更多信息。*/
@@ -938,7 +938,7 @@ void spopCommand(client *c) {
     }
 
     /* Set has been modified */
-    /* 集合已被修改，通知数据库 */
+    /* 集合已被修改，发送 key 被修改信号 */
     signalModifiedKey(c,c->db,c->argv[1]);
     server.dirty++;
 }
@@ -950,7 +950,7 @@ void spopCommand(client *c) {
  * for us to don't use the "remove elements" strategy? Read later in the
  * implementation for more info. */
 
-/* 处理 “SRANDMEMBER key <count>” 变体（输入了 count 参数）。 该命令的普通版本由 srandmemberCommand() 函数本身处理。 */
+/* 处理 “SRANDMEMBER key <count>” 命令（输入了 count 参数）。 该命令的普通版本由 srandmemberCommand() 函数本身处理。 */
 
 /* 与请求的元素数量相比，该集合应该大多少倍让我们不要使用“移除元素”策略？ 阅读后面的代码实现获取更多信息。 */
 #define SRANDMEMBER_SUB_STRATEGY_MUL 3
@@ -1177,7 +1177,7 @@ void srandmemberCommand(client *c) {
     }
 
     /* Handle variant without <count> argument. Reply with simple bulk string */
-    /* 处理没有 <count> 参数的变体，用简单的字符串进行回复 */
+    /* 处理没有 <count> 参数的命令，用简单的字符串进行回复 */
     if ((set = lookupKeyReadOrReply(c,c->argv[1],shared.null[c->resp]))
         == NULL || checkType(c,set,OBJ_SET)) return;
 
@@ -1203,7 +1203,7 @@ int qsortCompareSetsByCardinality(const void *s1, const void *s2) {
  * be handled as empty sets. */
 
 /* 这是由 SDIFF 命令使用的，在这种自定义比较函数下，
- * 我们可以收到 NULL，收到 NULL 时应该作为空集处理。
+ * 我们可能收到 NULL，收到 NULL 时应该作为空集处理。
  * 该自定义比较函数根据集合元素数量从大到小排序 */
 int qsortCompareSetsByRevCardinality(const void *s1, const void *s2) {
     robj *o1 = *(robj**)s1, *o2 = *(robj**)s2;
@@ -1668,7 +1668,7 @@ void sunionDiffGenericCommand(client *c, robj **setkeys, int setnum,
         /* If we have a target key where to store the resulting set
          * create this key with the result set inside */
 
-        /* 如果我们有一个用来存储结果集的目标 key，则创建这个 key，并将结果集给它 */*
+        /* 如果我们有一个用来存储结果集的目标 key，则创建这个 key，并将结果集给它 */
         if (setTypeSize(dstset) > 0) {
             setKey(c,c->db,dstkey,dstset,0);
             addReplyLongLong(c,setTypeSize(dstset));
