@@ -201,7 +201,7 @@ typedef struct quicklistEntry {
 /* 快速列表禁用压缩 */
 #define QUICKLIST_NOCOMPRESS 0
 
-/* quicklist container formats */
+/* quicklist node container formats */
 /* 快速列表节点容器格式 */
 #define QUICKLIST_NODE_CONTAINER_PLAIN 1
 #define QUICKLIST_NODE_CONTAINER_PACKED 2
