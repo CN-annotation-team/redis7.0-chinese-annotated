@@ -281,6 +281,7 @@ int hashTypeSet(robj *o, sds field, sds value, int flags) {
             fptr = lpFind(zl, fptr, (unsigned char*)field, sdslen(field), 1);
             if (fptr != NULL) {
                 /* Grab pointer to the value (fptr points to the field) */
+                /* 抓取所指指针的value(fptr指向的区域)*/
                 vptr = lpNext(zl, fptr);
                 serverAssert(vptr != NULL);
 
@@ -530,6 +531,13 @@ sds hashTypeCurrentFromHashTable(hashTypeIterator *hi, int what) {
  * If *vll is populated *vstr is set to NULL, so the caller
  * can always check the function return by checking the return value
  * type checking if vstr == NULL. */
+
+/*返回哈希值的哈希TypeCurrent*（） 的更高级别函数 在当前迭代器位置。 
+`*返回的元素通过 *vstr 和 *vlen 中的引用返回，如果它以字符串形式返回，如果返回为 *vll，则存储在 *vll 中 一个数字。
+ *如果填充了 *vll *vstr 设置为 NULL，则调用方
+ *始终可以通过检查返回值来检查函数返回
+ *键入检查 vstr 是否为 NULL。
+ *如果填充了 *vll *vstr 设置为 NULL，则调用方 始终可以通过检查返回值类型检查 vstr == NULL 来检查函数返回。/
 
 /* hashTypeCurrent*()的高级函数，返回当前哈希迭代器位置的值 */
 void hashTypeCurrentObject(hashTypeIterator *hi, int what, unsigned char **vstr, unsigned int *vlen, long long *vll) {
@@ -1429,6 +1437,7 @@ void hrandfieldWithCountCommand(client *c, long l, int withvalues) {
         }
 
         /* Release memory */
+        /* 释放内存 */
         dictRelease(d);
     }
 }
