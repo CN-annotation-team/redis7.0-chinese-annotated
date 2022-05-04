@@ -156,7 +156,7 @@ struct dict {
      * 平时只使用下标为 0 的哈希表.
      * 当需要进行 rehash 时 ('rehashidx' != -1),
      * 下标为 1 的一组数据会作为一组新的哈希表,
-     * 逐步继续 rehash 避免 rehash 造成长时间的阻塞.
+     * 渐进地进行 rehash 避免一次性 rehash 造成长时间的阻塞.
      * 当 rehash 完成时, 将新的哈希表置入下标为 0 的组别中,
      * 同时将 'rehashidx' 置为 -1.
      */
