@@ -28,8 +28,8 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [adlist.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/adlist.h) | 双端链表数据结构的相关声明，3.2 版本之前作为列表键的底层数据结构实现，也用于其它需要链表的场景，例如保存连接的客户端、慢查询条目等等等 | 完成 |
 | [adlist.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/adlist.c) |  双端链表数据结构的具体实现 | 完成 |
 | [cli_common.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/cli_common.c) | 命令行接口-通用接口的具体实现 | 完成 |
-| [intset.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/intset.c) | 整数集合数据结构的具体实现 | 完成 |
 | [intset.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/intset.h) |  整数集合数据结构的相关声明，作为集合键的底层实现之一 | 完成 |
+| [intset.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/intset.c) | 整数集合数据结构的具体实现 | 完成 |
 | [dict.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/dict.h) | 字典数据结构的相关声明，用于 redis 中 hashtable（哈希表）的底层实现 | 完成 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
