@@ -25,7 +25,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [sds.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sds.h) | SDS(简单动态字符串）数据结构的相关声明，用于字符串底层数据结构实现 | 完成 |
 | [sds.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sds.c) | SDS(简单动态字符串）数据结构的具体实现 | 完成 |
 | [quicklist.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/quicklist.h) | 快速列表数据结构的相关声明，3.2 版本后结合双端链表和压缩列表用于列表键底层数据结构实现，7.0 版本后结合双端列表和紧凑列表用于列表键底层数据结构实现 | 完成 |
-| [adlist.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/adlist.h) | 双端链表数据结构的相关声明，3.2 版本之前作为列表键的底层数据结构实现，也用于其它需要链表的场景，例如保存连接的客户端、慢查询条目等等等 | 完成 |
+| [adlist.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/adlist.h) | 双端链表数据结构的相关声明，3.2 版本之前作为列表键的底层数据结构实现，也用于其它需要链表的场景，例如保存连接的客户端、慢查询条目等等 | 完成 |
 | [adlist.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/adlist.c) |  双端链表数据结构的具体实现 | 完成 |
 | [cli_common.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/cli_common.c) | 命令行接口-通用接口的具体实现 | 完成 |
 | [intset.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/intset.h) |  整数集合数据结构的相关声明，作为集合键的底层实现之一 | 完成 |
