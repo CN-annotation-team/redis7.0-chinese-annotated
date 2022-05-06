@@ -138,11 +138,11 @@ void *ztrymalloc_usable(size_t size, size_t *usable) {
  * 于是, 在 zmalloc.h 中会进行判断, 若 ①② 同时满足, 那么宏 HAVE_MALLOC_SIZE 不会被定义.
  * 在这种情况下, redis 为了知晓某个指针被分配的空间, 会在申请空间给指针 ptr 时, 额外给 ptr 申请 sizeof(size_t) 大小的空间
  * 假设现在需要给 ptr 分配 size 大小
- * 那么 ptr 被分配的内存大概长这个样子 ==> [ header ] [ data ], 其中 header 占 sizeof(size_t) 大小, 这部分空间存储一个类型为size_t 的数为 size
+ * 那么 ptr 被分配的内存大概长这个样子 ==> [ header ] [ data ], 其中 header 占 sizeof(size_t) 大小, 这部分空间存储一个类型为 size_t 的数为 size
  * 而 data 占 size 的大小, 这部分才是真正会被用户用到的空间. 所以我们返回指针时, 实际应该返回 (char*)ptr+sizeof(size_t)
  */
 void *zmalloc(size_t size) {
-    void *ptr = ztrymalloc_usable(size, NULL); /* 按redis的策略分配空間 */
+    void *ptr = ztrymalloc_usable(size, NULL); /* 按 redis 的策略分配空間 */
     if (!ptr) zmalloc_oom_handler(size); /*  分配不成功,打印错误信息并退出程序　*/
     return ptr;
 }
