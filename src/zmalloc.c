@@ -152,7 +152,7 @@ void *zmalloc(size_t size) {
     /* 按 redis 的策略分配空间 */
     void *ptr = ztrymalloc_usable(size, NULL);
 	
-    /*  分配不成功, 打印错误信息并退出redis-server.　*/
+    /*  分配不成功, 打印错误信息并退出 redis-server.　*/
     if (!ptr) zmalloc_oom_handler(size);
     return ptr;
 }
