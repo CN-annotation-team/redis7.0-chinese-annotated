@@ -31,9 +31,10 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [intset.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/intset.h) |  整数集合数据结构的相关声明，作为集合键的底层实现之一 | 完成 |
 | [intset.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/intset.c) | 整数集合数据结构的具体实现 | 完成 |
 | [dict.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/dict.h) | 字典数据结构的相关声明，用于 redis 中 hashtable（哈希表）的底层实现 | 完成 |
+| [zmalloc.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/zmalloc.c) | redis 中内存管理的具体实现 | 低于一半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/5/5
+更新日期：2022/5/6
 
 
 ## 关于提交 PR 的方法：

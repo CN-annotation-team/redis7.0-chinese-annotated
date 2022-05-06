@@ -103,16 +103,30 @@ static void (*zmalloc_oom_handler)(size_t) = zmalloc_default_oom;
 
 /* Try allocating memory, and return NULL if failed.
  * '*usable' is set to the usable size if non NULL. */
+/*
+ * 尝试分配空间, 如果分配失败返回 NULL.
+ * 如果分配成功, 还会把 *usable 设置为可用空间的大小.
+ *
+ * ( 建议先看 zmalloc 函数的注释 )
+ * 首先分配一个 size + sizeof(size_t) 大小的空间
+ * 然后判断宏 HAVE_MALLOC_SIZE 是否存在, 也就是是否存在 zmalloc_size 函数, 然后进行具体逻辑.
+ */
 void *ztrymalloc_usable(size_t size, size_t *usable) {
     ASSERT_NO_SIZE_OVERFLOW(size);
     void *ptr = malloc(MALLOC_MIN_SIZE(size)+PREFIX_SIZE);
 
     if (!ptr) return NULL;
+	
+/* 存在 zmalloc_size 函数, 可以直接调函数获取实际 malloc 分配的空间 */
 #ifdef HAVE_MALLOC_SIZE
     size = zmalloc_size(ptr);
+	
+    /* 原子操作,修改 redis 总共使用的空间. */
     update_zmalloc_stat_alloc(size);
     if (usable) *usable = size;
     return ptr;
+	
+/* 不存在 zmalloc_size 函数, 必须手动给起始的 sizeof(size_t) 字节赋值为数字 size (作为分配了多少可用空间的标识) */
 #else
     *((size_t*)ptr) = size;
     update_zmalloc_stat_alloc(size+PREFIX_SIZE);
@@ -122,8 +136,23 @@ void *ztrymalloc_usable(size_t size, size_t *usable) {
 }
 
 /* Allocate memory or panic */
+/*
+ * redis 对 malloc 函数进行了封装.
+ * 原因在于, 对于任意一个指针 p, 我们不一定能得知 malloc 分配给 p 多少内存.
+ * ①. 如果你不在 macos 上, 那么你无法使用库 <malloc/malloc.h> 的函数 zmalloc_size(p) 得知 ( zmalloc.h 的 58-61 行 )
+ * ②. 如果你的 <google/tcmalloc.h> , <jemalloc/jemalloc.h> 库版本过低, 你也无法使用它们提供的 api 得知. ( zmalloc.h 的 38-55 行 )
+ * 于是, 在 zmalloc.h 中会进行判断, 若 ①② 同时满足, 那么宏 HAVE_MALLOC_SIZE 不会被定义.
+ * 在这种情况下, redis 为了知晓某个指针被分配的空间, 会在申请空间给指针 ptr 时, 额外给 ptr 申请 sizeof(size_t) 大小的空间
+ * 假设现在需要给 ptr 分配 size 大小
+ * 那么 ptr 被分配的内存大概长这个样子 ==> [ header ] [ data ], 其中 header 占 sizeof(size_t) 大小, 这部分空间存储一个类型为 size_t 的数为 size
+ * 而 data 占 size 的大小, 这部分才是真正会被用户用到的空间. 所以我们返回指针时, 实际应该返回 (char*)ptr+sizeof(size_t)
+ */
 void *zmalloc(size_t size) {
+	
+    /* 按 redis 的策略分配空间 */
     void *ptr = ztrymalloc_usable(size, NULL);
+	
+    /*  分配不成功, 打印错误信息并退出 redis-server.　*/
     if (!ptr) zmalloc_oom_handler(size);
     return ptr;
 }
@@ -196,6 +225,10 @@ void *zcalloc_num(size_t num, size_t size) {
 }
 
 /* Allocate memory and zero it or panic */
+/*
+ * 与 zmalloc 一样是用于分配空间的函数.
+ * 不同的是 zcalloc 使用 calloc 分配空间, calloc 会自动初始化分配的空间.
+ */
 void *zcalloc(size_t size) {
     void *ptr = ztrycalloc_usable(size, NULL);
     if (!ptr) zmalloc_oom_handler(size);
