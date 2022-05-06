@@ -142,7 +142,7 @@ void *ztrymalloc_usable(size_t size, size_t *usable) {
  * 而 data 占 size 的大小, 这部分才是真正会被用户用到的空间. 所以我们返回指针时, 实际应该返回 (char*)ptr+sizeof(size_t)
  */
 void *zmalloc(size_t size) {
-    void *ptr = ztrymalloc_usable(size, NULL); /* 按 redis 的策略分配空間 */
+    void *ptr = ztrymalloc_usable(size, NULL); /* 按 redis 的策略分配空间 */
     if (!ptr) zmalloc_oom_handler(size); /*  分配不成功,打印错误信息并退出程序　*/
     return ptr;
 }
