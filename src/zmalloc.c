@@ -104,7 +104,7 @@ static void (*zmalloc_oom_handler)(size_t) = zmalloc_default_oom;
 /* Try allocating memory, and return NULL if failed.
  * '*usable' is set to the usable size if non NULL. */
 /*
- * 尝试分配空间, 如果分配失败返回 NULL .
+ * 尝试分配空间, 如果分配失败返回 NULL.
  * 如果分配成功, 还会把 *usable 设置为可用空间的大小.
  *
  * ( 建议先看 zmalloc 函数的注释 )
@@ -116,12 +116,15 @@ void *ztrymalloc_usable(size_t size, size_t *usable) {
     void *ptr = malloc(MALLOC_MIN_SIZE(size)+PREFIX_SIZE);
 
     if (!ptr) return NULL;
-#ifdef HAVE_MALLOC_SIZE  /* 存在 zmalloc_size 函数, 可以直接调函数获取实际 malloc 分配的空间 */
+/* 存在 zmalloc_size 函数, 可以直接调函数获取实际 malloc 分配的空间 */
+#ifdef HAVE_MALLOC_SIZE
     size = zmalloc_size(ptr);
-    update_zmalloc_stat_alloc(size); /* 原子操作,修改 redis 总共使用的空间 */
+/* 原子操作,修改 redis 总共使用的空间. */
+    update_zmalloc_stat_alloc(size);
     if (usable) *usable = size;
     return ptr;
-#else /* 不存在 zmalloc_size 函数, 必须手动给起始的 sizeof(size_t) 字节赋值为数字 size (作为分配了多少可用空间的标识) */
+/* 不存在 zmalloc_size 函数, 必须手动给起始的 sizeof(size_t) 字节赋值为数字 size (作为分配了多少可用空间的标识) */
+#else
     *((size_t*)ptr) = size;
     update_zmalloc_stat_alloc(size+PREFIX_SIZE);
     if (usable) *usable = size;
@@ -142,8 +145,10 @@ void *ztrymalloc_usable(size_t size, size_t *usable) {
  * 而 data 占 size 的大小, 这部分才是真正会被用户用到的空间. 所以我们返回指针时, 实际应该返回 (char*)ptr+sizeof(size_t)
  */
 void *zmalloc(size_t size) {
-    void *ptr = ztrymalloc_usable(size, NULL); /* 按 redis 的策略分配空间 */
-    if (!ptr) zmalloc_oom_handler(size); /*  分配不成功,打印错误信息并退出程序　*/
+    /* 按 redis 的策略分配空间 */
+    void *ptr = ztrymalloc_usable(size, NULL);
+    /*  分配不成功, 打印错误信息并退出redis-server.　*/
+    if (!ptr) zmalloc_oom_handler(size);
     return ptr;
 }
 
