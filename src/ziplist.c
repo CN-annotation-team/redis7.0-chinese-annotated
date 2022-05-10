@@ -269,16 +269,16 @@
 /* Utility macros.*/
 
 /* Return total bytes a ziplist is composed of. */
-/* 获取 ziplist 的占用字节数，即 zlbytes */
+/* 获取 ziplist 的占用字节数，即 zlbytes 的值 */
 #define ZIPLIST_BYTES(zl)       (*((uint32_t*)(zl)))
 
 /* Return the offset of the last item inside the ziplist. */
-/* 根据 zl 往后偏移 zlbytes 然后获取到尾节点的偏移量，即 zltail */
+/* 根据 zl 往后偏移 zlbytes 4 个字节，然后获取到尾节点的偏移量，即 zltail 的值 */
 #define ZIPLIST_TAIL_OFFSET(zl) (*((uint32_t*)((zl)+sizeof(uint32_t))))
 
 /* Return the length of a ziplist, or UINT16_MAX if the length cannot be
  * determined without scanning the whole ziplist. */
-/* 根据 zl 往后偏移 zlybtes 和 zltail 然后获取节点数量，即 zllen */
+/* 根据 zl 往后偏移 zlybtes 4 个字节和 zltail 4 个字节，然后获取节点数量，即 zllen 的值 */
 #define ZIPLIST_LENGTH(zl)      (*((uint16_t*)((zl)+sizeof(uint32_t)*2)))
 
 /* The size of a ziplist header: two 32 bit integers for the total
@@ -853,7 +853,7 @@ static inline void zipAssertValidEntry(unsigned char* zl, size_t zlbytes, unsign
 /* Create a new empty ziplist. */
 /* 创建一个空 ziplist 只包含 <zlbytes><zltail><zllen><zlend> */
 unsigned char *ziplistNew(void) {
-    /* ziplist_header，两个uint32_t + 一个uint16_t，即 zlbytes(4) + zltail(4) + zllen(2) = 10 bytes
+    /* ziplist_header，两个 uint32_t + 一个 uint16_t，即 zlbytes(4) + zltail(4) + zllen(2) = 10 bytes
      * ziplist_end，一个 uint8_t 即 zlend 为 1 byte */
     unsigned int bytes = ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
     /* 给 ziplist 分配内存空间 */
@@ -940,11 +940,11 @@ unsigned char *__ziplistCascadeUpdate_before_62(unsigned char *zl, unsigned char
            连锁更新的第一个结束条件 */
         if (p[rawlen] == ZIP_END) break;
 
-        /* 将 p+ranlen 后继节点的信息保存在 next 中 */
+        /* 将 p+rawlen 后继节点的信息保存在 next 中 */
         zipEntry(p+rawlen, &next);
 
         /* Abort when "prevlen" has not changed. */
-        /* 如果 next 的 prevrwalen == rawlen
+        /* 如果 next 的 prevrawlen == rawlen
            即 next 节点 prevrawlen 锁保存的长度就等于 p 节点的长度
            这种就是长度刚好，不需要进行变动，后面的节点也不用更新，跳出
            连锁更新的第二个结束条件 */
@@ -1058,10 +1058,10 @@ unsigned char *__ziplistCascadeUpdate_before_62(unsigned char *zl, unsigned char
  *
  * 后面代码是 #6886 中进行的优化，在之前版本的实现里，也就是前面部分的实现，是 O(n^2) 的时间复杂度，
  * 它遍历整个压缩列表，针对需要扩展的节点，一个个的进行扩展，
- * 一个节点就需要做一次小的 realloc重新分配空间（只处理单个节点要扩展的）和一次大的 memmove内存拷贝（需要移动整个压缩列表）。
+ * 一个节点就需要做一次小的 realloc 重新分配空间（只处理单个节点要扩展的）和一次大的 memmove 内存拷贝（需要移动整个压缩列表）。
  *
  * 这个优化里，是 O(n) 的时间复杂度，它通过先遍历完整个压缩列表，算出需要扩展的字节数，
- * 然后只进行一次大 realloc将需要扩展的所有空间先重新分配好，然后针对每个节点进行一次小的 memmove处理单个节点的数据，可以看到这里的优化点主要是 realloc 和 memmove：
+ * 然后只进行一次大 realloc 将需要扩展的所有空间先重新分配好，然后针对每个节点进行一次小的 memmove 处理单个节点的数据，可以看到这里的优化点主要是 realloc 和 memmove：
     ● realloc
       ○ 在之前是每有一个要扩展的节点就要申请下空间，有 n 个节点要扩展就要执行 n 次 realloc
       ○ 在之后，提前遍历完压缩列表，将要扩展的空间都先计算出来，有 n 个节点也只执行 1 次 realloc
@@ -1108,12 +1108,12 @@ unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
         if (cur.prevrawlen == prevlen) break;
 
         /* Abort when entry's "prevlensize" is big enough. */
-        /* 如果 cur 当前节点的 prevrawsize >= prevlensize
+        /* 如果 cur 当前节点的 prevrawlensize >= prevlensize
            这种情况就是空间足够，不需要扩展，后面节点也不用更新，在更新好 prevlen 后跳出
            连锁更新的第二个结束条件 */
         if (cur.prevrawlensize >= prevlensize) {
             if (cur.prevrawlensize == prevlensize) {
-                // (1 == 1 or 5 == 5) 如果刚好相等，直接将 prevlen 写入
+                /* (1 == 1 or 5 == 5) 如果刚好相等，直接将 prevlen 写入 */
                 zipStorePrevEntryLength(p, prevlen);
             } else {
                 /* This would result in shrinking, which we want to avoid.
@@ -1154,10 +1154,10 @@ unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
     if (tail == zl + prevoffset) {
         /* When the last entry we need to update is also the tail, update tail offset
          * unless this is the only entry that was updated (so the tail offset didn't change). */
-        // 根据前面循环的处理逻辑，如果 tail == zl + prevoffset 即说明最后处理需要扩展的节点 cur 为尾节点
-        // 同时需要判断 extra-delta，如果结果为 0 说明只有一个节点需要扩展，且它是尾节点，这种情况不用更新尾节点偏移量
-        // 因为 ziplist 只有最后的尾节点需要进行扩展，但是尾节点前面的节点都没有变动，所以 zl 到尾节点的 offset 是不用变的
-        // 如果结果不为 0 说明有在尾节点前面的节点需要扩展，此时维护到尾节点的偏移量，为 extra-delta 偏移量要减掉尾节点的扩展 */
+        /* 根据前面循环的处理逻辑，如果 tail == zl + prevoffset 即说明最后处理需要扩展的节点 cur 为尾节点
+           同时需要判断 extra-delta，如果结果为 0 说明只有一个节点需要扩展，且它是尾节点，这种情况不用更新尾节点偏移量
+           因为 ziplist 只有最后的尾节点需要进行扩展，但是尾节点前面的节点都没有变动，所以 zl 到尾节点的 offset 是不用变的
+           如果结果不为 0 说明有在尾节点前面的节点需要扩展，此时维护到尾节点的偏移量，为 extra-delta 偏移量要减掉尾节点的扩展 */
         if (extra - delta != 0) {
             ZIPLIST_TAIL_OFFSET(zl) =
                 intrev32ifbe(intrev32ifbe(ZIPLIST_TAIL_OFFSET(zl))+extra-delta);
@@ -1418,7 +1418,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
         forcelarge = 1;
     }
 
-    // 此时 nextdiff 只会为 0 或者 4 这两种情况，不需要扩展 和 需要扩展两种情况，不会进行缩容 */
+    /* 此时 nextdiff 只会为 0 或者 4 这两种情况，不需要扩展 和 需要扩展两种情况，不会进行缩容 */
 
     /* Store offset because a realloc may change the address of zl. */
     /* 提前存一下 offset，p 位置相较于 ziplist 的偏移量，因为 realloc 可能会改变 zl 的地址
@@ -1515,42 +1515,42 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
  * On success: returns the merged ziplist (which is expanded version of either
  * 'first' or 'second', also frees the other unused input ziplist, and sets the
  * input ziplist argument equal to newly reallocated ziplist return value. */
-// 给定 first second 两个 ziplist，将它们进行合并，合并后的新 ziplist 为 first second 这样
-// 返回新的 ziplist 地址，因为经过 realloc 和 free 入参的 ziplist 返回后都是不可用的
-// 合并是扩展其中较大（节点数多）的那个 ziplist，然后复制另外个 ziplist，然后释放另外个 ziplist
+/* 给定 first second 两个 ziplist，将它们进行合并，合并后的新 ziplist 为 first second 这样
+   返回新的 ziplist 地址，因为经过 realloc 和 free 入参的 ziplist 返回后都是不可用的
+   合并是扩展其中较大（节点数多）的那个 ziplist，然后复制另外个 ziplist，然后释放另外个 ziplist */
 unsigned char *ziplistMerge(unsigned char **first, unsigned char **second) {
     /* If any params are null, we can't merge, so NULL. */
-    // 入参校验，有空 ziplist 直接返回 NULL
+    /* 入参校验，有空 ziplist 直接返回 NULL */
     if (first == NULL || *first == NULL || second == NULL || *second == NULL)
         return NULL;
 
     /* Can't merge same list into itself. */
-    // 如果传入的是相同的两个 ziplist 无法进行合并
+    /* 如果传入的是相同的两个 ziplist 无法进行合并 */
     if (*first == *second)
         return NULL;
 
-    // 获取第一个 ziplist 的字节大小和节点数量
+    /* 获取第一个 ziplist 的字节大小和节点数量 */
     size_t first_bytes = intrev32ifbe(ZIPLIST_BYTES(*first));
     size_t first_len = intrev16ifbe(ZIPLIST_LENGTH(*first));
 
-    // 获取第二个 ziplist 的字节大小和节点数量
+    /* 获取第二个 ziplist 的字节大小和节点数量 */
     size_t second_bytes = intrev32ifbe(ZIPLIST_BYTES(*second));
     size_t second_len = intrev16ifbe(ZIPLIST_LENGTH(*second));
 
-    // append == 1: 在 first 后面追加 second
-    // append == 0:
+    /* append == 1: 扩展 first，在 first 后面追加 second */
+    /* append == 0: 扩展 second，将 first 插入在 second 前面 */
     int append;
-    // source: 源 ziplist; target: 进行扩展的那个 ziplist
+    /* source: 源 ziplist; target: 进行扩展的那个 ziplist */
     unsigned char *source, *target;
     size_t target_bytes, source_bytes;
     /* Pick the largest ziplist so we can resize easily in-place.
      * We must also track if we are now appending or prepending to
      * the target ziplist. */
-    // 选择更大的那个 ziplist 进行扩展，因为这样申请需要的内存相对更少，更容易 in-place resize
-    // 这里是根据 len 节点数量进行的选择，理论上根据 bytes 判断大小压缩列表感觉会更好
+    /* 选择更大的那个 ziplist 进行扩展，因为这样申请需要的内存相对更少，更容易 in-place resize
+       这里是根据 len 节点数量进行的选择，理论上根据 bytes 判断大小压缩列表感觉会更好 */
     if (first_len >= second_len) {
         /* retain first, append second to first. */
-        // 保留扩展 first 将 second 附加到 first 后面，即为 first second
+        /* 保留扩展 first 将 second 附加到 first 后面，即为 first second */
         target = *first;
         target_bytes = first_bytes;
         source = *second;
@@ -1558,7 +1558,7 @@ unsigned char *ziplistMerge(unsigned char **first, unsigned char **second) {
         append = 1;
     } else {
         /* else, retain second, prepend first to second. */
-        // 保留扩展 second 将 second 后移，然后把 first 插入到它前面，即还是 first second
+        /* 保留扩展 second 将 second 后移，然后把 first 插入到它前面，即还是 first second */
         target = *second;
         target_bytes = second_bytes;
         source = *first;
@@ -1567,43 +1567,43 @@ unsigned char *ziplistMerge(unsigned char **first, unsigned char **second) {
     }
 
     /* Calculate final bytes (subtract one pair of metadata) */
-    // 计算合并后的新压缩列表大小，两个 bytes 相加然后减去一份元数据长度（元数据保留一份即可）
-    // 元数据包括：header + end 即 zlbytes + zltail_offset + zllen + zlend
+    /* 计算合并后的新压缩列表大小，两个 bytes 相加然后减去一份元数据长度（元数据保留一份即可）
+       元数据包括：header + end 即 zlbytes + zltail_offset + zllen + zlend */
     size_t zlbytes = first_bytes + second_bytes -
                      ZIPLIST_HEADER_SIZE - ZIPLIST_END_SIZE;
-    // 新压缩列表长度（节点大小），两个 len 直接相加
+    /* 新压缩列表长度（节点大小），两个 len 直接相加 */
     size_t zllength = first_len + second_len;
 
     /* Combined zl length should be limited within UINT16_MAX */
-    // 处理 zllen 大于等于 UINT16_MAX 的情况，大于等于的话我们无法用两个字节保存这个长度
-    // 就用 UINT16_MAX 作为标识，标识压缩列表长度（节点数量）需要完整遍历压缩列表才能算出，O(1) 退化成 O(N)
+    /* 处理 zllen 大于等于 UINT16_MAX 的情况，大于等于的话我们无法用两个字节保存这个长度
+       就用 UINT16_MAX 作为标识，标识压缩列表长度（节点数量）需要完整遍历压缩列表才能算出，O(1) 退化成 O(N) */
     zllength = zllength < UINT16_MAX ? zllength : UINT16_MAX;
 
     /* larger values can't be stored into ZIPLIST_BYTES */
-    // 断言判断 zlbytes 不会溢出，最多 4 个字节表示它
+    /* 断言判断 zlbytes 不会溢出，最多 4 个字节表示它 */
     assert(zlbytes < UINT32_MAX);
 
     /* Save offset positions before we start ripping memory apart. */
-    // 记录 first / second 两各自到尾节点的偏移量，用于后面合并
+    /* 记录 first / second 两各自到尾节点的偏移量，用于后面合并 */
     size_t first_offset = intrev32ifbe(ZIPLIST_TAIL_OFFSET(*first));
     size_t second_offset = intrev32ifbe(ZIPLIST_TAIL_OFFSET(*second));
 
     /* Extend target to new zlbytes then append or prepend source. */
-    // realloc target 对 target 扩展到新 ziplist 长度
+    /* realloc target 对 target 扩展到新 ziplist 长度 */
     target = zrealloc(target, zlbytes);
 
     if (append) {
         /* append == appending to target */
         /* Copy source after target (copying over original [END]):
          *   [TARGET - END, SOURCE - HEADER] */
-        // 在 target 之后复制 source，即扩展 first，然后在 first 后面追加 second
+        /* 在 target 之后复制 source，即扩展 first，然后在 first 后面追加 second
 
-        // 这个 memcpy 就是将 source (second) 数据部分复制到 first 后面
-        // void *memcpy(void *str1, const void *str2, size_t n) 从存储区 str2 复制 n 个字节到存储区 str1
-        // 从 source+ZIPLIST_HEADER_SIZE 复制 source_bytes-ZIPLIST_HEADER_SIZE 字节到 target+target_bytes-ZIPLIST_END_SIZE
-        // source + ZIPLIST_HEADER_SIZE: 源 ziplist 跳过 header 的大小，此时它指向节点数据部分（第一个节点），从这里开始复制
-        // source_bytes - ZIPLIST_HEADER_SIZE: 源 ziplist 大小减去 header 的大小，即源节点数据占用的字节数，要复制的字节数
-        // target + target_bytes - ZIPLIST_END_SIZE: 目标 ziplist 的末端，即将 source 节点数据复制到 target 的末端
+           这个 memcpy 就是将 source (second) 数据部分复制到 first 后面
+           void *memcpy(void *str1, const void *str2, size_t n) 从存储区 str2 复制 n 个字节到存储区 str1
+           从 source+ZIPLIST_HEADER_SIZE 复制 source_bytes-ZIPLIST_HEADER_SIZE 字节到 target+target_bytes-ZIPLIST_END_SIZE
+           source + ZIPLIST_HEADER_SIZE: 源 ziplist 跳过 header 的大小，此时它指向节点数据部分（第一个节点），从这里开始复制
+           source_bytes - ZIPLIST_HEADER_SIZE: 源 ziplist 大小减去 header 的大小，即源节点数据占用的字节数，要复制的字节数
+           target + target_bytes - ZIPLIST_END_SIZE: 目标 ziplist 的末端，即将 source 节点数据复制到 target 的末端 */
         memcpy(target + target_bytes - ZIPLIST_END_SIZE,
                source + ZIPLIST_HEADER_SIZE,
                source_bytes - ZIPLIST_HEADER_SIZE);
@@ -1613,25 +1613,25 @@ unsigned char *ziplistMerge(unsigned char **first, unsigned char **second) {
          * then copy source into vacated space (source - [END]):
          *   [SOURCE - END, TARGET - HEADER] */
 
-        // 在 target 之前复制 source，即扩展 second，然后将 second 原本的数据部分后移，空出前面的部分插入 first
+        /* 在 target 之前复制 source，即扩展 second，然后将 second 原本的数据部分后移，空出前面的部分插入 first
 
-        // 这个 memmove 就是把 target (second) 数据部分移动到后面，空出前面插入 first
-        // void *memmove(void *str1, const void *str2, size_t n) 从 str2 复制 n 个字符到 str1，但是在重叠内存块这方面，memmove() 是比 memcpy() 更安全的方法
-        // 从 target+ZIPLIST_HEADER_SIZE 复制 target_bytes-ZIPLIST_HEADER_SIZE 字节到 target+source_bytes-ZIPLIST_END_SIZE
-        // target + ZIPLIST_HEADER_SIZE: 目标 ziplist 大小跳过 header 的大小，此时它指向节点数据部分（第一个节点），这这里开始复制移动
-        // target_bytes - ZIPLIST_HEADER_SIZE: 目标 ziplist 大小减去 header 的大小，即目标节点数据占用的字节数，要移动复制的字节数
-        // target + source_bytes - ZIPLIST_END_SIZE: 将 target 数据部分后移，空出前面的空间放 first
+           这个 memmove 就是把 target (second) 数据部分移动到后面，空出前面插入 first
+           void *memmove(void *str1, const void *str2, size_t n) 从 str2 复制 n 个字符到 str1，但是在重叠内存块这方面，memmove() 是比 memcpy() 更安全的方法
+           从 target+ZIPLIST_HEADER_SIZE 复制 target_bytes-ZIPLIST_HEADER_SIZE 字节到 target+source_bytes-ZIPLIST_END_SIZE
+           target + ZIPLIST_HEADER_SIZE: 目标 ziplist 大小跳过 header 的大小，此时它指向节点数据部分（第一个节点），这这里开始复制移动
+           target_bytes - ZIPLIST_HEADER_SIZE: 目标 ziplist 大小减去 header 的大小，即目标节点数据占用的字节数，要移动复制的字节数
+           target + source_bytes - ZIPLIST_END_SIZE: 将 target 数据部分后移，空出前面的空间放 first */
         memmove(target + source_bytes - ZIPLIST_END_SIZE,
                 target + ZIPLIST_HEADER_SIZE,
                 target_bytes - ZIPLIST_HEADER_SIZE);
 
-        // 这个 memcpy 就是将 source (first) 数据部分复制到现在的 second 前面
-        // 将 source (first) 数据部分复制到新压缩列表的最前面
+        /* 这个 memcpy 就是将 source (first) 数据部分复制到现在的 second 前面
+           将 source (first) 数据部分复制到新压缩列表的最前面 */
         memcpy(target, source, source_bytes - ZIPLIST_END_SIZE);
     }
 
     /* Update header metadata. */
-    // 维护新 ziplist 的 header，即新字节长度和节点数量
+    /* 维护新 ziplist 的 header，即新字节长度和节点数量 */
     ZIPLIST_BYTES(target) = intrev32ifbe(zlbytes);
     ZIPLIST_LENGTH(target) = intrev16ifbe(zllength);
     /* New tail offset is:
