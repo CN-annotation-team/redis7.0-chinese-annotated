@@ -49,6 +49,8 @@ redis 仓库链接：https://github.com/redis/redis<br>
 修改完后，是时候该上传你的改动到你 fork 来的远程仓库上了。你可以用 git bash，也可以使用 IDE 里的 git 来操作。对于 git 不熟的用户建议使用 IDE，IDE 也更方便写 commit 信息，别忘了写 commit 信息哦！当然我们只是增删改中文注释，如果要直接在 github 上编辑也可以，你可以使用最简单的在线编辑功能（预览文件的时候点击右上角的笔🖊），或者你也可以在你的仓库首页按一下句号键使用 github 提供的在线 vscode 。🤔🤔<br>
 ### Step5:
 上传之后，点进你的仓库主页，会出现一个 "Contribute"，点击它，选择 "Open pull request"，选择好你仓库的分支和你想要在这里合并的分支后，点击 "Create pull request"，之后填写你的 PR 标题和正文内容，就成功提交一个 PR 啦！🍭🍭
+### Step6 (optional):
+记得检查修改自己的 GitHub Public profile 里的 Name 和 Public email，位置在右上角头像的 Settings 里，因为大多数情况下我们会使用 squash merge 来合并 PRs，此时 squash merge 后产生的新提交作者信息会使用这个 GH 信息（如果你的信息想公开的话）。
 
 ## 关于提交 PR 的内容：
 ### 修改内容：
