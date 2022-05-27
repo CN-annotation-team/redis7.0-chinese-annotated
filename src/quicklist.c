@@ -101,7 +101,7 @@ int quicklistisSetPackedThreshold(size_t sz) {
  * when the listpack exceeds the size limit by a few bytes (e.g. being 16388). */
 
 /* listapck entry 占用的 header 和 backlen 的估算最大值。
- * 因为 qucklistNode 的最大长度实际上为 16k, 所以我们只要算出在插入16k的 listpack entry 的情况下,
+ * 因为 qucklistNode 的最大长度实际上为 64k, 所以我们只要算出在插入64k的 listpack entry 的情况下,
  * 它的 header 和 backlen 总共占多大（header:5, baklen:3, 所以是8）。（感谢 pr #26 中 @sundb 的解释）
  * 尽管在最坏的情况下（sz < 64），我们将在一个快速列表节点中浪费6个字节，
  * 但当 listpack 超过大小限制的几个字节时（例如：16388）可以避免由于内部碎片造成的内存浪费 */
