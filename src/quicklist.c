@@ -43,7 +43,7 @@
 #endif
 
 /* Optimization levels for size-based filling.
- * Note that the largest possible limit is 16k, so even if each record takes
+ * Note that the largest possible limit is 64k, so even if each record takes
  * just one byte, it still won't overflow the 16 bit count field. */
 
 /* 快速列表中填充因子（fill）的优化级别。
@@ -54,7 +54,8 @@
  * fill 默认值为 -2，即采用 8192(Bytes) 作为 listpack 节点的最大容量。
  * 为什么要强调结构是 ziplist/listpack 的节点？
  * 当快速列表节点的 container（容器） 字段为 PACKED（7.0之前是 ZIPLIST ） 时，采用 ziplist/listpack 存储元素，
- * 若为 PLAIN（7.0之前是 NONE） 时，是利用一个 char 数组来存储一个占用空间很大的元素，该节点本身即是所存储的元素。 */
+ * 若为 PLAIN（7.0之前是 NONE） 时，是利用一个 char 数组来存储一个占用空间很大的元素，该节点本身即是所存储的元素。 
+ * 注：fill 为正数时，最大元素数量限制为64k（FILL_MAX = 2^16-1），这是为了保证 quicklistNode 中16位的 count 字段不会溢出。 */
 static const size_t optimization_level[] = {4096, 8192, 16384, 32768, 65536};
 
 /* packed_threshold is initialized to 1gb */
@@ -90,7 +91,7 @@ int quicklistisSetPackedThreshold(size_t sz) {
 /* 任何存储多个元素的 listpack 的最大容量（字节）。
  * 超出限制值的大元素将独立存储在 listpack 中。
  * 这只在被元素数量限制的情况下使用（fill 为正数的情况）。
- * 当我们被字节数限制时（fill 为负数的情况），最大的限制可以更大，且仍然安全。
+ * 当限制为字节数时（fill 为负数的情况），最大的限制可以更大，且仍然安全。
  * 8k 是一个推荐/默认的容量限制 */
 #define SIZE_SAFETY_LIMIT 8192
 
@@ -99,7 +100,9 @@ int quicklistisSetPackedThreshold(size_t sz) {
  * quicklistNode, but can avoid memory waste due to internal fragmentation
  * when the listpack exceeds the size limit by a few bytes (e.g. being 16388). */
 
-/* listpack 条目（entry）开销的最大估计值。
+/* listapck entry 占用的 header 和 backlen 的估算最大值。
+ * 因为 qucklistNode 的最大长度实际上为 16k, 所以我们只要算出在插入16k的 listpack entry 的情况下,
+ * 它的 header 和 backlen 总共占多大（header:5, baklen:3, 所以是8）。（感谢 pr #26 中 @sundb 的解释）
  * 尽管在最坏的情况下（sz < 64），我们将在一个快速列表节点中浪费6个字节，
  * 但当 listpack 超过大小限制的几个字节时（例如：16388）可以避免由于内部碎片造成的内存浪费 */
 #define SIZE_ESTIMATE_OVERHEAD 8
