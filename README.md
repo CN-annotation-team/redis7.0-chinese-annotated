@@ -36,7 +36,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [ziplist.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ziplist.c) | ziplist 压缩列表的实现，7.0 版本后被 listpack 紧凑列表替换了 | 低于一半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/5/26
+更新日期：2022/5/28
 
 
 ## 关于提交 PR 的方法：
