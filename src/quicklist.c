@@ -110,7 +110,7 @@ int quicklistisSetPackedThreshold(size_t sz) {
 /* Minimum listpack size in bytes for attempting compression. */
 
 /* 尝试压缩的 listpack 节点应满足的最小尺寸（字节）
- * listpack 节点的低于该值时不会对 listpack 进行压缩。 */
+ * listpack 节点的字节大小低于该值时不会对 listpack 进行压缩。 */
 #define MIN_COMPRESS_BYTES 48
 
 /* Minimum size reduction in bytes to store compressed quicklistNode data.
