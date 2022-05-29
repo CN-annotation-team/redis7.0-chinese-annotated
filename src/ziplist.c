@@ -98,13 +98,22 @@
  *    b. prevlen 实际的值被保存在后 4 个字节里
  *
  * So practically an entry is encoded in the following way:
- *
+ * 
  * <prevlen from 0 to 253> <encoding> <entry>
  *
  * Or alternatively if the previous entry length is greater than 253 bytes
  * the following encoding is used:
  *
  * 0xFE <4 bytes unsigned little endian prevlen> <encoding> <entry>
+ *
+ * 编码结构示意图：
+ * 1. 如果前节点字节长度 < 254 字节，那么当前节点的编码布局如下所示：
+ *    <prevlen from 0 to 253>           <encoding>               <entry>
+ *      前节点的长度[0, 253]     ｜ 当前节点的实际数据类型以及长度 ｜ 当前节点的实际数据
+ 
+ * 2. 如果前节点字节长度 >= 254 字节，那么当前节点的编码布局如下所示：
+ *          0xFE      <4 bytes unsigned little endian prevlen>               <encoding>              <entry>
+ *      标识（1字节）｜          前节点的实际长度（4字节）             ｜   当前节点的实际数据类型以及长度 ｜ 档前节点的实际数据
  *
  * The encoding field of the entry depends on the content of the
  * entry. When the entry is a string, the first 2 bits of the encoding first
