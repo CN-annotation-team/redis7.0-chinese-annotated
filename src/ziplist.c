@@ -113,7 +113,7 @@
  
  * 2. 如果前节点字节长度 >= 254 字节，那么当前节点的编码布局如下所示：
  *          0xFE      <4 bytes unsigned little endian prevlen>               <encoding>              <entry>
- *      标识（1字节）｜          前节点的实际长度（4字节）             ｜   当前节点的实际数据类型以及长度 ｜ 档前节点的实际数据
+ *      标识（1字节）｜          前节点的实际长度（4字节）             ｜   当前节点的实际数据类型以及长度 ｜ 当前节点的实际数据
  *
  * The encoding field of the entry depends on the content of the
  * entry. When the entry is a string, the first 2 bits of the encoding first
