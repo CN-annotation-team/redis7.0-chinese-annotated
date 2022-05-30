@@ -98,7 +98,7 @@
  *    b. prevlen 实际的值被保存在后 4 个字节里
  *
  * So practically an entry is encoded in the following way:
- * 
+ *
  * <prevlen from 0 to 253> <encoding> <entry>
  *
  * Or alternatively if the previous entry length is greater than 253 bytes
