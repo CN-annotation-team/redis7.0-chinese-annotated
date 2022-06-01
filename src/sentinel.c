@@ -69,7 +69,7 @@ typedef struct sentinelAddr {
 #define SRI_SLAVE   (1<<1)
 /* 实例是一个 Sentinel */
 #define SRI_SENTINEL (1<<2)
-/* 实例当前状态为:SDOWN */
+/* 实例当前状态为: SDOWN */
 #define SRI_S_DOWN (1<<3)   /* Subjectively down (no quorum). */
 /* 实例当前状态为：ODOWN */
 #define SRI_O_DOWN (1<<4)   /* Objectively down (confirmed by others). */
