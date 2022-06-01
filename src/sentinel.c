@@ -89,7 +89,7 @@ typedef struct sentinelAddr {
 #define SRI_RECONF_DONE (1<<10)     /* Slave synchronized with new master. */
 /* 主服务器强制执行故障迁移操作 */
 #define SRI_FORCE_FAILOVER (1<<11)  /* Force failover with master up. */
-/* 已对返回 -BUSY 的服务器发送 SCRIPT KILL命令 */
+/* 已对返回 -BUSY 的服务器发送 SCRIPT KILL 命令 */
 #define SRI_SCRIPT_KILL_SENT (1<<12) /* SCRIPT KILL already sent on -BUSY */
 /* 主服务器正在重启 */
 #define SRI_MASTER_REBOOT  (1<<13)   /* Master was detected as rebooting */
