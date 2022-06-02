@@ -151,8 +151,8 @@ static mstime_t sentinel_default_failover_timeout = 60*3*1000;
 #define SENTINEL_FAILOVER_STATE_SEND_SLAVEOF_NOONE 3 /* Slave -> Master */
 /* 等待从服务器转为主服务器 */
 #define SENTINEL_FAILOVER_STATE_WAIT_PROMOTION 4 /* Wait slave to change role */
-/* 向已下线主服务器的其他从服务器发送 SLAVEOF 命令 */
-/* 向它们复制新的主服务器 */
+/* 向已下线主服务器的从属从服务器发送 SLAVEOF new_master_ip new_master_port 命令 */
+/* 让它们向新主服务器建立主从复制，即向新主进行同步 */
 #define SENTINEL_FAILOVER_STATE_RECONF_SLAVES 5 /* SLAVEOF newmaster */
 /* 监视被升级的从服务器 */
 #define SENTINEL_FAILOVER_STATE_UPDATE_CONFIG 6 /* Monitor promoted slave. */
