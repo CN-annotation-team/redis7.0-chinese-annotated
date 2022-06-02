@@ -87,7 +87,7 @@ typedef struct sentinelAddr {
 #define SRI_RECONF_INPROG (1<<9)   /* Slave synchronization in progress. */
 /* 从服务器与新服务器同步完毕，INFO 响应中 master_link_status 为 up，从 INPROG -> DONE */
 #define SRI_RECONF_DONE (1<<10)     /* Slave synchronized with new master. */
-/* 主服务器强制执行故障迁移操作 */
+/* 主服务器强制执行故障转移操作，通过 SENTINEL FAILOVER <master-name> 命令主动触发而不用哨兵集群达成共识  */
 #define SRI_FORCE_FAILOVER (1<<11)  /* Force failover with master up. */
 /* 已对返回 -BUSY 的服务器发送 SCRIPT KILL 命令 */
 #define SRI_SCRIPT_KILL_SENT (1<<12) /* SCRIPT KILL already sent on -BUSY */
@@ -106,11 +106,11 @@ static mstime_t sentinel_ping_period = SENTINEL_PING_PERIOD;
 static mstime_t sentinel_ask_period = 1000;
 /* 发送 PUBLISH 命令的间隔 */
 static mstime_t sentinel_publish_period = 2000;
-/* 默认判断服务器已下线的时间 */
+/* 默认判断服务器主观下线所需要的时间，即失联多久才会认为对方主观下线 */
 static mstime_t sentinel_default_down_after = 30000;
 /* 默认 TILT 触发时长 */
 static mstime_t sentinel_tilt_trigger = 2000;
-/* 默认 TILT 环境时长 （需要多久才能退出 TITL 模式）*/
+/* 默认 TILT 环境时长（即哨兵正常工作多久后，才能退出 TITL 模式）*/
 static mstime_t sentinel_tilt_period = SENTINEL_PING_PERIOD * 30;
 /* 默认的从服务器配置修改超时时长 */
 static mstime_t sentinel_slave_reconf_timeout = 10000;
