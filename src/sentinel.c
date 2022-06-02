@@ -81,7 +81,7 @@ typedef struct sentinelAddr {
                                            this master. */
 /* 实例被选中为主服务器（当前仍是从服务器）*/
 #define SRI_PROMOTED (1<<7)            /* Slave selected for promotion. */
-/* 向服务器发送 SLAVEOF 命令，让其转向复制新主服务器 */
+/* 哨兵向服务器发送了 SLAVEOF 命令，让其转向复制新主服务器 */
 #define SRI_RECONF_SENT (1<<8)     /* SLAVEOF <newmaster> sent. */
 /* 从服务器正在和主服务器进行同步，INFO 响应中从服务器的主能对应上新主，从 SENT -> INPROG */
 #define SRI_RECONF_INPROG (1<<9)   /* Slave synchronization in progress. */
