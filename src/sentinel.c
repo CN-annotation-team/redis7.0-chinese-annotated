@@ -147,7 +147,7 @@ static mstime_t sentinel_default_failover_timeout = 60*3*1000;
 #define SENTINEL_FAILOVER_STATE_WAIT_START 1  /* Wait for failover_start_time*/
 /* 正在挑选将要提升作为新主服务器的从服务器 */
 #define SENTINEL_FAILOVER_STATE_SELECT_SLAVE 2 /* Select slave to promote */
-/* 向被选中的从服务器发送 “send_slaveof_noone” */
+/* 向被选中的从服务器发送  SLAVEOF NO ONE 命令，将其提升为 master */
 #define SENTINEL_FAILOVER_STATE_SEND_SLAVEOF_NOONE 3 /* Slave -> Master */
 /* 等待从服务器转为主服务器 */
 #define SENTINEL_FAILOVER_STATE_WAIT_PROMOTION 4 /* Wait slave to change role */
