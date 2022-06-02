@@ -85,7 +85,7 @@ typedef struct sentinelAddr {
 #define SRI_RECONF_SENT (1<<8)     /* SLAVEOF <newmaster> sent. */
 /* 从服务器正在和主服务器进行同步，INFO 响应中从服务器的主能对应上新主，从 SENT -> INPROG */
 #define SRI_RECONF_INPROG (1<<9)   /* Slave synchronization in progress. */
-/* 从服务器与新服务器同步完毕，开始复制新主服务器 */
+/* 从服务器与新服务器同步完毕，INFO 响应中 master_link_status 为 up，从 INPROG -> DONE */
 #define SRI_RECONF_DONE (1<<10)     /* Slave synchronized with new master. */
 /* 主服务器强制执行故障迁移操作 */
 #define SRI_FORCE_FAILOVER (1<<11)  /* Force failover with master up. */
