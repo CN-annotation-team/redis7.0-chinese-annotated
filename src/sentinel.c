@@ -133,7 +133,7 @@ static mstime_t sentinel_default_failover_timeout = 60*3*1000;
 #define SENTINEL_DEFAULT_PARALLEL_SYNCS 1
 /* 默认最大积压命令数量 */
 #define SENTINEL_MAX_PENDING_COMMANDS 100
-/* 启动故障迁移最大延迟时间 */
+/* 启动故障转移最大延迟时间 */
 #define SENTINEL_MAX_DESYNC 1000
 #define SENTINEL_DEFAULT_DENY_SCRIPTS_RECONFIG 1
 #define SENTINEL_DEFAULT_RESOLVE_HOSTNAMES 0
