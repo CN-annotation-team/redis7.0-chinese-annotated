@@ -108,7 +108,7 @@ static mstime_t sentinel_ask_period = 1000;
 static mstime_t sentinel_publish_period = 2000;
 /* 默认判断服务器已下线的时间 */
 static mstime_t sentinel_default_down_after = 30000;
-/* 默认 TILT 触发时间 */
+/* 默认 TILT 触发时长 */
 static mstime_t sentinel_tilt_trigger = 2000;
 /* 默认 TILT 环境时长 （需要多久才能退出 TITL 模式）*/
 static mstime_t sentinel_tilt_period = SENTINEL_PING_PERIOD * 30;
