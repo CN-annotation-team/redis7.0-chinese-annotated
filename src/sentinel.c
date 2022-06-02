@@ -76,7 +76,7 @@ typedef struct sentinelAddr {
 /* Sentinel 认为主服务器已下线 */
 #define SRI_MASTER_DOWN (1<<5) /* A Sentinel with this flag set thinks that
                                    its master is down. */
-/* 正在对主服务器进行故障迁移 */
+/* 正在对主服务器进行故障转移 */
 #define SRI_FAILOVER_IN_PROGRESS (1<<6) /* Failover is in progress for
                                            this master. */
 /* 实例被选中为主服务器（当前仍是从服务器）*/
