@@ -141,7 +141,7 @@ static mstime_t sentinel_default_failover_timeout = 60*3*1000;
 
 /* 故障转移时的状态 */
 /* Failover machine different states. */
-/* 不在执行故障迁移 */
+/* 没在执行故障转移 */
 #define SENTINEL_FAILOVER_STATE_NONE 0  /* No failover in progress. */
 /* 正在等待故障转移的启动 */
 #define SENTINEL_FAILOVER_STATE_WAIT_START 1  /* Wait for failover_start_time*/
