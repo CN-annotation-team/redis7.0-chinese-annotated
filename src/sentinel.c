@@ -69,7 +69,7 @@ typedef struct sentinelAddr {
 #define SRI_SLAVE   (1<<1)
 /* 实例是一个 Sentinel */
 #define SRI_SENTINEL (1<<2)
-/* 实例当前状态为: SDOWN */
+/* 实例当前状态为: SDOWN，即哨兵单方面认为对方下线，是一个很主观的想法，主观下线 */
 #define SRI_S_DOWN (1<<3)   /* Subjectively down (no quorum). */
 /* 实例当前状态为：ODOWN，即大多数（半数以上）哨兵认为对方主观下线，整个哨兵集群达成这个共识，标记为客观下线 */
 #define SRI_O_DOWN (1<<4)   /* Objectively down (confirmed by others). */
