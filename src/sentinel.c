@@ -129,7 +129,7 @@ static mstime_t sentinel_default_failover_timeout = 60*3*1000;
 #define SENTINEL_HELLO_CHANNEL "__sentinel__:hello"
 /* 默认的从服务器优先级，用于新主选择，优先级越小被选为新主的概率越大，优先级为 0 不参与选择 */
 #define SENTINEL_DEFAULT_SLAVE_PRIORITY 100
-/* 默认同时对新服务器进行复制的从服务器数量 */
+/* 默认同时对新主服务器进行复制的从服务器数量 */
 #define SENTINEL_DEFAULT_PARALLEL_SYNCS 1
 /* 默认最大积压命令数量 */
 #define SENTINEL_MAX_PENDING_COMMANDS 100
