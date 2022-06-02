@@ -42,6 +42,13 @@ extern const char *SDS_NOINIT;
 
 typedef char *sds; /* Simple Dynamic String 简单动态字符串 */
 
+/* __packed__ 取消结构在编译过程中的优化对齐，按照实际占用字节数进行对齐
+ * SDS 数据结构定义 <len><alloc><flags><buf>
+ * 特性1 指针是直接指向buf 使得可以直接使用 C 语言string.h库中的函数
+ * 特性2 并且前进一位就能直接获取flags。从而快速拿到类型
+ * redis 为了上述两个特性 牺牲了对齐填充
+ * */
+
 /* 注意: sdshdr5 从未被使用, 我们仅访问 flags 字节.
  * 虽说如此, 这里还是记录一下 SDS5 字符串的空间布局. */
 struct __attribute__ ((__packed__)) sdshdr5 {
@@ -88,7 +95,7 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 
 /* 获取 SDS 的长度 */
 static inline size_t sdslen(const sds s) {
-    unsigned char flags = s[-1]; /* 取出 s 的前一个字节, 用作类型判断 (仔细观测sds数据结构的定义) */
+    unsigned char flags = s[-1]; /* 根据sds数据结构的定义，sds的指针是指向buf,前一个字节就是flags，用作类型判断 */
     switch(flags&SDS_TYPE_MASK) { /* & 0b0111 取出3位低有效位中的类型 */
         case SDS_TYPE_5:
             return SDS_TYPE_5_LEN(flags);
