@@ -157,7 +157,7 @@ static mstime_t sentinel_default_failover_timeout = 60*3*1000;
 /* 监视被升级的从服务器 */
 #define SENTINEL_FAILOVER_STATE_UPDATE_CONFIG 6 /* Monitor promoted slave. */
 
-/* 连接正常 */
+/* 主从连接正常 */
 #define SENTINEL_MASTER_LINK_STATUS_UP 0
 /* 主从连接断开 */
 #define SENTINEL_MASTER_LINK_STATUS_DOWN 1
