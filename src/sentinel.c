@@ -159,7 +159,7 @@ static mstime_t sentinel_default_failover_timeout = 60*3*1000;
 
 /* 连接正常 */
 #define SENTINEL_MASTER_LINK_STATUS_UP 0
-/* 连接断开 */
+/* 主从连接断开 */
 #define SENTINEL_MASTER_LINK_STATUS_DOWN 1
 
 /* 可用于多个函数的通用标识。
