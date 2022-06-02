@@ -102,7 +102,7 @@ typedef struct sentinelAddr {
 static mstime_t sentinel_info_period = 10000;
 /* 发送 PING 命令的间隔 */
 static mstime_t sentinel_ping_period = SENTINEL_PING_PERIOD;
-/* 发送 ASK 命令的间隔 */
+/* 发送 ASK 命令的间隔，实际上是 SENTINEL is-master-down-by-addr 命令，询问对方某主服务器是否主观下线或者故障转移过程中用于拉票（哨兵 leader） */
 static mstime_t sentinel_ask_period = 1000;
 /* 发送 PUBLISH 命令的间隔 */
 static mstime_t sentinel_publish_period = 2000;
