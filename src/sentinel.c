@@ -145,7 +145,7 @@ static mstime_t sentinel_default_failover_timeout = 60*3*1000;
 #define SENTINEL_FAILOVER_STATE_NONE 0  /* No failover in progress. */
 /* 正在等待故障转移的启动 */
 #define SENTINEL_FAILOVER_STATE_WAIT_START 1  /* Wait for failover_start_time*/
-/* 正在为新服务器挑选从服务器 */
+/* 正在挑选将要提升作为新主服务器的从服务器 */
 #define SENTINEL_FAILOVER_STATE_SELECT_SLAVE 2 /* Select slave to promote */
 /* 向被选中的从服务器发送 “send_slaveof_noone” */
 #define SENTINEL_FAILOVER_STATE_SEND_SLAVEOF_NOONE 3 /* Slave -> Master */
