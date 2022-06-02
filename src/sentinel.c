@@ -187,7 +187,7 @@ static mstime_t sentinel_default_failover_timeout = 60*3*1000;
 #define SENTINEL_SCRIPT_MAX_QUEUE 256
 /* 同一时间可执行脚本的最大数量 */
 #define SENTINEL_SCRIPT_MAX_RUNNING 16
-/* 脚本重试前的延迟时间 */
+/* 脚本最大重试次数 */
 #define SENTINEL_SCRIPT_MAX_RETRY 10
 
 /* SENTINEL SIMULATE-FAILURE command flags. */
