@@ -56,7 +56,6 @@
     (server.current_client == NULL || server.current_client->id == CLIENT_ID_AOF) ? 0 : 1
 
 char* rdbFileBeingLoaded = NULL; /* used for rdb checking on read error 用于 rdb 检查读取错误 */
-
 extern int rdbCheckMode;
 void rdbCheckError(const char *fmt, ...);
 void rdbCheckSetError(const char *fmt, ...);
@@ -217,12 +216,10 @@ int rdbSaveLen(rio *rdb, uint64_t len) {
  * encodings.
  *
  * The function returns -1 on error, 0 on success. */
-/*
- * 读取编码/长度。
+/* 读取编码/长度。
  * 如果为长度，那么 '*isencoded' 为 0，'*lenptr' 为长度
  * 如果为编码类型，那么 '*isencoded' 为 1，'*lenptr' 为编码格式
- * 成功返回0，失败返回-1
- */
+ * 成功返回0，失败返回-1 */
 int rdbLoadLenByRef(rio *rdb, int *isencoded, uint64_t *lenptr) {
     unsigned char buf[2];
     int type;
@@ -264,10 +261,8 @@ int rdbLoadLenByRef(rio *rdb, int *isencoded, uint64_t *lenptr) {
  * from the RDB stream, signaling an error by returning RDB_LENERR
  * (since it is a too large count to be applicable in any Redis data
  * structure). */
-/*
- * 读取编码/长度
- * 若长度太大无法适用于任何 Reids数据结构体，则返回 RDB_LENERR
- */
+/* 读取编码/长度
+ * 若长度太大无法适用于任何 Reids数据结构体，则返回 RDB_LENERR */
 uint64_t rdbLoadLen(rio *rdb, int *isencoded) {
     uint64_t len;
 
@@ -279,10 +274,8 @@ uint64_t rdbLoadLen(rio *rdb, int *isencoded) {
  * for encoded types. If the function successfully encodes the integer, the
  * representation is stored in the buffer pointer to by "enc" and the string
  * length is returned. Otherwise 0 is returned. */
-/*
- * 计算 value 的整数编码格式，存储在enc中
- * 成功时返回长度，失败返回0
- */
+/* 计算 value 的整数编码格式，存储在enc中
+ * 成功时返回长度，失败返回0 */
 int rdbEncodeInteger(long long value, unsigned char *enc) {
     if (value >= -(1<<7) && value <= (1<<7)-1) {
         enc[0] = (RDB_ENCVAL<<6)|RDB_ENC_INT8;
@@ -308,10 +301,8 @@ int rdbEncodeInteger(long long value, unsigned char *enc) {
 /* Loads an integer-encoded object with the specified encoding type "enctype".
  * The returned value changes according to the flags, see
  * rdbGenericLoadStringObject() for more info. */
-/*
- * 加载指定类型的整数编码对象
- * 返回值根据 flags 变化。
- */
+/* 加载指定类型的整数编码对象
+ * 返回值根据 flags 变化。*/
 void *rdbLoadIntegerObject(rio *rdb, int enctype, int flags, size_t *lenptr) {
     int plain = flags & RDB_LOAD_PLAIN;
     int sds = flags & RDB_LOAD_SDS;
@@ -358,9 +349,7 @@ void *rdbLoadIntegerObject(rio *rdb, int enctype, int flags, size_t *lenptr) {
 /* String objects in the form "2391" "-100" without any space and with a
  * range of values that can fit in an 8, 16 or 32 bit signed value can be
  * encoded as integers to save space */
-/*
- * 将字符串对象转换为整数，如果可以的话..
- */
+/* 将字符串对象转换为整数，如果可以的话.. */
 int rdbTryIntegerEncoding(char *s, size_t len, unsigned char *enc) {
     long long value;
     if (string2ll(s, len, &value)) {
@@ -419,8 +408,7 @@ ssize_t rdbSaveLzfStringObject(rio *rdb, unsigned char *s, size_t len) {
 /* Load an LZF compressed string in RDB format. The returned value
  * changes according to 'flags'. For more info check the
  * rdbGenericLoadStringObject() function. */
-/* 加载 RDB 格式的 LZF 压缩字符串。 返回值根据 “flags” 变化。
- * 有关更多信息，请查看rdbGenericLoadStringObject() 函数。 */
+/* 加载 RDB 格式的 LZF 压缩字符串。 返回值根据 'flags' 变化。 */
 void *rdbLoadLzfStringObject(rio *rdb, int flags, size_t *lenptr) {
     int plain = flags & RDB_LOAD_PLAIN;
     int sds = flags & RDB_LOAD_SDS;
@@ -556,6 +544,7 @@ ssize_t rdbSaveStringObject(rio *rdb, robj *obj) {
  *                 返回使用 zmalloc() 分配的纯字符串
  * RDB_LOAD_SDS: Return an SDS string instead of a Redis object.
  *               返回 SDS 字符串
+ *
  * On I/O error NULL is returned.
  * I/O 错误时返回 NULL
  */
@@ -1094,6 +1083,7 @@ ssize_t rdbSaveObject(rio *rdb, robj *o, robj *key, int dbid) {
                     return -1;
                 }
                 nwritten += n;
+                
                 /* Save the consumers of this group. */
                 if ((n = rdbSaveStreamConsumers(rdb,cg)) == -1) {
                     raxStop(&ri);
@@ -1500,6 +1490,7 @@ int rdbSave(int req, char *filename, rdbSaveInfo *rsi) {
     if (fsync(fileno(fp))) goto werr;
     if (fclose(fp)) { fp = NULL; goto werr; }
     fp = NULL;
+
     /* Use RENAME to make sure the DB file is changed atomically only
      * if the generate DB file is ok. */
     /* 通过原子更改的方式替换RDB文件为最新的 */
@@ -2250,7 +2241,7 @@ robj *rdbLoadObject(int rdbtype, rio *rdb, sds key, int dbid, int *error) {
                     }
                 }
                 break;
-            case RDB_TYPE_LIST_ZIPLIST:
+            case RDB_TYPE_LIST_ZIPLIST: 
                 {
                     quicklist *ql = quicklistNew(server.list_max_listpack_size,
                                                  server.list_compress_depth);
@@ -2467,7 +2458,7 @@ robj *rdbLoadObject(int rdbtype, rio *rdb, sds key, int dbid, int *error) {
         /* Load the last entry ID. */
         s->last_id.ms = rdbLoadLen(rdb,NULL);
         s->last_id.seq = rdbLoadLen(rdb,NULL);
-
+        
         if (rdbtype == RDB_TYPE_STREAM_LISTPACKS_2) {
             /* Load the first entry ID. */
             s->first_id.ms = rdbLoadLen(rdb,NULL);
@@ -2486,9 +2477,9 @@ robj *rdbLoadObject(int rdbtype, rio *rdb, sds key, int dbid, int *error) {
             s->max_deleted_entry_id.ms = 0;
             s->max_deleted_entry_id.seq = 0;
             s->entries_added = s->length;
-
+            
             /* Since the rax is already loaded, we can find the first entry's
-             * ID. */
+             * ID. */ 
             streamGetEdgeID(s,1,1,&s->first_id);
         }
 
@@ -2532,7 +2523,7 @@ robj *rdbLoadObject(int rdbtype, rio *rdb, sds key, int dbid, int *error) {
                 decrRefCount(o);
                 return NULL;
             }
-
+            
             /* Load group offset. */
             uint64_t cg_offset;
             if (rdbtype == RDB_TYPE_STREAM_LISTPACKS_2) {
