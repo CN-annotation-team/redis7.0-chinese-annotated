@@ -179,7 +179,7 @@ quicklist *quicklistCreate(void) {
     return quicklist;
 }
 
-/* quicklist 最大压缩级别 （2**16-1）*/
+/* quicklist 最大压缩级别 （64 位操作系统下：2**16-1）*/
 #define COMPRESS_MAX ((1 << QL_COMP_BITS)-1)
 
 /* 设置 quicklist 的压缩深度 */
@@ -194,7 +194,7 @@ void quicklistSetCompressDepth(quicklist *quicklist, int compress) {
     quicklist->compress = compress;
 }
 
-/* quicklist 的最大填充系数 （2**16-1）*/
+/* quicklist 的最大填充系数 （64 位操作系统下：2**16-1）*/
 #define FILL_MAX ((1 << (QL_FILL_BITS-1))-1)
 void quicklistSetFill(quicklist *quicklist, int fill) {
     if (fill > FILL_MAX) {
@@ -277,7 +277,7 @@ REDIS_STATIC int __quicklistCompressNode(quicklistNode *node) {
 
     /* validate that the node is neither
      * tail nor head (it has prev and next)*/
-    /* 验证 quicklistNode 不是头节点也不是尾节点 */
+    /* 验证 quicklistNode 不是头节点也不是尾节点，因为头尾节点总是不压缩的，为了更快的头尾 POP 操作 */
     assert(node->prev && node->next);
 
     node->recompress = 0;
@@ -362,7 +362,7 @@ REDIS_STATIC int __quicklistDecompressNode(quicklistNode *node) {
     } while (0)
 
 /* Force node to not be immediately re-compressible */
-/* 强制 quicklistNode 不能立即重新压缩 */
+/* 对节点进行解压，同时设置 recompress = 1，代表为了使用而解压，后面不进行压缩 */
 #define quicklistDecompressNodeForUse(_node)                                   \
     do {                                                                       \
         if ((_node) && (_node)->encoding == QUICKLIST_NODE_ENCODING_LZF) {     \
