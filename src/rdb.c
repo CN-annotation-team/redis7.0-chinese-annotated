@@ -1069,7 +1069,7 @@ ssize_t rdbSaveObject(rio *rdb, robj *o, robj *key, int dbid) {
                     return -1;
                 }
                 nwritten += n;
-
+                
                 /* Save the group's logical reads counter. */
                 if ((n = rdbSaveLen(rdb,cg->entries_read)) == -1) {
                     raxStop(&ri);
@@ -1083,7 +1083,7 @@ ssize_t rdbSaveObject(rio *rdb, robj *o, robj *key, int dbid) {
                     return -1;
                 }
                 nwritten += n;
-                
+
                 /* Save the consumers of this group. */
                 if ((n = rdbSaveStreamConsumers(rdb,cg)) == -1) {
                     raxStop(&ri);
@@ -1490,7 +1490,7 @@ int rdbSave(int req, char *filename, rdbSaveInfo *rsi) {
     if (fsync(fileno(fp))) goto werr;
     if (fclose(fp)) { fp = NULL; goto werr; }
     fp = NULL;
-
+    
     /* Use RENAME to make sure the DB file is changed atomically only
      * if the generate DB file is ok. */
     /* 通过原子更改的方式替换RDB文件为最新的 */
