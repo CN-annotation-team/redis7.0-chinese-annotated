@@ -54,6 +54,7 @@
 /* This macro tells if we are in the context of a RESTORE command, and not loading an RDB or AOF. */
 #define isRestoreContext() \
     (server.current_client == NULL || server.current_client->id == CLIENT_ID_AOF) ? 0 : 1
+
 /* 用于 rdb 检查读取错误 */
 char* rdbFileBeingLoaded = NULL; /* used for rdb checking on read error */
 extern int rdbCheckMode;
@@ -134,7 +135,6 @@ time_t rdbLoadTime(rio *rdb) {
     if (rioRead(rdb,&t32,4) == 0) return -1;
     return (time_t)t32;
 }
-
 
 int rdbSaveMillisecondTime(rio *rdb, long long t) {
     int64_t t64 = (int64_t) t;
