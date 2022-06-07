@@ -54,8 +54,8 @@
 /* This macro tells if we are in the context of a RESTORE command, and not loading an RDB or AOF. */
 #define isRestoreContext() \
     (server.current_client == NULL || server.current_client->id == CLIENT_ID_AOF) ? 0 : 1
-
-char* rdbFileBeingLoaded = NULL; /* used for rdb checking on read error 用于 rdb 检查读取错误 */
+/* 用于 rdb 检查读取错误 */
+char* rdbFileBeingLoaded = NULL; /* used for rdb checking on read error */
 extern int rdbCheckMode;
 void rdbCheckError(const char *fmt, ...);
 void rdbCheckSetError(const char *fmt, ...);
@@ -138,7 +138,8 @@ time_t rdbLoadTime(rio *rdb) {
 
 int rdbSaveMillisecondTime(rio *rdb, long long t) {
     int64_t t64 = (int64_t) t;
-    memrev64ifbe(&t64); /* Store in little endian. 以小端法存储 */
+    /* 以小端法存储  */
+    memrev64ifbe(&t64); /* Store in little endian. */
     return rdbWriteRaw(rdb,&t64,8);
 }
 
@@ -168,7 +169,7 @@ long long rdbLoadMillisecondTime(rio *rdb, int rdbver) {
 /* Saves an encoded length. The first two bits in the first byte are used to
  * hold the encoding type. See the RDB_* definitions for more information
  * on the types of encoding. */
-/* 保存编码的长度。第一个字节的前两位用于保存编码类型 */
+/* 保存编码的长度。第一个字节的前两位用于保存编码类型. */
 int rdbSaveLen(rio *rdb, uint64_t len) {
     unsigned char buf[2];
     size_t nwritten;
@@ -219,7 +220,7 @@ int rdbSaveLen(rio *rdb, uint64_t len) {
 /* 读取编码/长度。
  * 如果为长度，那么 '*isencoded' 为 0，'*lenptr' 为长度
  * 如果为编码类型，那么 '*isencoded' 为 1，'*lenptr' 为编码格式
- * 成功返回0，失败返回-1 */
+ * 成功返回 0 ，失败返回 -1 */
 int rdbLoadLenByRef(rio *rdb, int *isencoded, uint64_t *lenptr) {
     unsigned char buf[2];
     int type;
@@ -261,8 +262,8 @@ int rdbLoadLenByRef(rio *rdb, int *isencoded, uint64_t *lenptr) {
  * from the RDB stream, signaling an error by returning RDB_LENERR
  * (since it is a too large count to be applicable in any Redis data
  * structure). */
-/* 读取编码/长度
- * 若长度太大无法适用于任何 Reids数据结构体，则返回 RDB_LENERR */
+/* 读取编码 / 长度
+ * 若长度太大无法适用于任何 Reids 数据结构体，则返回 RDB_LENERR */
 uint64_t rdbLoadLen(rio *rdb, int *isencoded) {
     uint64_t len;
 
@@ -274,8 +275,8 @@ uint64_t rdbLoadLen(rio *rdb, int *isencoded) {
  * for encoded types. If the function successfully encodes the integer, the
  * representation is stored in the buffer pointer to by "enc" and the string
  * length is returned. Otherwise 0 is returned. */
-/* 计算 value 的整数编码格式，存储在enc中
- * 成功时返回长度，失败返回0 */
+/* 计算 value 的整数编码格式，存储在 enc 中
+ * 成功时返回长度，失败返回 0 */
 int rdbEncodeInteger(long long value, unsigned char *enc) {
     if (value >= -(1<<7) && value <= (1<<7)-1) {
         enc[0] = (RDB_ENCVAL<<6)|RDB_ENC_INT8;
@@ -839,7 +840,7 @@ size_t rdbSaveStreamConsumers(rio *rdb, streamCG *cg) {
 
 /* Save a Redis object.
  * Returns -1 on error, number of bytes written on success. */
-/* 保存一个 Redis 对象。错误返回-1，否则返回成功写入的字节数 */
+/* 保存一个 Redis 对象。错误返回 -1 ，否则返回成功写入的字节数 */
 ssize_t rdbSaveObject(rio *rdb, robj *o, robj *key, int dbid) {
     ssize_t n = 0, nwritten = 0;
 
@@ -1444,13 +1445,12 @@ werr: /* Write error. */
 }
 
 /* Save the DB on disk. Return C_ERR on error, C_OK on success. */
-/* 保存 DB 在磁盘上。 错误时返回 C_ERR，正确返回 C_OK。 */
+/* 保存 DB 在磁盘上。 错误返回 C_ERR ，正确返回 C_OK 。 */
 int rdbSave(int req, char *filename, rdbSaveInfo *rsi) {
     /* 要写入的临时文件 */
     char tmpfile[256];
-    /* Current working dir path for error messages. */
     /* 错误消息的当前工作目录路径。 */
-    char cwd[MAXPATHLEN];
+    char cwd[MAXPATHLEN]; /* Current working dir path for error messages. */
     FILE *fp = NULL;
     rio rdb;
     int error = 0;
@@ -1474,7 +1474,7 @@ int rdbSave(int req, char *filename, rdbSaveInfo *rsi) {
     rioInitWithFile(&rdb,fp);
     startSaving(RDBFLAGS_NONE);
 
-    /* 允许的话，自动Sync, 每写入4mb调用一次fsync */
+    /* 允许的话，自动 Sync , 每写入 4mb 调用一次 fsync */
     if (server.rdb_save_incremental_fsync)
         rioSetAutoSync(&rdb,REDIS_AUTOSYNC_BYTES);
 
@@ -1493,7 +1493,7 @@ int rdbSave(int req, char *filename, rdbSaveInfo *rsi) {
     
     /* Use RENAME to make sure the DB file is changed atomically only
      * if the generate DB file is ok. */
-    /* 通过原子更改的方式替换RDB文件为最新的 */
+    /* 通过原子更改的方式替换 RDB 文件为最新的 */
     if (rename(tmpfile,filename) == -1) {
         char *str_err = strerror(errno);
         char *cwdp = getcwd(cwd,MAXPATHLEN);
@@ -1524,7 +1524,7 @@ werr:
     return C_ERR;
 }
 
-/* 创建进程写入RDB到磁盘 */
+/* 创建进程写入 RDB 到磁盘 */
 int rdbSaveBackground(int req, char *filename, rdbSaveInfo *rsi) {
     pid_t childpid;
 
@@ -1538,17 +1538,17 @@ int rdbSaveBackground(int req, char *filename, rdbSaveInfo *rsi) {
     if ((childpid = redisFork(CHILD_TYPE_RDB)) == 0) {
         int retval;
 
-        /* Child 子进程 */
+        /* Child */
         redisSetProcTitle("redis-rdb-bgsave");
         redisSetCpuAffinity(server.bgsave_cpulist);
-        /* 将rdb保存在磁盘中 */
+        /* 将 rdb 保存在磁盘中 */
         retval = rdbSave(req, filename,rsi);
         if (retval == C_OK) {
             sendChildCowInfo(CHILD_INFO_TYPE_RDB_COW_SIZE, "RDB");
         }
         exitFromChild((retval == C_OK) ? 0 : 1);
     } else {
-        /* Parent 父进程 */
+        /* Parent */
         if (childpid == -1) {
             /* 进程创建失败 */
             server.lastbgsave_status = C_ERR;
