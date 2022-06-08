@@ -243,7 +243,7 @@ sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     reqlen = newlen = (len+addlen);
     assert(newlen > len);   /* 处理 size_t 溢出 */
     if (greedy == 1) {
-        /* 新增后长度小于 1MB ，则按新长度的两倍扩容 */
+        /* 新增后长度小于 1MB ，则按新长度的两倍扩容（成倍扩容） */
         if (newlen < SDS_MAX_PREALLOC)
             newlen *= 2;
         else
