@@ -1340,7 +1340,7 @@ unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int
  *
  * 插入一个新的 entry 需要更新:
  *     插入 entry 后面节点的 prevlen 字段 (插入后需要维护后一个节点的元数据信息)
- *     维护 ziplist 首部的一些字段 => zlbytes,zltail,zllen */
+ *     维护 ziplist 首部的一些字段（zlbytes, zltail, zllen） */
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen) {
     /* curlen: 当前 ziplist 的完整字节长度
        reqlen: 新节点插入需要的最终字节长度，即新节点的长度（请求长度）
