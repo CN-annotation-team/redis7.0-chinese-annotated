@@ -94,7 +94,7 @@ struct __attribute__ ((__packed__)) sdshdr64 {
 
 /* 获取 SDS 的长度 */
 static inline size_t sdslen(const sds s) {
-    unsigned char flags = s[-1]; /* 根据sds数据结构的定义，sds的指针是指向buf,前一个字节就是flags，用作类型判断 */
+    unsigned char flags = s[-1]; /* 根据 sds 数据结构的定义，sds 的指针是指向 buf,前一个字节就是 flags，用作类型判断 */
     switch(flags&SDS_TYPE_MASK) { /* & 0b0111 取出3位低有效位中的类型 */
         case SDS_TYPE_5:
             return SDS_TYPE_5_LEN(flags);
