@@ -37,7 +37,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [sentinel.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sentinel.c) | sentinel 哨兵机制的具体实现 | 低于一半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/6/7
+更新日期：2022/6/8
 
 
 ## 关于提交 PR 的方法：
