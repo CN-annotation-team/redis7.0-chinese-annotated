@@ -235,7 +235,7 @@ sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     int hdrlen;
     size_t usable;
 
-    /* 剩余空间大于等于新增空间，无需扩容，直接返回源字符串 空间足够时的优化 */
+    /* 剩余空间大于等于新增空间，无需扩容，直接返回原字符串 - 空间足够时的优化 */
     if (avail >= addlen) return s;
 
     len = sdslen(s);
