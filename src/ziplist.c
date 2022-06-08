@@ -873,7 +873,7 @@ unsigned char *ziplistNew(void) {
      * 既为ziplist的起始地址，又负责记录ziplist的字节长度，zlbytes固定4字节，也就代表了一个ziplist最长为(2^32)-1字节*/
     ZIPLIST_BYTES(zl) = intrev32ifbe(bytes);
     /* zltail: 将到尾节点的偏移量写进内存，因为是刚初始化的 ziplist，
-     * 偏移量其实就是 HEADER_SIZE 值，此时它刚好指向 zlend，能够快速地执行push或pop操作 */
+     * 偏移量其实就是 HEADER_SIZE 值，此时它刚好指向 zlend，因此能够以 O(1) 时间复杂度快速在尾部进行 push 或 pop 操作 */
     ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(ZIPLIST_HEADER_SIZE);
     /* zllen: 将 ziplist 节点数量写进内存，初始化是 0 */
     ZIPLIST_LENGTH(zl) = 0;
