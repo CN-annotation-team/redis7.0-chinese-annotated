@@ -97,7 +97,7 @@ static inline size_t sdsTypeMaxSize(char type) {
  * mystring = sdsnewlen("abc",3);
  *
  * 您可以使用 printf() 打印字符串, 因为字符串末尾有一个隐式的 \0.
- * 不过, 字符串是二进制安全的, 中间可以包含 \0 字符, 因为长度存储在 sds 头部信息中 */
+ * 不过, sds 字符串本身是二进制安全的, 中间可以存储 \0, 因为字符串的实际长度是存储在 sds header 中 */
 sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
     void *sh;
     sds s;
@@ -218,7 +218,7 @@ void sdsclear(sds s) {
     s[0] = '\0';
 }
 
-/* 扩大 sds 字符串末端的空闲空间,
+/* 自动扩容机制 - 扩大 sds 字符串末端的空闲空间,
  * 这样, 调用者就可以确定在调用这个函数之后,
  * 字符串末尾的 addlen 字节是可覆写的, 然后再加上 nul 项的一个字节.
  * 如果已经有足够的空闲空间, 这个函数会返回且不做任何动作,
@@ -235,7 +235,7 @@ sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     int hdrlen;
     size_t usable;
 
-    /* 空间足够时的优化. */
+    /* 剩余空间大于等于新增空间，无需扩容，直接返回原字符串 - 空间足够时的优化 */
     if (avail >= addlen) return s;
 
     len = sdslen(s);
@@ -243,9 +243,11 @@ sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     reqlen = newlen = (len+addlen);
     assert(newlen > len);   /* 处理 size_t 溢出 */
     if (greedy == 1) {
+        /* 新增后长度小于 1MB ，则按新长度的两倍扩容（成倍扩容） */
         if (newlen < SDS_MAX_PREALLOC)
             newlen *= 2;
         else
+            /* 新增后长度大于 1MB ，则按新长度加上 1MB 扩容 */
             newlen += SDS_MAX_PREALLOC;
     }
 
@@ -289,7 +291,7 @@ sds sdsMakeRoomForNonGreedy(sds s, size_t addlen) {
     return _sdsMakeRoomFor(s, addlen, 0);
 }
 
-/* 再分配 sds 字符串, 分配目的是移出未使用的尾部空闲空间.
+/* 再分配 sds 字符串, 分配目的是移除未使用的 buf 尾部空闲空间，真正释放 SDS 未使用空间.
  * 所包含的字符串并没有被改变, 但是下一次拼接时将会需要再分配.
  *
  * 在这次调用后, 传入的字符串将会失效,
@@ -796,6 +798,7 @@ sds sdstrim(sds s, const char *cset) {
     len = (ep-sp)+1;
     if (s != sp) memmove(s, sp, len);
     s[len] = '\0';
+    /* 仅仅更新了 len 而没进行实际的内存释放（惰性空间释放），真正释放可以看函数 sdsRemoveFreeSpace */
     sdssetlen(s,len);
     return s;
 }

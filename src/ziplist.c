@@ -863,15 +863,17 @@ static inline void zipAssertValidEntry(unsigned char* zl, size_t zlbytes, unsign
 /* 创建一个空 ziplist 只包含 <zlbytes><zltail><zllen><zlend> */
 unsigned char *ziplistNew(void) {
     /* ziplist_header，两个 uint32_t + 一个 uint16_t，即 zlbytes(4) + zltail(4) + zllen(2) = 10 bytes
-     * ziplist_end，一个 uint8_t 即 zlend 为 1 byte */
+     * ziplist_end，一个 uint8_t 即 zlend 为 1 byte
+     * 初始化好 header 跟 end 共 11 字节 */
     unsigned int bytes = ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
     /* 给 ziplist 分配内存空间 */
     unsigned char *zl = zmalloc(bytes);
 
-    /* zlbytes: 将 ziplist 总字节数写进内存 */
+    /* zlbytes: 将 ziplist 总字节数写进内存
+     * zl 既为 ziplist 的起始地址，其中值又负责记录 ziplist 的总字节长度，zlbytes 编码存储固定 4 字节，也就代表了一个 ziplist 总字节最大为为 (2^32)-1 字节*/
     ZIPLIST_BYTES(zl) = intrev32ifbe(bytes);
     /* zltail: 将到尾节点的偏移量写进内存，因为是刚初始化的 ziplist，
-     * 偏移量其实就是 HEADER_SIZE 值，此时它刚好指向 zlend */
+     * 偏移量其实就是 HEADER_SIZE 值，此时它刚好指向 zlend，因此能够以 O(1) 时间复杂度快速在尾部进行 push 或 pop 操作 */
     ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(ZIPLIST_HEADER_SIZE);
     /* zllen: 将 ziplist 节点数量写进内存，初始化是 0 */
     ZIPLIST_LENGTH(zl) = 0;
@@ -1337,9 +1339,8 @@ unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int
  * 如果是字符串则为字符串长度; 如果是整数则需要根据编码计算对应需要的字节数
  *
  * 插入一个新的 entry 需要更新:
- *     插入 entry 的 prevlen 字段 (根据前一个 entry 计算赋值)
  *     插入 entry 后面节点的 prevlen 字段 (插入后需要维护后一个节点的元数据信息)
- *     维护 ziplist 首部的一些字段 */
+ *     维护 ziplist 首部的一些字段（zlbytes, zltail, zllen） */
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen) {
     /* curlen: 当前 ziplist 的完整字节长度
        reqlen: 新节点插入需要的最终字节长度，即新节点的长度（请求长度）
