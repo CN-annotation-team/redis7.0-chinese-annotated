@@ -798,7 +798,7 @@ sds sdstrim(sds s, const char *cset) {
     len = (ep-sp)+1;
     if (s != sp) memmove(s, sp, len);
     s[len] = '\0';
-    // 仅仅更新了len 惰性空间释放 真正释放可以看函数sdsRemoveFreeSpace
+    /* 仅仅更新了 len 而没进行实际的内存释放（惰性空间释放），真正释放可以看函数 sdsRemoveFreeSpace */
     sdssetlen(s,len);
     return s;
 }
