@@ -291,7 +291,7 @@ sds sdsMakeRoomForNonGreedy(sds s, size_t addlen) {
     return _sdsMakeRoomFor(s, addlen, 0);
 }
 
-/* 再分配 sds 字符串, 分配目的是移出未使用的尾部空闲空间 真正释放SDS未使用空间.
+/* 再分配 sds 字符串, 分配目的是移除未使用的 buf 尾部空闲空间，真正释放 SDS 未使用空间.
  * 所包含的字符串并没有被改变, 但是下一次拼接时将会需要再分配.
  *
  * 在这次调用后, 传入的字符串将会失效,
