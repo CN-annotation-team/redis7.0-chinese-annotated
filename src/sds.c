@@ -97,7 +97,7 @@ static inline size_t sdsTypeMaxSize(char type) {
  * mystring = sdsnewlen("abc",3);
  *
  * 您可以使用 printf() 打印字符串, 因为字符串末尾有一个隐式的 \0.
- * 不过, sds字符串是二进制安全的, 中间可以包含 \0 字符, 因为长度存储在 sds 头部信息中 */
+ * 不过, sds 字符串本身是二进制安全的, 中间可以存储 \0, 因为字符串的实际长度是存储在 sds header 中 */
 sds _sdsnewlen(const void *init, size_t initlen, int trymalloc) {
     void *sh;
     sds s;
