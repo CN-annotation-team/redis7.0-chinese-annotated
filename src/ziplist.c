@@ -864,7 +864,7 @@ static inline void zipAssertValidEntry(unsigned char* zl, size_t zlbytes, unsign
 unsigned char *ziplistNew(void) {
     /* ziplist_header，两个 uint32_t + 一个 uint16_t，即 zlbytes(4) + zltail(4) + zllen(2) = 10 bytes
      * ziplist_end，一个 uint8_t 即 zlend 为 1 byte
-     * 初始化好header与end共11字节 */
+     * 初始化好 header 跟 end 共 11 字节 */
     unsigned int bytes = ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
     /* 给 ziplist 分配内存空间 */
     unsigned char *zl = zmalloc(bytes);
