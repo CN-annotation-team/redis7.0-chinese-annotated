@@ -22,8 +22,8 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [t_list.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/t_list.c) | 定义了 list 列表类型以及相关命令，例如 LPUSH/RPOP | 完成 |
 | [t_set.c ](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/t_set.c ) | 定义了 set 集合类型以及相关命令，例如 SADD/SMEMBERS | 完成 |
 | [t_zset.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/t_zset.c) | 定义了 zset 有序类型（包含 skiplist 跳表的实现）以及相关命令，例如 ZADD/ZRANGE | 完成 |
-| [sds.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sds.h) | SDS(简单动态字符串）数据结构的相关声明，用于字符串底层数据结构实现 | 完成 |
-| [sds.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sds.c) | SDS(简单动态字符串）数据结构的具体实现 | 完成 |
+| [sds.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sds.h) | SDS（简单动态字符串）数据结构的相关声明，用于字符串底层数据结构实现 | 完成 |
+| [sds.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sds.c) | SDS（简单动态字符串）数据结构的具体实现 | 完成 |
 | [quicklist.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/quicklist.h) | 快速列表数据结构的相关声明，3.2 版本后结合双端链表和压缩列表用于列表键底层数据结构实现，7.0 版本后结合双端列表和紧凑列表用于列表键底层数据结构实现 | 完成 |
 | [quicklist.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/quicklist.c) | 快速列表数据结构的具体实现 | 低于一半 |
 | [adlist.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/adlist.h) | 双端链表数据结构的相关声明，3.2 版本之前作为列表键的底层数据结构实现，也用于其它需要链表的场景，例如保存连接的客户端、慢查询条目等等 | 完成 |
@@ -37,7 +37,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [sentinel.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sentinel.c) | sentinel 哨兵机制的具体实现 | 低于一半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/6/8
+更新日期：2022/6/9
 
 
 ## 关于提交 PR 的方法：
