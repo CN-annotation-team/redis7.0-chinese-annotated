@@ -459,8 +459,8 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist,
      *  （Head 方向）   compress（压缩深度）= 2
      * | <--node--> |  depth 1  深度外  uncompressed
      * | <--node--> |  depth 2  深度外  uncompressed
-     * | <--node--> |  depth 3  深度内  compressed
-     * | <--node--> |  depth 3  深度内  compressed
+     * | <--node--> |  depth 3  深度内  compressed or plain
+     * | <--node--> |  depth 3  深度内  compressed or plain
      * | <--node--> |  depth 2  深度外  uncompressed
      * | <--node--> |  depth 1  深度外  uncompressed
      *  （Tail 方向）
