@@ -449,12 +449,28 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist,
     /* 迭代直到达到压缩深度，
      * 注意：因为在这个函数的 *顶部* 我们已经做了长度检查，
      * 所以我们可以跳过下面的空指针检查。 */
+    
+     /* 注释提到的压缩深度内外与常识有些不同，
+     * 若压缩深度 = 3，常识上我们认为深度内会是 <= 3，
+     * 而我们这里把 > 3 称为深度内，<= 3 称为深度外，
+     * 因为我们从作用的角度来取名，深度内为可以压缩的节点，
+     * 而深度外为不可以压缩或需要解压的节点。
+     * 对于注释中的压缩深度内外做出的图解示例：
+     *  （Head 方向）   compress（压缩深度）= 2
+     * | <--node--> |  depth 1  深度外  uncompressed
+     * | <--node--> |  depth 2  深度外  uncompressed
+     * | <--node--> |  depth 3  深度内  compressed
+     * | <--node--> |  depth 3  深度内  compressed
+     * | <--node--> |  depth 2  深度外  uncompressed
+     * | <--node--> |  depth 1  深度外  uncompressed
+     *  （Tail 方向）
+     * */
     quicklistNode *forward = quicklist->head;
     quicklistNode *reverse = quicklist->tail;
     int depth = 0;
     int in_depth = 0;
     while (depth++ < quicklist->compress) {
-        /* 如果深度内的两端节点被压缩，则将它们解压 */
+        /* 如果深度外的两端节点被压缩，则将它们解压 */
         quicklistDecompressNode(forward);
         quicklistDecompressNode(reverse);
 
