@@ -313,7 +313,7 @@
 /* Return the pointer to the last byte of a ziplist, which is, the
  * end of ziplist FF entry. */
 /* 获取指向 ziplist 末端 ZIP_END 的指针，即 zl 偏移 zlbytes - 1，此时就指向 ZIP_END */
-#define ZIPLIST_ENTRY_END(zl)   ((zl)+intrev32ifbe(ZIPLIST_BYTES(zl))-1)
+#define ZIPLIST_ENTRY_END(zl)   ((zl)+intrev32ifbe(ZIPLIST_BYTES(zl))-ZIPLIST_END_SIZE)
 
 /* copy from 黄健宏老师的 redis3.0 代码注释
 
