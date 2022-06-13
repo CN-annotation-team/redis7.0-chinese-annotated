@@ -1518,9 +1518,10 @@ void zsetConvert(robj *zobj, int encoding) {
         zs->zsl = zslCreate();
 
         eptr = lpSeek(zl,0);
-        serverAssertWithInfo(NULL,zobj,eptr != NULL);
-        sptr = lpNext(zl,eptr);
-        serverAssertWithInfo(NULL,zobj,sptr != NULL);
+        if (eptr != NULL) {
+            sptr = lpNext(zl,eptr);
+            serverAssertWithInfo(NULL,zobj,sptr != NULL);
+        }
 
         /* 遍历 listpack，将所有成员加入到跳表与字典（哈希表）中 */
         while (eptr != NULL) {
@@ -4941,7 +4942,7 @@ void blockingGenericZpopCommand(client *c, robj **keys, int numkeys, int where,
     /* If the keys do not exist we must block */
     /* 如果所有 key 都不存在则将它们阻塞 */
     struct blockPos pos = {where};
-    blockForKeys(c,BLOCKED_ZSET,c->argv+1,c->argc-2,count,timeout,NULL,&pos,NULL);
+    blockForKeys(c,BLOCKED_ZSET,keys,numkeys,count,timeout,NULL,&pos,NULL);
 }
 
 // BZPOPMIN key [key ...] timeout

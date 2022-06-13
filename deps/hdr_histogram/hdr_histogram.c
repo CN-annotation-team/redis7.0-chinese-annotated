@@ -679,32 +679,44 @@ int64_t hdr_min(const struct hdr_histogram* h)
 static int64_t get_value_from_idx_up_to_count(const struct hdr_histogram* h, int64_t count_at_percentile)
 {
     int64_t count_to_idx = 0;
-    int64_t value_from_idx = 0;
-    int32_t sub_bucket_idx = -1;
-    int32_t bucket_idx = 0;
-    int32_t bucket_base_idx = get_bucket_base_index(h, bucket_idx);
 
-    // Overflow check
-    if (count_at_percentile > h->total_count)
+    count_at_percentile = 0 < count_at_percentile ? count_at_percentile : 1;
+    for (int32_t idx = 0; idx < h->counts_len; idx++)
     {
-        count_at_percentile = h->total_count;
-    }
-
-    while (count_to_idx < count_at_percentile)
-    {
-        // increment bucket
-        sub_bucket_idx++;
-        if (sub_bucket_idx >= h->sub_bucket_count)
+        count_to_idx += h->counts[idx];
+        if (count_to_idx >= count_at_percentile)
         {
-            sub_bucket_idx = h->sub_bucket_half_count;
-            bucket_idx++;
-            bucket_base_idx = get_bucket_base_index(h, bucket_idx);
+            return hdr_value_at_index(h, idx);
         }
-        count_to_idx += get_count_at_index_given_bucket_base_idx(h, bucket_base_idx, sub_bucket_idx);
-        value_from_idx = ((int64_t)(sub_bucket_idx)) << (((int64_t)(bucket_idx)) + h->unit_magnitude);
     }
-    return value_from_idx;
+
+    struct hdr_iter iter;
+    const int64_t total_count = h->total_count;
+    // to avoid allocations we use the values array for intermediate computation
+    // i.e. to store the expected cumulative count at each percentile
+    for (size_t i = 0; i < length; i++)
+    {
+        const double requested_percentile = percentiles[i] < 100.0 ? percentiles[i] : 100.0;
+        const int64_t count_at_percentile =
+        (int64_t) (((requested_percentile / 100) * total_count) + 0.5);
+        values[i] = count_at_percentile > 1 ? count_at_percentile : 1;
+    }
+
+    hdr_iter_init(&iter, h);
+    int64_t total = 0;
+    size_t at_pos = 0;
+    while (hdr_iter_next(&iter) && at_pos < length)
+    {
+        total += iter.count;
+        while (at_pos < length && total >= values[at_pos])
+        {
+            values[at_pos] = highest_equivalent_value(h, iter.value);
+            at_pos++;
+        }
+    }
+    return 0;
 }
+
 
 int64_t hdr_value_at_percentile(const struct hdr_histogram* h, double percentile)
 {
