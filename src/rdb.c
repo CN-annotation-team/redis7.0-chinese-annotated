@@ -1528,7 +1528,7 @@ werr:
 int rdbSaveBackground(int req, char *filename, rdbSaveInfo *rsi) {
     pid_t childpid;
 
-    /* 当前进程不为主进程时错误 */
+    /* 如果有活跃的子进程（例如 bgsave bgrewriteaof），不进行 rdbSaveBackground */
     if (hasActiveChildProcess()) return C_ERR;
     server.stat_rdb_saves++;
 
@@ -1550,7 +1550,7 @@ int rdbSaveBackground(int req, char *filename, rdbSaveInfo *rsi) {
     } else {
         /* Parent */
         if (childpid == -1) {
-            /* 进程创建失败 */
+            /* 子进程创建失败 */
             server.lastbgsave_status = C_ERR;
             serverLog(LL_WARNING,"Can't save in background: fork: %s",
                 strerror(errno));
@@ -2814,7 +2814,7 @@ void stopLoading(int success) {
 
 void startSaving(int rdbflags) {
     /* Fire the persistence modules end event. */
-    /* 触发持久化模块结束事件 */
+    /* 给 Module 发送持久化开始的事件 */
     int subevent;
     if (rdbflags & RDBFLAGS_AOF_PREAMBLE && getpid() != server.pid)
         subevent = REDISMODULE_SUBEVENT_PERSISTENCE_AOF_START;
@@ -3434,7 +3434,7 @@ int rdbSaveToSlavesSockets(int req, rdbSaveInfo *rsi) {
     pid_t childpid;
     int pipefds[2], rdb_pipe_write, safe_to_exit_pipe;
 
-    /* 是否存在子进程开始RDB */
+    /* 是否存在活跃的子进程，例如 bgsave 或者 bg aof rewrite */
     if (hasActiveChildProcess()) return C_ERR;
 
     /* Even if the previous fork child exited, don't start a new one until we
