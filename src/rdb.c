@@ -461,7 +461,7 @@ err:
 
 /* Save a string object as [len][data] on disk. If the object is a string
  * representation of an integer value we try to save it in a special form */
-/* 将字符串对象保存为磁盘上的 [len][data]
+/* 将字符串对象以 [len][data] 形式保存到磁盘上
  * 如果对象是字符串整数值的表示，以整数编码保存 */
 ssize_t rdbSaveRawString(rio *rdb, unsigned char *s, size_t len) {
     int enclen;
