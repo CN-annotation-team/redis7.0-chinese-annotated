@@ -275,8 +275,8 @@ uint64_t rdbLoadLen(rio *rdb, int *isencoded) {
  * for encoded types. If the function successfully encodes the integer, the
  * representation is stored in the buffer pointer to by "enc" and the string
  * length is returned. Otherwise 0 is returned. */
-/* 计算 value 的整数编码格式，存储在 enc 中
- * 成功时返回长度，失败返回 0 */
+/* 计算 value 的整数编码格式，并将 value 存储在 enc 中
+ * 成功时返回 enc 字符串长度，失败返回 0 */
 int rdbEncodeInteger(long long value, unsigned char *enc) {
     if (value >= -(1<<7) && value <= (1<<7)-1) {
         enc[0] = (RDB_ENCVAL<<6)|RDB_ENC_INT8;
@@ -303,7 +303,7 @@ int rdbEncodeInteger(long long value, unsigned char *enc) {
  * The returned value changes according to the flags, see
  * rdbGenericLoadStringObject() for more info. */
 /* 加载指定类型的整数编码对象
- * 返回值根据 flags 变化。*/
+ * 返回值类型由 flags 指定。*/
 void *rdbLoadIntegerObject(rio *rdb, int enctype, int flags, size_t *lenptr) {
     int plain = flags & RDB_LOAD_PLAIN;
     int sds = flags & RDB_LOAD_SDS;
@@ -350,7 +350,7 @@ void *rdbLoadIntegerObject(rio *rdb, int enctype, int flags, size_t *lenptr) {
 /* String objects in the form "2391" "-100" without any space and with a
  * range of values that can fit in an 8, 16 or 32 bit signed value can be
  * encoded as integers to save space */
-/* 将字符串对象转换为整数，如果可以的话.. */
+/* 将字符串对象转换为整数，如果可以转换的话（范围在有符号32位整数内）*/
 int rdbTryIntegerEncoding(char *s, size_t len, unsigned char *enc) {
     long long value;
     if (string2ll(s, len, &value)) {
@@ -409,7 +409,7 @@ ssize_t rdbSaveLzfStringObject(rio *rdb, unsigned char *s, size_t len) {
 /* Load an LZF compressed string in RDB format. The returned value
  * changes according to 'flags'. For more info check the
  * rdbGenericLoadStringObject() function. */
-/* 加载 RDB 格式的 LZF 压缩字符串。 返回值根据 'flags' 变化。 */
+/* 加载 RDB 格式的 LZF 压缩字符串。 返回值类型由 'flags' 指定。 */
 void *rdbLoadLzfStringObject(rio *rdb, int flags, size_t *lenptr) {
     int plain = flags & RDB_LOAD_PLAIN;
     int sds = flags & RDB_LOAD_SDS;
