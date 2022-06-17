@@ -538,7 +538,7 @@ ssize_t rdbSaveStringObject(rio *rdb, robj *obj) {
  *               encode it in a special way to be more memory
  *               efficient. When this flag is passed the function
  *               no longer guarantees that obj->ptr is an SDS string.
- *               如果返回类型是Redis对象，尝试以特殊方式对其进行编码以获得更多内存
+ *               如果返回类型是 Redis 对象，尝试以特殊方式对其进行编码以提高内存效率
  *               这个标志被传递给函数时，不再保证 obj->ptr 是 SDS 字符串。
  * RDB_LOAD_PLAIN: Return a plain string allocated with zmalloc()
  *                 instead of a Redis object with an sds in it.
@@ -583,7 +583,7 @@ void *rdbGenericLoadStringObject(rio *rdb, int flags, size_t *lenptr) {
         }
         if (lenptr) *lenptr = len;
         if (len && rioRead(rdb,buf,len) == 0) {
-            /* I/O错误 */
+            /* I/O 错误 */
             if (plain)
                 zfree(buf);
             else
@@ -1182,7 +1182,7 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime, in
 }
 
 /* Save an AUX field. */
-/* 保存 AUX 字段 */
+/* 以为 key / value 的格式，保存 AUX 字段 */
 ssize_t rdbSaveAuxField(rio *rdb, void *key, size_t keylen, void *val, size_t vallen) {
     ssize_t ret, len = 0;
     if ((ret = rdbSaveType(rdb,RDB_OPCODE_AUX)) == -1) return -1;
