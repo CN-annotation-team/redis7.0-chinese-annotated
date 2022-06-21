@@ -41,7 +41,7 @@
 
 const char *SDS_NOINIT = "SDS_NOINIT";
 
-/**
+/*
  * redis 为了节省内存，针对不同的长度数据采用不同的数据结构
  * sds.h 中定义了如下共五种，通常 SDS_TYPE_5 并不使用，因为该类型不会存放数据长度，每次都需要进行分配和释放。
  * #define SDS_TYPE_5  0
