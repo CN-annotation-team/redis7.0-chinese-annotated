@@ -41,6 +41,15 @@
 
 const char *SDS_NOINIT = "SDS_NOINIT";
 
+/*
+ * redis 为了节省内存，针对不同的长度数据采用不同的数据结构
+ * sds.h 中定义了如下共五种，通常 SDS_TYPE_5 并不使用，因为该类型不会存放数据长度，每次都需要进行分配和释放。
+ * #define SDS_TYPE_5  0
+ * #define SDS_TYPE_8  1
+ * #define SDS_TYPE_16 2
+ * #define SDS_TYPE_32 3
+ * #define SDS_TYPE_64 4
+ */
 static inline int sdsHdrSize(char type) {
     switch(type&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
@@ -176,18 +185,44 @@ sds sdsempty(void) {
     return sdsnewlen("",0);
 }
 
-/* 从一个以空终结符结束的 C 字符串中创建一个新的 sds 字符串. */
+/*
+ * 根据给定字符串 init ，创建一个包含同样字符串的 sds
+ *
+ * 参数
+ *  init ：如果输入为 NULL ，那么创建一个空白 sds
+ *         否则，新创建的 sds 中包含和 init 内容相同字符串
+ *
+ * 返回值
+ *  sds ：创建成功返回内容为 init 的 sds
+ *        创建失败返回 NULL
+ *
+ * 复杂度
+ *  T = O(N)
+ */
 sds sdsnew(const char *init) {
     size_t initlen = (init == NULL) ? 0 : strlen(init);
     return sdsnewlen(init, initlen);
 }
 
-/* 复制一个 sds 字符串. */
+/*
+ * 复制给定 sds 的副本
+ *
+ * 返回值
+ *  sds ：创建成功返回输入 sds 的副本
+ *        创建失败返回 NULL
+ *
+ * 复杂度
+ *  T = O(N)
+ */
 sds sdsdup(const sds s) {
     return sdsnewlen(s, sdslen(s));
 }
 
 /* 释放一个 sds 字符串. 如果 's' 为 NULL, 则不执行任何操作. */
+/*
+* 复杂度
+* T = O(N)
+*/
 void sdsfree(sds s) {
     if (s == NULL) return;
     s_free((char*)s-sdsHdrSize(s[-1]));
@@ -210,11 +245,20 @@ void sdsupdatelen(sds s) {
     sdssetlen(s, reallen);
 }
 
-/* 在其原位置把一个 sds 变量 's' 设为空字符串 (将其 len 设为 0).
+/* 
+ * 在不释放 SDS 的字符串空间的情况下，
+ * 重置 SDS 所保存的字符串为空字符串。
+ *
+ * 在其原位置把一个 sds 变量 's' 设为空字符串 (将其 len 设为 0).
  * 注意, 旧的缓冲区不会被释放, 而是被设置为空闲状态,
- * 这样的话, 下一次的扩展就不需要把之前已分配缓冲区再分配一次 */
+ * 这样的话, 下一次的扩展就不需要把之前已分配缓冲区再分配一次。
+ * 
+ * 复杂度
+ *  T = O(1)
+ */
 void sdsclear(sds s) {
     sdssetlen(s, 0);
+    /* 将结束符放到最前面（相当于惰性地删除 buf 中的内容） */
     s[0] = '\0';
 }
 
@@ -229,6 +273,7 @@ void sdsclear(sds s) {
  * 注意: 这不会改变 sdslen() 返回的 SDS 字符串的 *长度*, 而只改变我们拥有的空闲缓冲区空间. */
 sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     void *sh, *newsh;
+    /* 获取 s 目前的空余空间长度 */
     size_t avail = sdsavail(s);
     size_t len, newlen, reqlen;
     char type, oldtype = s[-1] & SDS_TYPE_MASK;
@@ -238,6 +283,7 @@ sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     /* 剩余空间大于等于新增空间，无需扩容，直接返回原字符串 - 空间足够时的优化 */
     if (avail >= addlen) return s;
 
+    /* 获取 s 目前已占用空间的长度 直接读取 SDS 的 len 属性来获取 复杂度 T = O(1) */
     len = sdslen(s);
     sh = (char*)s-sdsHdrSize(oldtype);
     reqlen = newlen = (len+addlen);
@@ -266,6 +312,7 @@ sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     } else {
         /* 由于头部大小改变, 需要将字符串向前移动, 不能使用 realloc */
         newsh = s_malloc_usable(hdrlen+newlen+1, &usable);
+        /* 内存不足，分配失败，返回 */
         if (newsh == NULL) return NULL;
         memcpy((char*)newsh+hdrlen, s, len+1);
         s_free(sh);
