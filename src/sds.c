@@ -204,7 +204,6 @@ sds sdsnew(const char *init) {
     return sdsnewlen(init, initlen);
 }
 
-/* 复制一个 sds 字符串. */
 /*
  * 复制给定 sds 的副本
  *
