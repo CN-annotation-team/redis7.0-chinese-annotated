@@ -185,7 +185,6 @@ sds sdsempty(void) {
     return sdsnewlen("",0);
 }
 
-/* 从一个以空终结符结束的 C 字符串中创建一个新的 sds 字符串. */
 /*
  * 根据给定字符串 init ，创建一个包含同样字符串的 sds
  *
