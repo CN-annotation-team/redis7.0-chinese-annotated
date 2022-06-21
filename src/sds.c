@@ -193,7 +193,7 @@ sds sdsempty(void) {
  *         否则，新创建的 sds 中包含和 init 内容相同字符串
  *
  * 返回值
- *  sds ：创建成功返回 sdshdr 相对应的 sds
+ *  sds ：创建成功返回内容为 init 的 sds
  *        创建失败返回 NULL
  *
  * 复杂度
