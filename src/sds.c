@@ -282,7 +282,7 @@ sds _sdsMakeRoomFor(sds s, size_t addlen, int greedy) {
     /* 剩余空间大于等于新增空间，无需扩容，直接返回原字符串 - 空间足够时的优化 */
     if (avail >= addlen) return s;
 
-    /* 获取 s 目前已占用空间的长度 直接读取SDS的len属性来获取 复杂度 T = O(1) */
+    /* 获取 s 目前已占用空间的长度 直接读取 SDS 的 len 属性来获取 复杂度 T = O(1) */
     len = sdslen(s);
     sh = (char*)s-sdsHdrSize(oldtype);
     reqlen = newlen = (len+addlen);
