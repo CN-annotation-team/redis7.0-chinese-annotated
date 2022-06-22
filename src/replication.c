@@ -58,7 +58,7 @@ int RDBGeneratedByReplication = 0;
  * 2. replicationSetMaster() 完成一些准备工作之后会调用 connectWithMaster() 负责建立连接
  * 3. connectWithMaster() 发起与主节点的连接，并在连接建立后回调 syncWithMaster()
  * 4. syncWithMaster() 会负责建立主从同步的主要工作，在此过程中 syncWithMaster() 会作为 event loop 的 handler 被多次回调
- * 5. 主从握手完成后 syncWithMaster() 会调用 slaveTryPartialResynchronization() 尝试进行部分同步，后者会负责向主节点发送 PSYNC 命令，* 并处理主节点响应。slaveTryPartialResynchronization() 同样会被多次回调，并负责设置同步过程中的 replid 和 offset 等参数。
+ * 5. 主从握手完成后 syncWithMaster() 会调用 slaveTryPartialResynchronization() 尝试进行部分同步，后者会负责向主节点发送 PSYNC 命令，并处理主节点响应。slaveTryPartialResynchronization() 同样会被多次回调，并负责设置同步过程中的 replid 和 offset 等参数。
  * 6. 一旦 PSYNC 相关参数设置完成，syncWithMaster() 会调用 readSyncBulkPayload() 阻塞式地接受并加载主节点传来的 RDB 文件。
  * 7. RDB 文件加载完成后，从节点就可以从 redisServer.master 结构中继续接收来自主节点的后续数据
  */
@@ -1687,7 +1687,7 @@ int slaveIsInHandshakeState(void) {
 /*
  * 在初次同步过程中从节点需要花费较长时间加载 RDB 文件。为了避免主节点误认为此状态下的从节点超时，
  * 我们会向主节点发送一个 LF('\n') 字符。
- * 这里为了避免意外情况导致CRLF被划分到两条消息里所以只发送单个字符，
+ * 这里为了避免意外情况导致 CRLF 被划分到两条消息里所以只发送单个字符，
  * 并在协议中兼容只有一个 LF 字符的情况。
  * 
  * 这个函数会在两个上下文中被调用：
@@ -1851,7 +1851,7 @@ void readSyncBulkPayload(connection *conn) {
 
     /* Static vars used to hold the EOF mark, and the last bytes received
      * from the server: when they match, we reached the end of the transfer. */
-    /* 这些静态变量用于存储40个字节长的 EOF 标志以及从主节点收到最后40个字符串，如果收到的最后一段字符串与 
+    /* 这些静态变量用于存储40个字节长的 EOF 标志以及从主节点收到最后40个字符，如果收到的最后一段字符串与 
      * EOF 标志匹配说明我们已经收到完整的 RDB 文件。
      * 
      * readSyncBulkPayload 会作为连接的 read handler 被多次回调，所以需要使用静态变量来保存之前回调中获得的 EOF Mark。
@@ -2093,7 +2093,7 @@ void readSyncBulkPayload(connection *conn) {
      * rdbLoad() will call the event loop to process events from time to
      * time for non blocking loading. */
     /* 在加载数据库之前删除读回调。因为 rdbLoad() 在非阻塞加载过程中会不时调用事件循环，
-    若不删除则本函数会被递归调用 */
+     * 若不删除则本函数会被递归调用 */
     connSetReadHandler(conn, NULL);
     
     /* 开始加载主节点发来的 RDB 文件 */
@@ -2111,7 +2111,7 @@ void readSyncBulkPayload(connection *conn) {
              * It is enabled only on SWAPDB diskless replication when master replication ID hasn't changed,
              * because in that state the old content of the db represents a different point in time of the same
              * data set we're currently receiving from the master. */
-            /* 异步加载意味着在执行全量同步的过程中我们可以继续处理读命令，并且只有在加载完成时才会使用新的数据库代替就数据库。
+            /* 异步加载意味着在执行全量同步的过程中我们可以继续处理读命令，并且只有在加载完成时才会使用新的数据库代替旧数据库。
              * 异步加载只有使用 DISKLESS_LOAD_SWAPDB 策略且主节点的 replid 没有改变时才会启用，因为此时我们和主节点使用同一个数据集，只是我们落后于主节点有一些数据尚未收到 */
             if (memcmp(server.replid, server.master_replid, CONFIG_RUN_ID_SIZE) == 0) {
                 asyncLoading = 1;
@@ -2145,7 +2145,7 @@ void readSyncBulkPayload(connection *conn) {
                       "from socket: %s", strerror(errno));
             loadingFailed = 1;
         } else if (usemark) {
-            /* 加载成功且使用无盘传输，需要校验 EOF 标志*/
+            /* 加载成功且使用无盘传输，需要校验 EOF 标志 */
             /* Verify the end mark is correct. */
             if (!rioRead(&rdb, buf, CONFIG_RUN_ID_SIZE) ||
                 memcmp(buf, eofmark, CONFIG_RUN_ID_SIZE) != 0)
@@ -2155,7 +2155,7 @@ void readSyncBulkPayload(connection *conn) {
             }
         }
 
-        /* 若加载失败， 需要进行清理并恢复数据*/
+        /* 若加载失败， 需要进行清理并恢复数据 */
         if (loadingFailed) {
             stopLoading(0);
             cancelReplicationHandshake(1);
@@ -2301,7 +2301,7 @@ void readSyncBulkPayload(connection *conn) {
     /* After a full resynchronization we use the replication ID and
      * offset of the master. The secondary ID / offset are cleared since
      * we are starting a new history. */
-    /* 在执行全量同步后将主节点的 replid 和偏移量作为自己的replid 和 偏移量。
+    /* 在执行全量同步后将主节点的 replid 和偏移量作为自己的 replid 和偏移量。
      * 并清空 replid2 和对应的偏移量。 replid2 的作用可以参考 server.h 中 redisServer 中 
      * replid2 字段注释 
      */
@@ -2607,7 +2607,7 @@ int slaveTryPartialResynchronization(connection *conn, int read_reply) {
              * reply means that the master supports PSYNC, but the reply
              * format seems wrong. To stay safe we blank the master
              * replid to make sure next PSYNCs will fail. */
-            /* 这是一个意外情况，实际上返回 +FULLRESYNC 表示主节点支持 PSYNC 命令，但是返回的结果缺不正确。
+            /* 这是一个意外情况，实际上返回 +FULLRESYNC 表示主节点支持 PSYNC 命令，但是返回的结果却不正确。
              * 为了保证安全我们将 replid 清空，确保之后所有 PSYNC 命令都会失败*/
             memset(server.master_replid,0,CONFIG_RUN_ID_SIZE+1); /* server.master_replid 是 C 风格字符串，以 \0 结尾，所以 size 要加1 */
         } else {
@@ -2634,8 +2634,8 @@ int slaveTryPartialResynchronization(connection *conn, int read_reply) {
          * secondary ID as the old master ID up to the current offset, so
          * that our sub-slaves will be able to PSYNC with us after a
          * disconnection. */
-        /* 检查主节点发来的新 replid。如果它改变了我们需要将新ID设为主ID(server.replid), 
-         * 原来的id设为次要ID(server.replid2)，当前的复制偏移量存入 second_replid_offset，
+        /* 检查主节点发来的新 replid。如果它改变了我们需要将新 ID 设为主 ID(server.replid), 
+         * 原来的 ID 设为次要 ID(server.replid2)，当前的复制偏移量存入 second_replid_offset，
          * 这样我们的次级子节点在重连我们时就可以进行部分同步了
          */
         char *start = reply+10;
@@ -2648,7 +2648,7 @@ int slaveTryPartialResynchronization(connection *conn, int read_reply) {
 
             if (strcmp(new,server.cached_master->replid)) {
                 /* Master ID changed. */
-                /* 主节点的复制ID改变了 */
+                /* 主节点的复制 ID 改变了 */
                 serverLog(LL_WARNING,"Master replication ID changed to %s",new);
 
                 /* Set the old ID as our ID2, up to the current offset+1. */
@@ -2723,8 +2723,8 @@ int slaveTryPartialResynchronization(connection *conn, int read_reply) {
 /* This handler fires when the non blocking connect was able to
  * establish a connection with the master. */
 /* 当与主节点建立非阻塞连接后，本函数会被调用 
- * 本函数会负责与主节点完成同步参数的协商（鉴权、是否使用无盘同步、是否使用部分同步、接收replid等），
- * 并在全量同步时异步下载主节点发来的RDB文件 */
+ * 本函数会负责与主节点完成同步参数的协商（鉴权、是否使用无盘同步、是否使用部分同步、接收 replid 等），
+ * 并在全量同步时异步下载主节点发来的 RDB 文件 */
 void syncWithMaster(connection *conn) {
     char tmpfile[256], *err = NULL;
     int dfd = -1, maxtries = 5;
@@ -2732,7 +2732,7 @@ void syncWithMaster(connection *conn) {
 
     /* If this event fired after the user turned the instance into a master
      * with SLAVEOF NO ONE we must just return ASAP. */
-    /* 如果用户使用了 SLAVEOF NO ONE 来将当前实例转变为主节点后本函数被回调，我们要尽快返回*/
+    /* 如果用户使用了 SLAVEOF NO ONE 来将当前实例转变为主节点后本函数被回调，我们要尽快返回 */
     if (server.repl_state == REPL_STATE_NONE) {
         connClose(conn);
         return;
@@ -2740,7 +2740,7 @@ void syncWithMaster(connection *conn) {
 
     /* Check for errors in the socket: after a non blocking connect() we
      * may find that the socket is in error state. */
-    /* 在调用非阻塞的 connect() 之后 scoket 可能处于错误状态，检查 socket 的报错 */
+    /* 在调用非阻塞的 connect() 之后 socket 可能处于错误状态，检查 socket 的报错 */
     if (connGetState(conn) != CONN_STATE_CONNECTED) {
         serverLog(LL_WARNING,"Error condition on socket for SYNC: %s",
                 connGetLastError(conn));
@@ -4025,7 +4025,7 @@ void replicationCron(void) {
 
     /* Remove the RDB file used for replication if Redis is not running
      * with any persistence. */
-    /* 如果 Redis 配置没有启用任何持久化，那么删除主从复制用的 RDB 文件*/
+    /* 如果 Redis 配置没有启用任何持久化，那么删除主从复制用的 RDB 文件 */
     removeRDBUsedToSyncReplicas();
 
     /* Sanity check replication buffer, the first block of replication buffer blocks
