@@ -2238,7 +2238,7 @@ void readSyncBulkPayload(connection *conn) {
         }
 
         /* Rename rdb like renaming rewrite aof asynchronously. */
-        /* 重命名 RDB 文件，用从主节点接收到  RDB 文件代替当前实例的 RDB 文件 */
+        /* 重命名 RDB 文件，用从主节点接收到 RDB 文件代替当前实例的 RDB 文件 */
         int old_rdb_fd = open(server.rdb_filename,O_RDONLY|O_NONBLOCK);
         if (rename(server.repl_transfer_tmpfile,server.rdb_filename) == -1) {
             serverLog(LL_WARNING,
@@ -2689,7 +2689,7 @@ int slaveTryPartialResynchronization(connection *conn, int read_reply) {
      *
      * Return PSYNC_NOT_SUPPORTED on errors we don't understand, otherwise
      * return PSYNC_TRY_LATER if we believe this is a transient error. */
-    /* 如果代码执行到次数我们要么遇到了一个错误要么主节点返回了意外的响应。
+    /* 如果代码执行到这里我们要么遇到了一个错误要么主节点返回了意外的响应。
      * 我们可能遇到的错误可能是主节点无法理解 PSYNC 命令或者主节点暂时无法处理我们的请求。
      * 
      * 返回 PSYNC_NOT_SUPPORTED 表示主节点无法理解 PSYNC, 
@@ -2753,7 +2753,7 @@ void syncWithMaster(connection *conn) {
         serverLog(LL_NOTICE,"Non blocking connect for SYNC fired the event.");
         /* Delete the writable event so that the readable event remains
          * registered and we can wait for the PONG reply. */
-        /* 清除连接上的可写事件保留可读事件， 这样我们可以等待收到 PONG 响应再次回调本函数 */
+        /* 清除连接上的可写事件保留可读事件，这样我们可以等待收到 PONG 响应再次回调本函数 */
         connSetReadHandler(conn, syncWithMaster);
         connSetWriteHandler(conn, NULL);
         server.repl_state = REPL_STATE_RECEIVE_PING_REPLY;
@@ -2779,7 +2779,7 @@ void syncWithMaster(connection *conn) {
          * permitted" instead of using a proper error code, so we test
          * both. */
         /* 我们只接受两种响应：+PONG 或者鉴权失败。
-         * 注意旧版的 Redis 会返回  operation not permitted 而不是正确的错误码
+         * 注意旧版的 Redis 会返回 operation not permitted 而不是正确的错误码
          */
         if (err[0] != '+' &&
             strncmp(err,"-NOAUTH",7) != 0 &&
@@ -2893,7 +2893,7 @@ void syncWithMaster(connection *conn) {
         if (err == NULL) goto no_response_error;
         /* Ignore the error if any, not all the Redis versions support
          * REPLCONF listening-port. */
-        /* 因为有些主节点的 Redis 版本不支持 REPLCONF listening-port 命令，所以可以忽略主节点返回的错误*/
+        /* 因为有些主节点的 Redis 版本不支持 REPLCONF listening-port 命令，所以可以忽略主节点返回的错误 */
         if (err[0] == '-') {
             serverLog(LL_NOTICE,"(Non critical) Master does not understand "
                                 "REPLCONF listening-port: %s", err);
@@ -2951,7 +2951,7 @@ void syncWithMaster(connection *conn) {
      * 在下次连接断开尝试重连时就可以尝试部分同步了。
     */
     if (server.repl_state == REPL_STATE_SEND_PSYNC) {
-        // 发送 PSYNC 请求
+        /* 发送 PSYNC 请求 */
         if (slaveTryPartialResynchronization(conn,0) == PSYNC_WRITE_ERROR) {
             err = sdsnew("Write error sending the PSYNC command.");
             abortFailover("Write error to failover target");
@@ -3085,10 +3085,10 @@ write_error: /* Handle sendCommand() errors. */
 }
 
 
-// 连接主节点并进行主从复制
+/* 连接主节点并进行主从复制 */
 int connectWithMaster(void) {
     server.repl_transfer_s = server.tls_replication ? connCreateTLS() : connCreateSocket();
-    // syncWithMaster() 会负责进行与主节点同步
+    /* syncWithMaster() 会负责进行与主节点同步 */
     if (connConnect(server.repl_transfer_s, server.masterhost, server.masterport,
                 server.bind_source_addr, syncWithMaster) == C_ERR) {
         serverLog(LL_WARNING,"Unable to connect to MASTER: %s",
@@ -3220,7 +3220,7 @@ void replicationSetMaster(char *ip, int port) {
     server.repl_state = REPL_STATE_CONNECT;
     serverLog(LL_NOTICE,"Connecting to MASTER %s:%d",
         server.masterhost, server.masterport);
-    // 与主节点建立连接并进行主从复制
+    /* 与主节点建立连接并进行主从复制 */
     connectWithMaster();
 }
 
@@ -3306,11 +3306,11 @@ void replicationHandleMasterDisconnection(void) {
     }
 }
 
-// RELICAOF(SLAVEOF) 命令的入口函数
+/* RELICAOF(SLAVEOF) 命令的入口函数 */
 void replicaofCommand(client *c) {
     /* SLAVEOF is not allowed in cluster mode as replication is automatically
      * configured using the current address of the master node. */
-    /* 因为在集群模式使用主节点的当前位置自动配置同步，所以在集群模式下禁止使用 SLAVEOF 命令 */
+    /* 因为在集群模式使用主节点的当前位置自动配置同步，所以在集群模式下禁止使用 RELICAOF / SLAVEOF 命令 */
     if (server.cluster_enabled) {
         addReplyError(c,"REPLICAOF not allowed in cluster mode.");
         return;
@@ -3323,7 +3323,7 @@ void replicaofCommand(client *c) {
 
     /* The special host/port combination "NO" "ONE" turns the instance
      * into a master. Otherwise the new master address is set. */
-    /* 使用特殊的 host/port 参数组合  "NO" "ONE" 可以将当前实例转变为主节点。
+    /* 使用特殊的 host/port 参数组合 "NO" "ONE" 可以将当前实例转变为主节点。
      * 其它参数用于设置新的主节点地址 */
     if (!strcasecmp(c->argv[1]->ptr,"no") &&
         !strcasecmp(c->argv[2]->ptr,"one")) {
@@ -3869,7 +3869,7 @@ void replicationCron(void) {
          * a Redis Cluster manual failover: the PING we send will otherwise
          * alter the replication offsets of master and slave, and will no longer
          * match the one stored into 'mf_master_offset' state. */
-        /* 注意： 若客户端处于 Redis Cluster 手动故障转移过程中时我们不会向它发送 PING, 
+        /* 注意：若客户端处于 Redis Cluster 手动故障转移过程中时我们不会向它发送 PING, 
          * 否则我们发送的 PING 会影响主从节点的复制偏移量使它不再与 mf_master_offset 中存储的状态相匹配
          */
         int manual_failover_in_progress =

@@ -485,9 +485,12 @@ typedef enum {
 #define AOF_FSYNC_EVERYSEC 2
 
 /* Replication diskless load defines */
-#define REPL_DISKLESS_LOAD_DISABLED 0 /* 禁用无盘加载 */
-#define REPL_DISKLESS_LOAD_WHEN_DB_EMPTY 1 /* 只有当前数据库为空时才会启用无盘加载*/
-#define REPL_DISKLESS_LOAD_SWAPDB 2 /* 先在内存中拷贝一份当前内容，当成功加载主节点传来的 RDB 文件后再删除拷贝，若解析失败则从拷贝进行恢复 */
+/* 禁用无盘加载 */
+#define REPL_DISKLESS_LOAD_DISABLED 0
+/* 只有当前数据库为空时才会启用无盘加载 */
+#define REPL_DISKLESS_LOAD_WHEN_DB_EMPTY 1
+/* 先在内存中拷贝一份当前内容，当成功加载主节点传来的 RDB 文件后再删除拷贝，若解析失败则从拷贝进行恢复 */
+#define REPL_DISKLESS_LOAD_SWAPDB 2
 
 /* TLS Client Authentication */
 #define TLS_CLIENT_AUTH_NO 0
@@ -1778,11 +1781,14 @@ struct redisServer {
     char *masterhost;               /* Hostname of master */
     int masterport;                 /* Port of master */
     int repl_timeout;               /* Timeout after N seconds of master idle */
-    client *master;     /* Client that is master for this slave */ /* 从节点持有的它与主节点的连接, master 有 CLIENT_MASTER 标志 */
-    client *cached_master; /* Cached master to be reused for PSYNC. */ /* cached_master 存储上次连接的主节点的 replid 和复制偏移量，用于在重连时使用 PSYNC 进行部分同步 */
+    /* 从节点持有的它与主节点的连接, master 有 CLIENT_MASTER 标志 */
+    client *master;     /* Client that is master for this slave */
+    /* cached_master 存储上次连接的主节点的 replid 和复制偏移量，用于在重连时使用 PSYNC 进行部分同步 */
+    client *cached_master; /* Cached master to be reused for PSYNC. */
     int repl_syncio_timeout; /* Timeout for synchronous I/O calls */
     int repl_state;          /* Replication status if the instance is a slave */
-    off_t repl_transfer_size; /* Size of RDB to read from master during sync. */ /*主从同步时需要读取的 RDB 文件大小 */
+    /*主从同步时需要读取的 RDB 文件大小 */
+    off_t repl_transfer_size; /* Size of RDB to read from master during sync. */
     off_t repl_transfer_read; /* Amount of RDB read from master during sync. */
     off_t repl_transfer_last_fsync_off; /* Offset when we fsync-ed last time. */
     connection *repl_transfer_s;     /* Slave -> Master SYNC connection */
