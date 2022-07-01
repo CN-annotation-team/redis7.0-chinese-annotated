@@ -38,9 +38,9 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [rdb.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/rdb.c) | RDB 持久化功能的具体实现 | 低于一半 |
 | [replication.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/replication.c) | 主从复制的具体实现 | 低于一半 |
 | [object.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/object.c) | Redis 对象的相关操作 | 低于一半 |
-|</p>|||
-|尚未有中文注释的文件不会出现在表格中。<br>|||
-|更新日期：2022/7/01|||
+</p>
+尚未有中文注释的文件不会出现在表格中。<br>
+更新日期：2022/7/1
 
 
 ## 关于提交 PR 的方法：
