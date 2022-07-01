@@ -37,9 +37,10 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [sentinel.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sentinel.c) | sentinel 哨兵机制的具体实现 | 低于一半 |
 | [rdb.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/rdb.c) | RDB 持久化功能的具体实现 | 低于一半 |
 | [replication.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/replication.c) | 主从复制的具体实现 | 低于一半 |
-</p>
-尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/6/24
+| [object.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/object.c) | Redis 对象的相关操作 | 低于一半 |
+|</p>|||
+|尚未有中文注释的文件不会出现在表格中。<br>|||
+|更新日期：2022/7/01|||
 
 
 ## 关于提交 PR 的方法：
@@ -93,5 +94,4 @@ A: 我们会选取最好的注释来合并，我们希望把意思最清晰且�
 A: 这是一个大家用爱发电的项目，包括我们 "CN-Annotation-Team" 组织的大家都是用爱发电的，金钱方面是没有利益啦...最重要的是以贡献注释的过程中，你阅读和理解源码之后，并能把它讲明白给大家听，这点对你是受益匪浅的，同时贡献注释给他人也许还能成为你阅读并注释源码的动力。<br>
   除此之外，要是你贡献累计达到50行注释以上，我们会邀请你成为 "CN-Annotation-Team" 组织的一员！身为 "CN-Annotation-Team" 组织的一员去完善现有项目的中文注释，或者推动其它热门开源项目的中文注释项目吧！🍭🍭（虽然目前组织还很小也没什么名气，但是这也是个好机会让你可以成为元老级的member啊~）<br>
 还有，偷偷告诉你，在你做中文注释的同时，由于你详细阅读了源码，你是有很大机会找出问题给 Redis 提 PR 的哦！<br>
-
 

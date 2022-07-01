@@ -39,6 +39,12 @@
 
 /* ===================== Creation and parsing of objects ==================== */
 
+/* 根据传入对象的类型，以及指针创建对象 redisObject
+ * 1.为 robj 指针分配内存
+ * 2.参数赋值：将对象类型 type 以及实际对象的指针赋给 robj 对应字段。（其中 type 有5种取值，分别对应 redis 5种基本对象，定义在 server.h 中，如 OBJ_STRING 对应 type 值为0）
+ * 3.将 robj 引用计数递增
+ * 4.设置 robj LRU 信息
+ */
 robj *createObject(int type, void *ptr) {
     robj *o = zmalloc(sizeof(*o));
     o->type = type;
