@@ -75,7 +75,7 @@ robj *createObject(int type, void *ptr) {
  */
 /*
  * 在对象中设置一个特殊的引用计数以使其“共享”：
- * incrRefCount 和 decrRefCount() 将测试这个特殊的 refcount
+ * 在 incrRefCount 和 decrRefCount() 里将会检查这个特殊的 refcount
  * 并且不会影响到这个对象。 这样就可以在多线程场景中不加锁访问共享对象（如小整数等对象）。
  *
  * 创建共享对象的常见模式：
@@ -148,7 +148,7 @@ robj *createEmbeddedStringObject(const char *ptr, size_t len) {
  * 参考长度是 OBJ_ENCODING_EMBSTR_SIZE_LIMIT，具体值为44
  * 如果 <44 则使用 EMBSTR 编码，否则使用 RAW 编码。
  *
- * 选择 44 的当前限制，以便最大的 EMBSTR 编码的字符串对象仍将适合 jemalloc 的 64 字节区域。
+ * 选择长度 44 作为限制，以便最大的 EMBSTR 编码的字符串对象仍将适合 jemalloc 分配的 64 字节区域。
  * 这里的长度指的是 sdshdr 的长度，而一个 string obj 包括 robj + sdshdr （推测一个 robj 占20字节）
  */
 #define OBJ_ENCODING_EMBSTR_SIZE_LIMIT 44
