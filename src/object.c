@@ -73,6 +73,15 @@ robj *createObject(int type, void *ptr) {
  * robj *myobject = makeObjectShared(createObject(...));
  *
  */
+/*
+ * 在对象中设置一个特殊的引用计数以使其“共享”：
+ * 在 incrRefCount 和 decrRefCount() 里将会检查这个特殊的 refcount
+ * 并且不会影响到这个对象。 这样就可以在多线程场景中不加锁访问共享对象（如小整数等对象）。
+ *
+ * 创建共享对象的常见模式：
+
+ * robj *myobject = makeObjectShared(createObject(...));
+ */
 robj *makeObjectShared(robj *o) {
     serverAssert(o->refcount == 1);
     o->refcount = OBJ_SHARED_REFCOUNT;
@@ -81,6 +90,9 @@ robj *makeObjectShared(robj *o) {
 
 /* Create a string object with encoding OBJ_ENCODING_RAW, that is a plain
  * string object where o->ptr points to a proper sds string. */
+/*
+ * 创建一个编码为 OBJ_ENCODING_RAW 的字符串对象，这是一个纯字符串对象，其中 o->ptr 指向正确的 sds 字符串。
+ */
 robj *createRawStringObject(const char *ptr, size_t len) {
     return createObject(OBJ_STRING, sdsnewlen(ptr,len));
 }
@@ -88,6 +100,15 @@ robj *createRawStringObject(const char *ptr, size_t len) {
 /* Create a string object with encoding OBJ_ENCODING_EMBSTR, that is
  * an object where the sds string is actually an unmodifiable string
  * allocated in the same chunk as the object itself. */
+/*
+ * 创建一个编码为 OBJ_ENCODING_EMBSTR 的字符串对象
+ * 在这个对象中， sds 字符串实际上是一个不可修改的字符串，分配在与对象本身相同的块中。
+ * 
+ * 字符串对象的编码有：int，raw 或者 embstr。这里的编码是 embstr：
+ * 其中，创建 embstr 编码的字符串时只会分配一次内存（ robj 和 sdshdr 是连续分配的，如下），减少了一次内存分配次数，同时这种编码的字符串是不可修改的，如果修改，则 embstr 编码转变为 raw 编码。
+ * 创建 raw 编码的字符串则会分配两次内存（ robj 与 sdshdr 分别分配 ）。
+ * robj 的 ptr 指针指向具体的 sdshdr，区别在于 robj 与 sdshdr 在内存上是否连续
+ */
 robj *createEmbeddedStringObject(const char *ptr, size_t len) {
     robj *o = zmalloc(sizeof(robj)+sizeof(struct sdshdr8)+len+1);
     struct sdshdr8 *sh = (void*)(o+1);
@@ -122,6 +143,16 @@ robj *createEmbeddedStringObject(const char *ptr, size_t len) {
  *
  * The current limit of 44 is chosen so that the biggest string object
  * we allocate as EMBSTR will still fit into the 64 byte arena of jemalloc. */
+/*
+ * 根据字符串长度创建不同编码的字符串：
+ * 参考长度是 OBJ_ENCODING_EMBSTR_SIZE_LIMIT，具体值为44
+ * 如果 < 44 则使用 EMBSTR 编码，否则使用 RAW 编码。
+ *
+ * 选择长度 44 作为限制，以便最大的 EMBSTR 编码的字符串对象仍将适合 jemalloc 分配的 64 字节区域。
+ * 这里的长度指的是 sdshdr 的长度，而一个 string obj 包括 robj + sdshdr
+ * robj 头占 16 个字节，一个 sdshdr (sdshdr8) 最少需要占用 3 字节，所以这边要 19 字节
+ * 那么 64 - 19 - 1 可以算出字符串长度为 44 字节，其中额外需要的 1 字节是 \0 结尾
+ */
 #define OBJ_ENCODING_EMBSTR_SIZE_LIMIT 44
 robj *createStringObject(const char *ptr, size_t len) {
     if (len <= OBJ_ENCODING_EMBSTR_SIZE_LIMIT)
@@ -131,6 +162,7 @@ robj *createStringObject(const char *ptr, size_t len) {
 }
 
 /* Same as CreateRawStringObject, can return NULL if allocation fails */
+/* 和上面的 CreateRawStringObject() 方法一样，但是这里如果分配失败可以返回 NULL */
 robj *tryCreateRawStringObject(const char *ptr, size_t len) {
     sds str = sdstrynewlen(ptr,len);
     if (!str) return NULL;
@@ -138,6 +170,7 @@ robj *tryCreateRawStringObject(const char *ptr, size_t len) {
 }
 
 /* Same as createStringObject, can return NULL if allocation fails */
+/* 和上面的 createStringObject() 方法一样（都是根据长度创建不同的 string obj），但是这里如果分配失败可以返回 NULL */
 robj *tryCreateStringObject(const char *ptr, size_t len) {
     if (len <= OBJ_ENCODING_EMBSTR_SIZE_LIMIT)
         return createEmbeddedStringObject(ptr,len);
