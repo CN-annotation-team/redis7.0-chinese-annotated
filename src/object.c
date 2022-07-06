@@ -149,7 +149,9 @@ robj *createEmbeddedStringObject(const char *ptr, size_t len) {
  * 如果 < 44 则使用 EMBSTR 编码，否则使用 RAW 编码。
  *
  * 选择长度 44 作为限制，以便最大的 EMBSTR 编码的字符串对象仍将适合 jemalloc 分配的 64 字节区域。
- * 这里的长度指的是 sdshdr 的长度，而一个 string obj 包括 robj + sdshdr （推测一个 robj 占20字节）
+ * 这里的长度指的是 sdshdr 的长度，而一个 string obj 包括 robj + sdshdr
+ * robj 头占 16 个字节，一个 sdshdr (sdshdr8) 最少需要占用 3 字节，所以这边要 19 字节
+ * 那么 64 - 19 - 1 可以算出字符串长度为 44 字节，其中额外需要的 1 字节是 \0 结尾
  */
 #define OBJ_ENCODING_EMBSTR_SIZE_LIMIT 44
 robj *createStringObject(const char *ptr, size_t len) {
