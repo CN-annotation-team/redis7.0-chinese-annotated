@@ -22,8 +22,8 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [t_list.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/t_list.c) | 定义了 list 列表类型以及相关命令，例如 LPUSH/RPOP | 完成 |
 | [t_set.c ](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/t_set.c ) | 定义了 set 集合类型以及相关命令，例如 SADD/SMEMBERS | 完成 |
 | [t_zset.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/t_zset.c) | 定义了 zset 有序类型（包含 skiplist 跳表的实现）以及相关命令，例如 ZADD/ZRANGE | 完成 |
-| [sds.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sds.h) | SDS(简单动态字符串）数据结构的相关声明，用于字符串底层数据结构实现 | 完成 |
-| [sds.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sds.c) | SDS(简单动态字符串）数据结构的具体实现 | 完成 |
+| [sds.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sds.h) | SDS（简单动态字符串）数据结构的相关声明，用于字符串底层数据结构实现 | 完成 |
+| [sds.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sds.c) | SDS（简单动态字符串）数据结构的具体实现 | 完成 |
 | [quicklist.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/quicklist.h) | 快速列表数据结构的相关声明，3.2 版本后结合双端链表和压缩列表用于列表键底层数据结构实现，7.0 版本后结合双端列表和紧凑列表用于列表键底层数据结构实现 | 完成 |
 | [quicklist.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/quicklist.c) | 快速列表数据结构的具体实现 | 低于一半 |
 | [adlist.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/adlist.h) | 双端链表数据结构的相关声明，3.2 版本之前作为列表键的底层数据结构实现，也用于其它需要链表的场景，例如保存连接的客户端、慢查询条目等等 | 完成 |
@@ -34,9 +34,13 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [dict.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/dict.h) | 字典数据结构的相关声明，用于 redis 中 hashtable（哈希表）的底层实现 | 完成 |
 | [zmalloc.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/zmalloc.c) | redis 中内存管理的具体实现 | 低于一半 |
 | [ziplist.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ziplist.c) | ziplist 压缩列表的实现，7.0 版本后被 listpack 紧凑列表替换了 | 低于一半 |
+| [sentinel.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sentinel.c) | sentinel 哨兵机制的具体实现 | 低于一半 |
+| [rdb.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/rdb.c) | RDB 持久化功能的具体实现 | 低于一半 |
+| [replication.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/replication.c) | 主从复制的具体实现 | 低于一半 |
+| [object.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/object.c) | Redis 的对象系统实现 | 低于一半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/5/30
+更新日期：2022/7/6
 
 
 ## 关于提交 PR 的方法：
@@ -71,10 +75,10 @@ redis 仓库链接：https://github.com/redis/redis<br>
 (2) 在代码上一行起的注释，若注释上一行有代码可以多空一行。<br>
 
 ### 注释要求：
-(1) 若你要对没有中文注释的源码加上注释，请至少完成一个函数的注释工作，不要仅对一个函数的某一小部分进行注释，我们希望每个“勇闯无人区”的“勇士”至少负责一个函数。完成一个函数的注释工作，要在函数定义上方说明该函数的作用，在每个重要的部分和难以理解的部分进行代码注释；对于代码量很少的，且内容没有什么阅读难度的函数，请至少在函数定义上方注释说明该函数的作用。<br>
+(1) 若你要对没有中文注释的源码加上注释，请先到仓库的 issue 中查看是否有别人打算负责注释了这块源码，若没有则发起 issue 提出你接下来打算负责的源码部分，防止和别人发生冲突，issue 标题格式为“[新注释] <文件名>”（如：[新注释] aof.c），然后在正文内容中说明你要负责的部分，有很多种说明方式只要能说清楚即可，这里不做限制。请至少完成一个函数的注释工作，不要仅对一个函数的某一小部分进行注释，我们希望每个“勇闯无人区”的“勇士”至少负责一个函数。完成一个函数的注释工作，要在函数定义上方说明该函数的作用，在每个重要的部分和难以理解的部分进行代码注释；对于代码量很少的，且内容没有什么阅读难度的函数，请至少在函数定义上方注释说明该函数的作用。<br>
 (2) 本仓库在源码基础上增加和修改中文注释，同时为了注释可以增加空格和空行。若你觉得英文注释存在会影响你的中文注释观感，你可以把英文注释删除，但你最好要在中文注释中保留原英文注释的意思。注意不要修改源代码，不要破坏源代码的结构！如果你真的对源代码有修改的想法，请到 redis 仓库发起 pull request。还有如果你发现了英文注释有误，你想对英文注释进行修改，我们经过审核后可以在这边先进行合并，但同时你也别忘了到 redis 的仓库提一下 pr 告知官方哦！（但是我们的仓库是比较旧的，请先检查官方有没有已经修正了）🥇🥇<br>
 (3) 对于 commit 信息，请写清楚你对哪个函数进行了注释的添加或修改。如：“添加 setGenericCommand 函数的注释”，“修正 setGenericCommand 函数注释的格式错误”。<br>
-(4) 如果你增加了新的注释，请看一下项目进度的完成度标准，再看看你增加注释后是否达到了一个新的完成度阶段，如果达到了 PR 时请一起修改 README 中的项目进度，谢谢🍭🍭
+(4) 如果你增加了新的注释，请看一下项目进度的完成度标准，再看看你增加注释后是否达到了一个新的完成度阶段，如果达到了 PR 时请一起修改 README 中的项目进度，谢谢🍭🍭<br>
 ## FAQ:
 ### Q: 该项目是定格在 redis7.0 版本了吗？还是会更新呢？
 A: 我们希望项目能够持续更新下去，所以会在 redis 发行了一个新版本之后逐步与最新版本的代码合并。🍭🍭
@@ -83,12 +87,11 @@ A: 如果你不会发起 PR，建议上网找个详细的教程，PR 并不难�
 ### Q: 我有 redis 相关的问题，可以在这里讨论吗？
 A: 如果你有对 redis 源码出 bug 的问题，建议到 redis 仓库去提 issue。如果你有其他的问题（如面试问题，使用问题），命令的相关用法可以到[redis官网](https://redis.io/)查找，网上实在找不到方法也可以在这里讨论，我们特地开设了一个讨论区（上方的 Discussions ）来让大家讨论 redis 相关问题！在讨论区讨论的时候请记得用词要文明礼貌，别人才会愿意和你交流哦！
 ### Q: 我想注释并提交的代码已经被别人提交了。
-A: 这是有可能的，我们不希望你每次都攒了一个很多注释的代码再发起 PR，每次 PR 尽量范围小一些，比如做完两三个函数的注释就发起 PR，减少和别人的冲突。而且PR的内容少一些的话，审查得也会变快哦~
+A: 这是有可能的，我们不希望你每次都攒了一个很多注释的代码再发起 PR，每次 PR 尽量范围小一些，比如做完两三个函数的注释就发起 PR，减少和别人的冲突。而且PR的内容少一些的话，审查得也会变快哦~如果是对一个尚未有中文注释的源码部分进行注释，请先在 issue 中查看是否有别人打算负责注释了这块源码，若没有则提出你接下来打算负责的源码部分，防止和别人发生冲突。
 ### Q: 如果我的 PR 和别人的 PR 注释的函数相同怎么办？
 A: 我们会选取最好的注释来合并，我们希望把意思最清晰且观感最好的注释展现给大家看。如果你的注释没有被合并，请不要气馁，你可以学习一下被合并的注释对比你的注释优点在哪里，学习之后可以提升你写代码注释的水平哦！🍦🍦
 ### Q: 我贡献注释能得到什么？
 A: 这是一个大家用爱发电的项目，包括我们 "CN-Annotation-Team" 组织的大家都是用爱发电的，金钱方面是没有利益啦...最重要的是以贡献注释的过程中，你阅读和理解源码之后，并能把它讲明白给大家听，这点对你是受益匪浅的，同时贡献注释给他人也许还能成为你阅读并注释源码的动力。<br>
   除此之外，要是你贡献累计达到50行注释以上，我们会邀请你成为 "CN-Annotation-Team" 组织的一员！身为 "CN-Annotation-Team" 组织的一员去完善现有项目的中文注释，或者推动其它热门开源项目的中文注释项目吧！🍭🍭（虽然目前组织还很小也没什么名气，但是这也是个好机会让你可以成为元老级的member啊~）<br>
 还有，偷偷告诉你，在你做中文注释的同时，由于你详细阅读了源码，你是有很大机会找出问题给 Redis 提 PR 的哦！<br>
-
 
