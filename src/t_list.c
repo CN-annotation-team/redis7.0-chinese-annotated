@@ -1013,7 +1013,8 @@ void lposCommand(client *c) {
                 return;
             if (rank == 0) {
                 addReplyError(c,"RANK can't be zero: use 1 to start from "
-                                "the first match, 2 from the second, ...");
+                                "the first match, 2 from the second ... "
+                                "or use negative to start from the end of the list");
                 return;
             }
         } else if (!strcasecmp(opt,"COUNT") && moreargs) {
@@ -1685,13 +1686,13 @@ void lmpopGenericCommand(client *c, int numkeys_idx, int is_block) {
     }
 }
 
-/* LMPOP numkeys [<key> ...] LEFT|RIGHT [COUNT count] */
+/* LMPOP numkeys <key> [<key> ...] (LEFT|RIGHT) [COUNT count] */
 /* 处理 lmpop 命令的函数 */
 void lmpopCommand(client *c) {
     lmpopGenericCommand(c, 1, 0);
 }
 
-/* BLMPOP timeout numkeys [<key> ...] LEFT|RIGHT [COUNT count] */
+/* BLMPOP timeout numkeys <key> [<key> ...] (LEFT|RIGHT) [COUNT count] */
 /* 处理 blmpop 命令的函数 */
 void blmpopCommand(client *c) {
     lmpopGenericCommand(c, 2, 1);
