@@ -49,7 +49,7 @@
 #include "config.h"
 
 /* Glob-style pattern matching. */
-/* Glob-style 的模式匹配,根据下面函数返回值可知 1 代表匹配 0 代表不匹配*/
+/* Glob-style 的模式匹配,根据下面函数返回值可知 1 代表匹配 0 代表不匹配 */
 int stringmatchlen(const char *pattern, int patternLen,
         const char *string, int stringLen, int nocase)
 {
@@ -199,13 +199,13 @@ int stringmatchlen_fuzz_test(void) {
  * set to 0. On error the function return value is 0, regardless of the
  * fact 'err' is NULL or not. */
 
-/*将表示内存数量的字符串转换成多少字节
- *所以举个例子 这个 1GB 的内存将返回 1073741824
- *即是(1024*1024*1024)的结果
+/* 将表示内存数量的字符串转换成多少字节
+ * 所以举个例子 这个 1GB 的内存将返回 1073741824
+ * 即是(1024*1024*1024)的结果
  *
- *在遇到语法错误时(比如字符串以 - 开头 详情请看函数),如果 *err 不为空 把它置为 1 否则置为 0
- *在错误的结果这个函数都会返回的值为 0 不管事实
- *err是空还是不为空。*/
+ * 在遇到语法错误时(比如字符串以 - 开头 详情请看函数),如果 *err 不为空 把它置为 1 否则置为 0
+ * 在错误的结果这个函数都会返回的值为 0 不管事实
+ * err是空还是不为空。*/
 unsigned long long memtoull(const char *p, int *err) {
     const char *u;
     char buf[128];
