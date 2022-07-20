@@ -205,7 +205,7 @@ int stringmatchlen_fuzz_test(void) {
  *
  * 在遇到语法错误时(比如字符串以 - 开头 详情请看函数),如果 *err 不为空 把它置为 1 否则置为 0
  * 在错误的结果这个函数都会返回的值为 0 不管事实
- * err是空还是不为空。*/
+ * *err 是空还是不为空。*/
 unsigned long long memtoull(const char *p, int *err) {
     const char *u;
     char buf[128];
