@@ -618,6 +618,17 @@ void unblockDeletedStreamReadgroupClients(readyList *rl) {
  * other side of the linked list. However as long as the key starts to
  * be used only for a single type, like virtually any Redis application will
  * do, the function is already fair. */
+
+/* 当单个命令，MULTI/EXEC，Lua脚本等每次 被客户端调用执行完后应该调用这个方法。
+ * 所有key关联的客户端(通过redisDb->blocking_keys关联)至少有一个被阻塞，并且通过某些写入操作
+ * 接收到至少一个新元素后都会被累积到服务器中的ready_keys列表。
+ * 该函数将遍历该列表并相应地为客户端提供服务。
+ * 由于给BLMOVE命令服务，我们会有新的阻塞客户端来服务，因此该函数将一次又一次地迭代。 
+ * 
+ * 这个功能通常是“公平的”，也就是说，它会使用FIFO(先进先出)策略服务于客户端。
+ * 然而，在某些极端情况下，这种公平性受到了破坏，也就是当我们同时为有序集合和列表两种类型的相同键阻止客户端时。
+ * 因为键的数据类型和当前已存在的键数据类型不同的阻塞客户端会被移动到列表的另一端。
+ * 但是只要key开始仅用于单一数据类型，该功能就已经采取公平策略了 */
 void handleClientsBlockedOnKeys(void) {
     /* This function is called only when also_propagate is in its basic state
      * (i.e. not from call(), module context, etc.) */
