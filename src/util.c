@@ -49,7 +49,7 @@
 #include "config.h"
 
 /* Glob-style pattern matching. */
-/* Glob-style 的模式匹配,根据下面函数返回值可知 1 代表匹配 0 代表不匹配 */
+/* Glob-style 的模式匹配，根据下面函数返回值可知 1 代表匹配 0 代表不匹配 */
 int stringmatchlen(const char *pattern, int patternLen,
         const char *string, int stringLen, int nocase)
 {
@@ -200,12 +200,12 @@ int stringmatchlen_fuzz_test(void) {
  * fact 'err' is NULL or not. */
 
 /* 将表示内存数量的字符串转换成多少字节
- * 所以举个例子 这个 1GB 的内存将返回 1073741824
- * 即是(1024*1024*1024)的结果
+ * 例如 memtoull("1Gb")，这个 1Gb 的字符串函数调用将返回 1073741824
+ * 即是 (1024*1024*1024) 的结果
+ * 需要注意，redis 里单位是不区分大小写的，所以 1GB 1Gb 1gB 都一样
  *
- * 在遇到语法错误时(比如字符串以 - 开头 详情请看函数),如果 *err 不为空 把它置为 1 否则置为 0
- * 在错误的结果这个函数都会返回的值为 0 不管事实
- * *err 是否为空。*/
+ * 在遇到错误时，比如字符串以 - 开头（详情请看函数），如果 *err 不为空，把它置为 1，否则置为 0
+ * 在出错的情况下，函数会返回 0，不管事实 *err 是否为空，两者搭配使用可以确认返回的 0 字节是否合法。*/
 unsigned long long memtoull(const char *p, int *err) {
     const char *u;
     char buf[128];
@@ -281,8 +281,8 @@ const char *mempbrk(const char *s, size_t len, const char *chars, size_t charsle
  * set with the corresponding char in the 'to' set. Always returns s.
  */
 
-/* 修改缓冲区所有出现过的 from 字符
- * 把 to 的值去赋给出现过的字符,总是返回 s 数组
+/* 修改 s 字符数组中所有出现过的 from 字符，将其替换修改成 to 字符数组里对应下标的字符
+ * 函数总是返回 s 字符数组
  */
 char *memmapchars(char *s, size_t len, const char *from, const char *to, size_t setlen) {
     for (size_t j = 0; j < len; j++) {

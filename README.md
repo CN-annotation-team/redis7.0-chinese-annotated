@@ -41,7 +41,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [util.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/util.c) | Redis 工具函数 | 低于一半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/7/13
+更新日期：2022/7/21
 
 
 ## 关于提交 PR 的方法：
