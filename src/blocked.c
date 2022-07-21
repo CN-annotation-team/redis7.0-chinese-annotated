@@ -626,8 +626,8 @@ void unblockDeletedStreamReadgroupClients(readyList *rl) {
  * 当给BLMOVE命令服务时，我们会有新的阻塞客户端出现，因此该函数将一次又一次地迭代。 
  * 
  * 这个功能通常是“公平的”，也就是说，它会使用FIFO(先进先出)策略服务于客户端。
- * 然而，在某些极端情况下，这种公平性受到了破坏，也就是当我们同时为有序集合和列表两种类型的相同键阻止客户端时。
- * 因为键的数据类型和当前已存在的键数据类型不同的阻塞客户端会被移动到列表的另一端。
+ * 然而，在某些极端情况下，这种公平性受到了破坏，也就是当我们同时有键相同的有序集合和列表两种类型的阻塞客户端时。
+ * 因为键的数据类型和当前已存在的键数据类型不同的客户端会被移动到列表的另一端。
  * 但是只要key开始仅用于单一数据类型，该功能就已经采取公平策略了 */
 void handleClientsBlockedOnKeys(void) {
     /* This function is called only when also_propagate is in its basic state
