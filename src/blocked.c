@@ -619,7 +619,7 @@ void unblockDeletedStreamReadgroupClients(readyList *rl) {
  * be used only for a single type, like virtually any Redis application will
  * do, the function is already fair. */
 
-/* 单个命令，MULTI/EXEC，Lua脚本等每次被客户端调用执行完后Redis会调用这个方法。
+/* 单个命令，MULTI/EXEC，Lua 脚本等每次被客户端调用执行完后 Redis 会调用这个方法。
  * 所有key关联的客户端(通过redisDb->blocking_keys关联)至少有一个被阻塞，并且通过某些写入操作
  * 接收到至少一个新元素后都会被累积到服务器中的ready_keys列表。
  * 该函数将遍历该列表并相应地为客户端提供服务。
