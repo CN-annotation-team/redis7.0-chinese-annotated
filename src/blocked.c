@@ -618,6 +618,22 @@ void unblockDeletedStreamReadgroupClients(readyList *rl) {
  * other side of the linked list. However as long as the key starts to
  * be used only for a single type, like virtually any Redis application will
  * do, the function is already fair. */
+
+/* 单个命令，MULTI/EXEC，Lua 脚本等每次被客户端调用执行完后 Redis 会调用这个方法。
+ * 所有 key 关联的客户端(通过 redisDb->blocking_keys 关联)至少有一个被阻塞，并且通过某些写入操作
+ * 接收到至少一个新元素后都会被累积到服务器中的 ready_keys 列表。
+ * 该函数将遍历该列表并相应地为客户端提供服务。
+ * 当给 BLMOVE 命令服务时，我们会有新的阻塞客户端出现，因此该函数将一次又一次地迭代。 
+ * 
+ * 这个功能通常是“公平的”，也就是说，它会使用 FIFO(先进先出) 策略服务于所有阻塞在同一个键的客户端。
+ * 然而，在某些极端情况下，这种公平性受到了破坏，比如说当我们同时有某些客户端阻塞在相同键名，
+ * 但是是阻塞在不同数据类型的键上时，例如一个为列表键另一个一个为有序集合键时，但是键名都一样（这很少见，但可能会有）
+ * 因为阻塞键的数据类型和当前已 ready 的键的数据类型不同，这样的客户端会被移动到链表的另一端。
+ * 这边说的链表是这样的关系：blocking_key -> clients，将 client 移动到 clients 的尾部，这样下一个循环就不容易遍历到它
+ * 但是只要 key 仅用于单一数据类型，该功能对于被阻塞的客户端就是先进先出，是公平的。
+ * 因为不同类型相同键名的阻塞，一般来说很少在实际上使用，而实际上这种处理方式是过去代码遗留的问题，
+ * 在过去只有 list 和 zset，而现在还有了 stream，这种将 client 移动到尾部的作法只是链表错误遍历带来的副作用变更，
+ * 在 7.0 或者说在 #10306 之后这个随着方法小范围重构已经被移除了 */
 void handleClientsBlockedOnKeys(void) {
     /* This function is called only when also_propagate is in its basic state
      * (i.e. not from call(), module context, etc.) */
