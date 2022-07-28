@@ -42,7 +42,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [blocked.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/blocked.c) | Redis 对 BLPOP 和 WAIT 等阻塞操作的通用支持 | 低于一半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/7/21
+更新日期：2022/7/28
 
 
 ## 关于提交 PR 的方法：
