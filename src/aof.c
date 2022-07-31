@@ -808,7 +808,6 @@ int openNewIncrAofForAppend(void) {
             goto cleanup;
         }
     }
-    sdsfree(new_aof_name);
 
     serverLog(LL_NOTICE, "Creating AOF incr file %s on background rewrite",
             new_aof_name);
