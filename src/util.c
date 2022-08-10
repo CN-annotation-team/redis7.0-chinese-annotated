@@ -298,6 +298,9 @@ char *memmapchars(char *s, size_t len, const char *from, const char *to, size_t 
 
 /* Return the number of digits of 'v' when converted to string in radix 10.
  * See ll2string() for more information. */
+
+/* 返回当 'v' 被转换为以 10 为基数的字符串时的位数.
+ * 对于更多细节请参考 ll2string(). */
 uint32_t digits10(uint64_t v) {
     if (v < 10) return 1;
     if (v < 100) return 2;
@@ -333,6 +336,9 @@ uint32_t sdigits10(int64_t v) {
 /* Convert a long long into a string. Returns the number of
  * characters needed to represent the number.
  * If the buffer is not big enough to store the string, 0 is returned. */
+
+/* 将 long long 转换为 string. 返回表示该数字所需要的字符数.
+ * 如果 buffer 的大小不足以存下该字符串则返回 0. */
 int ll2string(char *dst, size_t dstlen, long long svalue) {
     unsigned long long value;
     int negative = 0;
@@ -711,6 +717,12 @@ int ld2string(char *buf, size_t len, long double value, ld2string_mode mode) {
  * stream. However if /dev/urandom is not available, a weaker seed is used.
  *
  * This function is not thread safe, since the state is global. */
+
+/* 获取随机字节，尝试从 /dev/urandom 获取初始种子，
+ * 并在计数器模式下使用单向哈希函数来生成随机流。
+ * 如果 /dev/urandom 不可用，则使用一个更弱的种子。
+ * 
+ * 因为状态是全局的，因此该函数不是线程安全的。 */
 void getRandomBytes(unsigned char *p, size_t len) {
     /* Global state. */
     static int seed_initialized = 0;
@@ -722,10 +734,13 @@ void getRandomBytes(unsigned char *p, size_t len) {
          * the same seed with a progressive counter. For the goals of this
          * function we just need non-colliding strings, there are no
          * cryptographic security needs. */
+        /* 初始化一个种子，在计数器模式下使用 SHA1，我们用一个渐进式计数器对同一个种子进行哈希。
+         * 对于这个函数的目标，我们只需要不冲突的字符串，没有加密的安全需求。 */
         FILE *fp = fopen("/dev/urandom","r");
         if (fp == NULL || fread(seed,sizeof(seed),1,fp) != 1) {
             /* Revert to a weaker seed, and in this case reseed again
              * at every call.*/
+            /* 恢复到一个较弱的种子，在这种情况下，每次调用时都要重新选取随机种子。 */
             for (unsigned int j = 0; j < sizeof(seed); j++) {
                 struct timeval tv;
                 gettimeofday(&tv,NULL);
@@ -779,6 +794,10 @@ void getRandomBytes(unsigned char *p, size_t len) {
  * given execution of Redis, so that if you are talking with an instance
  * having run_id == A, and you reconnect and it has run_id == B, you can be
  * sure that it is either a different instance or it was restarted. */
+
+/* 生成 Redis "Run ID"，这是一个 SHA1 大小的随机数，用于识别 Redis 的一次特定执行。
+ * 因此，如果你正在与一个 run_id == A 的实例交互，而你重新连接时它的 run_id == B，
+ * 你就可以确定它或者时一个不同的实例，或者它被重新启动了。*/
 void getRandomHexChars(char *p, size_t len) {
     char *charset = "0123456789abcdef";
     size_t j;
@@ -794,6 +813,12 @@ void getRandomHexChars(char *p, size_t len) {
  * The function does not try to normalize everything, but only the obvious
  * case of one or more "../" appearing at the start of "filename"
  * relative path. */
+
+/* 给定文件名，返回 SDS 字符串形式的绝对路径，如果因某种原因失败，则返回 NULL。
+ * 注意，"文件名"可能已经是一个绝对路径，这将被检测并正确处理。
+ *
+ * 该函数并不尝试简化所有的路径，而只在相对路径 "filename" 的开头出现一个
+ * 或多个 ".../" 的明显情况下进行简化。 */
 sds getAbsolutePath(char *filename) {
     char cwd[1024];
     sds abspath;
