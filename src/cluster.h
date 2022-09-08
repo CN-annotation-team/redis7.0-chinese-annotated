@@ -4,11 +4,11 @@
 /*-----------------------------------------------------------------------------
  * Redis cluster data structures, defines, exported API.
  *----------------------------------------------------------------------------*/
-/* redis集群的总槽位数量 16384 */
+/* redis 集群的总槽位数量 16384 */
 #define CLUSTER_SLOTS 16384
 /* 集群在线 */
 #define CLUSTER_OK 0            /* Everything looks ok */
-/* 集群挂了 */
+/* 集群失效 */
 #define CLUSTER_FAIL 1          /* The cluster can't work */
 /* 集群节点名字长度 */
 #define CLUSTER_NAMELEN 40      /* sha1 hex length */
@@ -17,10 +17,10 @@
 
 /* The following defines are amount of time, sometimes expressed as
  * multiplicators of the node timeout value (when ending with MULT). */
-/* 下面是和时间相关的一些常量，以_MULT结尾的常量会作为时间值的乘法因子来使用 */
+/* 下面是和时间相关的一些常量，以 _MULT 结尾的常量会作为时间值的乘法因子来使用 */
 /* 节点故障报告的乘法因子 */
 #define CLUSTER_FAIL_REPORT_VALIDITY_MULT 2 /* Fail report validity. */
-/* 撤销主节点FAIL状态的乘法因子 */
+/* 撤销主节点 FAIL 状态的乘法因子 */
 #define CLUSTER_FAIL_UNDO_TIME_MULT 2 /* Undo fail if master is back. */
 /* 在进行手动自愈之前需要等待的超时时间 */
 #define CLUSTER_MF_TIMEOUT 5000 /* Milliseconds to do a manual failover. */
@@ -33,13 +33,13 @@
 #define CLUSTER_REDIR_NONE 0          /* Node can serve the request. */
 /* 所请求的键在其他槽 */
 #define CLUSTER_REDIR_CROSS_SLOT 1    /* -CROSSSLOT request. */
-/* 键所处的槽正在进行rehash */
+/* 键所处的槽正在进行 rehash */
 #define CLUSTER_REDIR_UNSTABLE 2      /* -TRYAGAIN redirection required */
-/* 需要进行ASK重定向 */
+/* 需要进行 ASK 重定向 */
 #define CLUSTER_REDIR_ASK 3           /* -ASK redirection required. */
-/* 需要进行MOVED重定向 */
+/* 需要进行 MOVED 重定向 */
 #define CLUSTER_REDIR_MOVED 4         /* -MOVED redirection required. */
-/* 如果集群状态不是OK状态 */
+/* 如果集群状态不是 OK 状态 */
 #define CLUSTER_REDIR_DOWN_STATE 5    /* -CLUSTERDOWN, global state. */
 /* 当前节点未分配槽位 */
 #define CLUSTER_REDIR_DOWN_UNBOUND 6  /* -CLUSTERDOWN, unbound slot. */
@@ -49,7 +49,7 @@
 struct clusterNode;
 
 /* clusterLink encapsulates everything needed to talk with a remote node. */
-/* clusterLink包含和其他节点通信的所有信息 */
+/* clusterLink 包含和其他节点通信的所有信息 */
 typedef struct clusterLink {
     /* 连接创建时间 */
     mstime_t ctime;             /* Link creation time */
@@ -76,15 +76,15 @@ typedef struct clusterLink {
 #define CLUSTER_NODE_SLAVE 2      /* The node is a slave */
 /* 该节点疑似下线，需要对他的状态进行确认 */
 #define CLUSTER_NODE_PFAIL 4      /* Failure? Need acknowledge */
-/* 节点确定挂了 */
+/* 节点确定下线 */
 #define CLUSTER_NODE_FAIL 8       /* The node is believed to be malfunctioning */
 /* 节点是自己 */
 #define CLUSTER_NODE_MYSELF 16    /* This node is myself */
-/* 该节点还没有于当前节点进行一个ping通信 */
+/* 该节点还没有于当前节点进行一个 ping 通信 */
 #define CLUSTER_NODE_HANDSHAKE 32 /* We have still to exchange the first ping */
 /* 该节点还没有地址 */
 #define CLUSTER_NODE_NOADDR   64  /* We don't know the address of this node */
-/* 该节点发送了meet包给当前节点 */
+/* 该节点发送了 meet 包给当前节点 */
 #define CLUSTER_NODE_MEET 128     /* Send a MEET message to this node */
 /* 有资格做副本漂移的主节点 */
 #define CLUSTER_NODE_MIGRATE_TO 256 /* Master eligible for replica migration. */
@@ -92,7 +92,7 @@ typedef struct clusterLink {
 #define CLUSTER_NODE_NOFAILOVER 512 /* Slave will not try to failover. */
 #define CLUSTER_NODE_NULL_NAME "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
 
-/* 下面的宏是对flags属性做判断，即判断该节点的状态 */
+/* 下面的宏是对 flags 属性做判断，即判断该节点的状态 */
 #define nodeIsMaster(n) ((n)->flags & CLUSTER_NODE_MASTER)
 #define nodeIsSlave(n) ((n)->flags & CLUSTER_NODE_SLAVE)
 #define nodeInHandshake(n) ((n)->flags & CLUSTER_NODE_HANDSHAKE)
@@ -124,7 +124,7 @@ typedef struct clusterLink {
  * kind of packet. PONG is the reply to ping, in the exact format as a PING,
  * while MEET is a special PING that forces the receiver to add the sender
  * as a node (if it is not already in the list). */
-/* redis集群节点之前的通信的消息分为以下11种，
+/* redis 集群节点之前的通信的消息分为以下11种，
  * 最后一种是包类型计数边界，代码中做判断
  * 5（是否可以故障转移）,6（回复可以故障转移）,8（在手动故障转移的时候通知集群暂停处理客户端请求）三种包头没有包体
  * 其他类型的包都由包头和包体两部分组成，包头格式相同，包体内容更具具体的类型填充 */
@@ -133,8 +133,8 @@ typedef struct clusterLink {
 #define CLUSTERMSG_TYPE_MEET 2          /* Meet "let's join" message */
 #define CLUSTERMSG_TYPE_FAIL 3          /* Mark node xxx as failing */
 #define CLUSTERMSG_TYPE_PUBLISH 4       /* Pub/Sub Publish propagation */
-#define CLUSTERMSG_TYPE_FAILOVER_AUTH_REQUEST 5 /* May I failover? failover授权请求包 */
-#define CLUSTERMSG_TYPE_FAILOVER_AUTH_ACK 6     /* Yes, you have my vote  （failover授权确认包） */
+#define CLUSTERMSG_TYPE_FAILOVER_AUTH_REQUEST 5 /* May I failover? failover 授权请求包 */
+#define CLUSTERMSG_TYPE_FAILOVER_AUTH_ACK 6     /* Yes, you have my vote  （failover 授权确认包） */
 #define CLUSTERMSG_TYPE_UPDATE 7        /* Another node slots configuration */
 #define CLUSTERMSG_TYPE_MFSTART 8       /* Pause clients for manual failover 手动故障转移包 */
 #define CLUSTERMSG_TYPE_MODULE 9        /* Module cluster API message. */
@@ -168,13 +168,13 @@ typedef struct clusterNode {
     /* 节点当前的配置纪元，用于节点的故障转移 */
     uint64_t configEpoch; /* Last configEpoch observed for this node */
     /* 由这个节点负责处理的槽
-     * 一共有CLUSTER_SLOTS / 8 个字节长 （一个字节8比特位，一位标识一个槽）
+     * 一共有 CLUSTER_SLOTS / 8 个字节长 （一个字节8比特位，一位标识一个槽）
      * 每个字节的每位记录一个槽的保存状态
      * 位的值为1，标识槽正由本节点处理，为0标识非本节点处理的槽 */
     unsigned char slots[CLUSTER_SLOTS/8]; /* slots handled by this node */
     uint16_t *slot_info_pairs; /* Slots info represented as (start/end) pair (consecutive index). */
     int slot_info_pairs_count; /* Used number of slots in slot_info_pairs */
-    /* 当前节点管理的槽位数量 *、
+    /* 当前节点管理的槽位数量 */
     int numslots;   /* Number of slots handled by this node */
     /* 如果该节点是主节点，该属性记录该主节点下的从节点数量 */
     int numslaves;  /* Number of slave nodes, if this is a master */
@@ -194,20 +194,20 @@ typedef struct clusterNode {
     mstime_t orphaned_time;     /* Starting time of orphaned master condition */
     /* 该节点已知的副本偏移量 */
     long long repl_offset;      /* Last known repl offset for this node. */
-    /* ip地址 */
+    /* ip 地址 */
     char ip[NET_IP_STR_LEN];    /* Latest known IP address of this node */
     /* 节点的主机名 */
     sds hostname;               /* The known hostname for this node */
     /* 节点的端口号 */
     int port;                   /* Latest known clients port (TLS or plain). */
-    /* 用来判断客户端是否是TLS协议 */
+    /* 客户端实际传输数据的端口 */
     int pport;                  /* Latest known clients plaintext port. Only used
                                    if the main clients port is for TLS. */
     /* 该节点的集群端口号 */
     int cport;                  /* Latest known cluster port of this node. */
-    /* 该节点相关的连接对象（连接状态是established） */
+    /* 该节点相关的连接对象（连接状态是 established ） */
     clusterLink *link;          /* TCP/IP link established toward this node */
-    /* accept到的连接，处于三次握手服务端接受到客户端的syn后和接收到客户端的ack之间这段时间的连接 */
+    /* accept 到的连接，处于三次握手服务端接受到客户端的 syn 后和接收到客户端的 ack 之间这段时间的连接 */
     clusterLink *inbound_link;  /* TCP/IP link accepted from this node */
     /* 该节点保存下线通知的链表 */
     list *fail_reports;         /* List of nodes signaling this as failing */
@@ -247,10 +247,10 @@ typedef struct clusterState {
     int state;            /* CLUSTER_OK, CLUSTER_FAIL, ... */
     /* 集群中至少处理一个槽的节点数量 */
     int size;             /* Num of master nodes with at least one slot */
-    /* 保存集群节点的字典，键是节点名称，值是clusterNode结构的指针 */
+    /* 保存集群节点的字典，键是节点名称，值是 clusterNode 结构的指针 */
     dict *nodes;          /* Hash table of name -> clusterNode structures */
-    /* 集群节点黑名单（包括myself），可以防止在集群中的节点二次加入集群
-     * 黑名单可以防止被forget的节点重新添加到集群节点 */
+    /* 集群节点黑名单（包括 myself ），可以防止在集群中的节点二次加入集群
+     * 黑名单可以防止被 forget 的节点重新添加到集群节点 */
     dict *nodes_black_list; /* Nodes we don't re-add for a few seconds. */
     /* 记录要从当前节点迁移到目标节点的槽，以及迁移的目标节点 */
     clusterNode *migrating_slots_to[CLUSTER_SLOTS];
@@ -264,9 +264,9 @@ typedef struct clusterState {
     mstime_t failover_auth_time; /* Time of previous or next election. */
     /* 节点获得支持的票数，从节点 */
     int failover_auth_count;    /* Number of votes received so far. */
-    /* 如果为True，表示该节点已经向其他节点发送了投票请求 */
+    /* 如果为 True ，表示该节点已经向其他节点发送了投票请求 */
     int failover_auth_sent;     /* True if we already asked for votes. */
-    /* 该从节点在当前请求中的优先级，该值根据复制偏移量计算而来，最终用于确定slave节点发起投票的时间 */
+    /* 该从节点在当前请求中的优先级，该值根据复制偏移量计算而来，最终用于确定 slave 节点发起投票的时间 */
     int failover_auth_rank;     /* This slave rank for current auth request. */
     /* 当前选举的纪元 */
     uint64_t failover_auth_epoch; /* Epoch of the current election. */
@@ -290,13 +290,13 @@ typedef struct clusterState {
     /* The following fields are used by masters to take state on elections. */
     /* 集群最近一次投票的纪元 */
     uint64_t lastVoteEpoch;     /* Epoch of the last vote granted. */
-    /* 调用clusterBeforeSleep()所做的一些事 */
+    /* 调用 clusterBeforeSleep() 所做的一些事 */
     int todo_before_sleep; /* Things to do in clusterBeforeSleep(). */
     /* Stats */
     /* Messages received and sent by type. */
     /* 发送的字节数 */
     long long stats_bus_messages_sent[CLUSTERMSG_TYPE_COUNT];
-    /* 通过cluster接收到的消息数量 */
+    /* 通过 cluster 接收到的消息数量 */
     long long stats_bus_messages_received[CLUSTERMSG_TYPE_COUNT];
     long long stats_pfail_nodes;    /* Number of nodes in PFAIL status,
                                        excluding nodes without address. */
@@ -308,38 +308,38 @@ typedef struct clusterState {
 /* Initially we don't know our "name", but we'll find it once we connect
  * to the first node, using the getsockname() function. Then we'll use this
  * address for all the next messages. */
-/* ping包：redis集群中每个节点通过心跳包可以知道其他节点的当前状态并保存到本节点状态中
- * pong包：pong包除了在接收ping包和meet包之后会作为回复发送之外，当进行主从切换之后，新的主节点会向集群中所有节点直接发送一个pong包，通知
+/* ping 包：redis 集群中每个节点通过心跳包可以知道其他节点的当前状态并保存到本节点状态中
+ * pong 包：pong 包除了在接收 ping 包和 meet 包之后会作为回复发送之外，当进行主从切换之后，新的主节点会向集群中所有节点直接发送一个 pong 包，通知
  * 主从切换后节点角色的转换
- * meet包：当执行cluster meet ip port命令之后，执行端会向ip:port指定的地址发送meet包，连接建立之后，会定期发送ping包 */
+ * meet 包：当执行 cluster meet ip port 命令之后，执行端会向 ip:port 指定的地址发送 meet 包，连接建立之后，会定期发送 ping 包 */
 typedef struct {
     /* 节点名称 */
     char nodename[CLUSTER_NAMELEN];
-    /* 发送ping的时间 */
+    /* 发送 ping 的时间 */
     uint32_t ping_sent;
-    /* 接收pong的时间 */
+    /* 接收 pong 的时间 */
     uint32_t pong_received;
-    /* 节点IP地址 */
+    /* 节点 IP 地址 */
     char ip[NET_IP_STR_LEN];  /* IP address last time it was seen */
     /* 节点的端口 */
     uint16_t port;              /* base port last time it was seen */
     /* 节点监听集群通信端口 */
     uint16_t cport;             /* cluster port last time it was seen */
-    /* 节点状态flags */
+    /* 节点状态 flags */
     uint16_t flags;             /* node->flags copy */
-    /* 如果是TLS协议，该属性标识实际通信端口 */
+    /* 如果是 TLS 协议，该属性标识实际通信端口 */
     uint16_t pport;             /* plaintext-port, when base port is TLS */
     /* 预留 */
     uint16_t notused1;
 } clusterMsgDataGossip;
 
-/* fail包用来通知集群某个节点处于故障状态，当一个节点被大多数节点标记为pfail状态时，会进入fail状态
- * 当一个主节点进入fail状态后，该主节点下的从节点会要求进行切换 */
+/* fail 包用来通知集群某个节点处于故障状态，当一个节点被大多数节点标记为 pfail 状态时，会进入 fail 状态
+ * 当一个主节点进入 fail 状态后，该主节点下的从节点会要求进行切换 */
 typedef struct {
     char nodename[CLUSTER_NAMELEN];
 } clusterMsgDataFail;
 
-/* publish包用来广播publish信息 */
+/* publish 包用来广播publish信息 */
 typedef struct {
     /* 通道长度 */
     uint32_t channel_len;
@@ -436,7 +436,7 @@ typedef struct {
     uint16_t port;      /* TCP base port number. */
     /* 包类型，（接收到包后通过该属性来决定如何解析包体） */
     uint16_t type;      /* Message type */
-    /* data中的gossip section个数（供ping pong meet包使用） */
+    /* data 中的 gossip section 个数（供 ping pong meet 包使用） */
     uint16_t count;     /* Only used for some kind of messages. */
     /* 发送方节点记录的集群当前纪元 */
     uint64_t currentEpoch;  /* The epoch accordingly to the sending node. */
@@ -449,11 +449,11 @@ typedef struct {
                            processed replication offset if node is a slave. */
     /* 发送方名称 */
     char sender[CLUSTER_NAMELEN]; /* Name of the sender node */
-    /* 发送方提供服务的slot映射表，（如果为从，则为该从所对应的主提供服务的slot映射表） */
+    /* 发送方提供服务的 slot 映射表，（如果为从，则为该从所对应的主提供服务的 slot 映射表） */
     unsigned char myslots[CLUSTER_SLOTS/8];
     /* 发送方如果为从，则该字段为对应的主的名称 */
     char slaveof[CLUSTER_NAMELEN];
-    /* 发送方IP */
+    /* 发送方 IP */
     char myip[NET_IP_STR_LEN];    /* Sender IP, if not all zeroed. */
     /* 和该包一起发送的扩展数 */
     uint16_t extensions; /* Number of extensions sent along with this packet. */
@@ -461,13 +461,13 @@ typedef struct {
     char notused1[30];   /* 30 bytes reserved for future usage. */
     /* 发送方实际发送数据的端口 */
     uint16_t pport;      /* Sender TCP plaintext port, if base port is TLS */
-    /* 发送方监听的cluster bus端口 */
+    /* 发送方监听的 cluster bus 端口 */
     uint16_t cport;      /* Sender TCP cluster bus port */
-    /* 发送方节点所记录的flags */
+    /* 发送方节点所记录的 flags */
     uint16_t flags;      /* Sender node flags */
     /* 发送方节点所记录的集群状态 */
     unsigned char state; /* Cluster state from the POV of the sender */
-    /* 目前只有mflags[0]会在手动 failover 时使用 */
+    /* 目前只有 mflags[0] 会在手动 failover 时使用 */
     unsigned char mflags[3]; /* Message flags: CLUSTERMSG_FLAG[012]_... */
     /* 包体内容 */
     union clusterMsgData data;
