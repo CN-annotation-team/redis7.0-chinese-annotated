@@ -94,7 +94,7 @@ static int rioBufferFlush(rio *r) {
 
 /* 定义了一个 rio 结构的实体 */
 static const rio rioBufferIO = {
-        /* 四个方法 */
+    /* 四个方法 */
     rioBufferRead,
     rioBufferWrite,
     rioBufferTell,
@@ -129,8 +129,7 @@ static size_t rioFileWrite(rio *r, const void *buf, size_t len) {
      * the autosync threshold (so that the kernel's buffer cache never has too
      * many dirty pages at once). */
     /* 增量写数据到文件中，避免单次写的数据量大于 autosync 的阈值
-     * 注： 为了避免内核缓冲区一次出现太多的脏页
-     * */
+     * 注： 为了避免内核缓冲区一次出现太多的脏页 */
     while (len != nwritten) {
         serverAssert(r->io.file.autosync > r->io.file.buffered);
         /* 计算 autosync 阈值（可以看做一个中转空间的大小，如果达到这个值表示中转空间放满了，需要直接刷到磁盘，清空中转空间）还剩下多少 */
@@ -202,7 +201,7 @@ static int rioFileFlush(rio *r) {
 }
 
 static const rio rioFileIO = {
-        /* file rio 的四个操作函数*/
+    /* file rio 的四个操作函数*/
     rioFileRead,
     rioFileWrite,
     rioFileTell,

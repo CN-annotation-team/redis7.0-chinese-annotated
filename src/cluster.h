@@ -12,7 +12,7 @@
 #define CLUSTER_FAIL 1          /* The cluster can't work */
 /* 集群节点名字长度 */
 #define CLUSTER_NAMELEN 40      /* sha1 hex length */
-/* 集群实际通信的端口 = 用户指定端口 + CLUSTER_PORT_INCR （6379 + 10000 = 16379）*/
+/* 默认情况下；集群实际通信的端口 = 用户指定端口 + CLUSTER_PORT_INCR （6379 + 10000 = 16379）*/
 #define CLUSTER_PORT_INCR 10000 /* Cluster port = baseport + PORT_INCR */
 
 /* The following defines are amount of time, sometimes expressed as
@@ -86,7 +86,7 @@ typedef struct clusterLink {
 #define CLUSTER_NODE_NOADDR   64  /* We don't know the address of this node */
 /* 该节点发送了 meet 包给当前节点 */
 #define CLUSTER_NODE_MEET 128     /* Send a MEET message to this node */
-/* 有资格做副本漂移的主节点 */
+/* 有资格做副本迁移的主节点 */
 #define CLUSTER_NODE_MIGRATE_TO 256 /* Master eligible for replica migration. */
 /* 从节点不会去做故障转移 */
 #define CLUSTER_NODE_NOFAILOVER 512 /* Slave will not try to failover. */
@@ -125,18 +125,21 @@ typedef struct clusterLink {
  * while MEET is a special PING that forces the receiver to add the sender
  * as a node (if it is not already in the list). */
 /* redis 集群节点之前的通信的消息分为以下11种，
- * 最后一种是包类型计数边界，代码中做判断
- * 5（是否可以故障转移）,6（回复可以故障转移）,8（在手动故障转移的时候通知集群暂停处理客户端请求）三种包头没有包体
- * 其他类型的包都由包头和包体两部分组成，包头格式相同，包体内容更具具体的类型填充 */
+ * 最后一个 CLUSTERMSG_TYPE_COUNT 是包类型计数边界，代码中做判断
+ * 5（是否可以故障转移）,6（回复可以故障转移）,8（在手动故障转移的时候通知集群暂停处理客户端请求）三种包只有包头没有包体
+ * 其他类型的包都由包头和包体两部分组成，包头格式相同，包体内容根据具体的类型填充 */
 #define CLUSTERMSG_TYPE_PING 0          /* Ping */
 #define CLUSTERMSG_TYPE_PONG 1          /* Pong (reply to Ping) */
 #define CLUSTERMSG_TYPE_MEET 2          /* Meet "let's join" message */
 #define CLUSTERMSG_TYPE_FAIL 3          /* Mark node xxx as failing */
 #define CLUSTERMSG_TYPE_PUBLISH 4       /* Pub/Sub Publish propagation */
-#define CLUSTERMSG_TYPE_FAILOVER_AUTH_REQUEST 5 /* May I failover? failover 授权请求包 */
-#define CLUSTERMSG_TYPE_FAILOVER_AUTH_ACK 6     /* Yes, you have my vote  （failover 授权确认包） */
+/* failover 授权请求包 */
+#define CLUSTERMSG_TYPE_FAILOVER_AUTH_REQUEST 5 /* May I failover? */
+/* failover 授权确认包 */
+#define CLUSTERMSG_TYPE_FAILOVER_AUTH_ACK 6     /* Yes, you have my vote   */
 #define CLUSTERMSG_TYPE_UPDATE 7        /* Another node slots configuration */
-#define CLUSTERMSG_TYPE_MFSTART 8       /* Pause clients for manual failover 手动故障转移包 */
+/* 手动故障转移包 */
+#define CLUSTERMSG_TYPE_MFSTART 8       /* Pause clients for manual failover  */
 #define CLUSTERMSG_TYPE_MODULE 9        /* Module cluster API message. */
 #define CLUSTERMSG_TYPE_PUBLISHSHARD 10 /* Pub/Sub Publish shard propagation */
 #define CLUSTERMSG_TYPE_COUNT 11        /* Total number of message types. */
@@ -311,7 +314,7 @@ typedef struct clusterState {
 /* ping 包：redis 集群中每个节点通过心跳包可以知道其他节点的当前状态并保存到本节点状态中
  * pong 包：pong 包除了在接收 ping 包和 meet 包之后会作为回复发送之外，当进行主从切换之后，新的主节点会向集群中所有节点直接发送一个 pong 包，通知
  * 主从切换后节点角色的转换
- * meet 包：当执行 cluster meet ip port 命令之后，执行端会向 ip:port 指定的地址发送 meet 包，连接建立之后，会定期发送 ping 包 */
+ * meet 包：当执行 cluster meet ip port [cluster_bus_port] 命令之后，执行端会向 ip:port 指定的地址发送 meet 包，连接建立之后，会定期发送 ping 包 */
 typedef struct {
     /* 节点名称 */
     char nodename[CLUSTER_NAMELEN];
