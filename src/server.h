@@ -1963,9 +1963,14 @@ struct redisServer {
     int tls_auth_clients;
     redisTLSContextConfig tls_ctx_config;
     /* cpu affinity */
+    /* CPU 亲和度配置 具体可以看 redis.conf 2248-2271行，将不同的线程和进程绑定的 CPU 给分开了 */
+    /* 主线程绑定的 cpu 核 */
     char *server_cpulist; /* cpu affinity list of redis server main/io thread. */
+    /* 后台 IO 线程绑定的 cpu 核 */
     char *bio_cpulist; /* cpu affinity list of bio thread. */
+    /* AOF 的 rewrite 进程绑定的 CPU 核 */
     char *aof_rewrite_cpulist; /* cpu affinity list of aof rewrite process. */
+    /* bgsave 进程绑定的 CPU 核 */
     char *bgsave_cpulist; /* cpu affinity list of bgsave process. */
     /* Sentinel config */
     struct sentinelConfig *sentinel_config; /* sentinel config to load at startup time. */
