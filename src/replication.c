@@ -602,11 +602,15 @@ void replicationFeedMonitors(client *c, list *monitors, int dictid, robj **argv,
 
 /* Feed the slave 'c' with the replication backlog starting from the
  * specified 'offset' up to the end of the backlog. */
+/* 将复制缓冲区从 offset 开始的所有命令发送给副本
+ * 注：这里和 redis 6 版本的区别挺大，有兴趣的可以看看 redis 6 的实现，复制缓冲区是使用循环数组实现的，
+ * 没有使用 rax 数据结构来做快速索引 */
 long long addReplyReplicationBacklog(client *c, long long offset) {
     long long skip;
 
     serverLog(LL_DEBUG, "[PSYNC] Replica request offset: %lld", offset);
 
+    /* 如果副本缓冲区的大小为0，直接返回 */
     if (server.repl_backlog->histlen == 0) {
         serverLog(LL_DEBUG, "[PSYNC] Backlog history len is zero");
         return 0;
@@ -620,25 +624,38 @@ long long addReplyReplicationBacklog(client *c, long long offset) {
              server.repl_backlog->histlen);
 
     /* Compute the amount of bytes we need to discard. */
+    /* 用 当前需要读取的起始偏移量 - 复制缓冲区第一个字节的偏移量 = 需要忽略的复制缓冲区的数据长度 */
     skip = offset - server.repl_backlog->offset;
     serverLog(LL_DEBUG, "[PSYNC] Skipping: %lld", skip);
 
     /* Iterate recorded blocks, quickly search the approximate node. */
+    /* 该属性最后会定位到需要发送给副本的第一个复制缓冲区块对应的节点，下面 if 判断和 while 循环就是定位逻辑 */
     listNode *node = NULL;
+    /* 判断复制缓冲区的快速索引大小是否大于0 */
     if (raxSize(server.repl_backlog->blocks_index) > 0) {
+        /* long long 转 uint64 */
         uint64_t encoded_offset = htonu64(offset);
         raxIterator ri;
+        /* 根据 rax 数据结构生成一个 raxIterator 迭代器 */
         raxStart(&ri, server.repl_backlog->blocks_index);
+        /* 将迭代器迭代到刚好大于 offset 的位置 */
         raxSeek(&ri, ">", (unsigned char*)&encoded_offset, sizeof(uint64_t));
+        /* 如果迭代器直接结束了，表示索引目前的存储的最大偏移量是小于当前给定的偏移量 */
         if (raxEOF(&ri)) {
             /* No found, so search from the last recorded node. */
+            /* 将迭代器指向最后一个元素 */
             raxSeek(&ri, "$", NULL, 0);
+            /* 迭代器往前移动一个元素 */
             raxPrev(&ri);
+            /* 当前节点指向了尾部的前一个节点 */
             node = (listNode *)ri.data;
         } else {
+            /* 没结束的情况 */
+            /* 因为迭代器是迭代到了大于 offset 的位置，所以需要前移一个节点 */
             raxPrev(&ri); /* Skip the sought node. */
             /* We should search from the prev node since the offset of current
              * sought node exceeds searching offset. */
+            /* 这里又做了一次前移，没看明白？求大佬指教 */
             if (raxPrev(&ri))
                 node = (listNode *)ri.data;
             else
@@ -647,25 +664,36 @@ long long addReplyReplicationBacklog(client *c, long long offset) {
         raxStop(&ri);
     } else {
         /* No recorded blocks, just from the start node to search. */
+        /* 如果复制缓冲区没有快速索引的话，将节点指针指向复制缓冲区的第一个节点 */
         node = server.repl_backlog->ref_repl_buf_node;
     }
 
     /* Search the exact node. */
+    /* 从上面的判断中获取到节点之后，接着往后遍历节点 */
     while (node != NULL) {
         replBufBlock *o = listNodeValue(node);
+        /* 如果该节点的块的起始位置对应的复制缓冲区偏移量 + 块被使用的大小 >= offset 了，就表示找到了需要找的块节点 */
         if (o->repl_offset + (long long)o->used >= offset) break;
+        /* 没找到就接着往下找 */
         node = listNextNode(node);
     }
     serverAssert(node != NULL);
 
     /* Install a writer handler first.*/
+    /* 副本写数据的前置处理 */
     prepareClientToWrite(c);
     /* Setting output buffer of the replica. */
+    /* 从当前找到的节点中获取复制缓冲区块 */
     replBufBlock *o = listNodeValue(node);
+    /* 块的引用计数 +1 */
     o->refcount++;
+    /* 设置副本需要开始复制的节点 */
     c->ref_repl_buf_node = node;
+    /* 设置副本需要从该复制缓冲区块的什么位置开始复制
+     * 给定的需要开始复制的偏移量 - 块当前在复制缓冲区的复制偏移量 = 块内当前需要开始复制的偏移量*/
     c->ref_block_pos = offset - o->repl_offset;
-
+    /* 返回当前复制缓冲区中需要复制的数据，skip 就是给定的 offset 之前的数据，因为要从 offset 处开始复制
+     * histlen 表示复制缓冲区中实际有的数据的大小，减去需要跳过的数据大小，剩下的就是副本要复制的数据大小 */
     return server.repl_backlog->histlen - skip;
 }
 
@@ -693,19 +721,35 @@ long long getPsyncInitialOffset(void) {
  * Normally this function should be called immediately after a successful
  * BGSAVE for replication was started, or when there is one already in
  * progress that we attached our slave to. */
+
+/* 在完整重同步下发送一个 FULLRESYNC 回复用来设置从节点的状态，不同的回复有着不同的
+ * 作用：
+ * 1) 为了保证新的从节点在到达相同的后台 RDB 存储进程以后，我们也能在从节点中获取到
+ *    正确的偏移量，我们需要在 slave 客户端结构中保存我们已经发送的数据的复制偏移量
+ * 2) 设置从节点的复制状态为 WAIT_BGSAVE_END（RDB 文件准备完毕了，后面到的命令不
+ *    能再放到 RDB 文件中，而是放在复制缓冲区），然后开始累积当前主节点在当前时刻之
+ *    后接收到的写命令。
+ * 3) 强制复制流重新发出一个 SELECT 命令以保证主节点新增加的命令可以在从节点中正确
+ *    编号的数据库中执行
+ *
+ * 先进行 RDB 快照同步，与此同时记录复制缓冲区的偏移量，该偏移量之后到的命令需要在副
+ * 本接收完 rdb 后发送给副本 */
 int replicationSetupSlaveForFullResync(client *slave, long long offset) {
     char buf[128];
     int buflen;
-
+    /* 将副本的部分重同步的初始偏移量设置为提供的偏移量（在开始 rdb 同步的那一刻的复制偏移量） */
     slave->psync_initial_offset = offset;
+    /* 复制状态转换 */
     slave->replstate = SLAVE_STATE_WAIT_BGSAVE_END;
     /* We are going to accumulate the incremental changes for this
      * slave as well. Set slaveseldb to -1 in order to force to re-emit
      * a SELECT statement in the replication stream. */
+    /* 这里将从节点的数据库编号设置为-1，后面会强制加一个 SELECT 来选择正确的数据库 */
     server.slaveseldb = -1;
 
     /* Don't send this reply to slaves that approached us with
      * the old SYNC command. */
+    /* 如果副本不可以识别 PSYNC 报错 */
     if (!(slave->flags & CLIENT_PRE_PSYNC)) {
         buflen = snprintf(buf,sizeof(buf),"+FULLRESYNC %s %lld\r\n",
                           server.replid,offset);
@@ -722,6 +766,7 @@ int replicationSetupSlaveForFullResync(client *slave, long long offset) {
  *
  * On success return C_OK, otherwise C_ERR is returned and we proceed
  * with the usual full resync. */
+/* 部分重同步 */
 int masterTryPartialResynchronization(client *c, long long psync_offset) {
     long long psync_len;
     char *master_replid = c->argv[1]->ptr;
@@ -734,6 +779,10 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
      *
      * Note that there are two potentially valid replication IDs: the ID1
      * and the ID2. The ID2 however is only valid up to a specific offset. */
+    /* 判断当前服务（主节点）持有的复制 id 是否和想要部分重同步的从节点匹配，如果不匹配
+     * 表示主节点的历史复制和该从节点不符合，将不再继续接下来的步骤。（主节点已经开始新
+     * 一轮的部分重同步了，但是从节点还是以前旧的部分重同步的过程，需要重新进行完整重同
+     * 步） */
     if (strcasecmp(master_replid, server.replid) &&
         (strcasecmp(master_replid, server.replid2) ||
          psync_offset > server.second_replid_offset))
@@ -756,10 +805,14 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
             serverLog(LL_NOTICE,"Full resync requested by replica %s",
                 replicationGetSlaveName(c));
         }
+        /* 这里如果进入了该 if 中标识需要完整重同步，则报错 */
         goto need_full_resync;
     }
 
     /* We still have the data our slave is asking for? */
+    /* 1.复制缓冲区不存在
+     * 2.需要部分重同步的偏移量小于当前复制缓冲区的偏移量
+     * 3.需要部分重同步的偏移量太大，超过了复制缓冲区的总数据量 */
     if (!server.repl_backlog ||
         psync_offset < server.repl_backlog->offset ||
         psync_offset > (server.repl_backlog->offset + server.repl_backlog->histlen))
@@ -770,6 +823,7 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
             serverLog(LL_WARNING,
                 "Warning: replica %s tried to PSYNC with an offset that is greater than the master replication offset.", replicationGetSlaveName(c));
         }
+        /* 需要完整重同步，报错 */
         goto need_full_resync;
     }
 
@@ -777,14 +831,20 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
      * 1) Set client state to make it a slave.
      * 2) Inform the client we can continue with +CONTINUE
      * 3) Send the backlog data (from the offset to the end) to the slave. */
+    /* 如果运行到这里，说明是部分重同步 */
+    /* 将客户端的状态设置为副本 */
     c->flags |= CLIENT_SLAVE;
+    /* 复制状态设置为副本在线状态 */
     c->replstate = SLAVE_STATE_ONLINE;
+    /* 设置副本确认时间，（会用来做超时判断） */
     c->repl_ack_time = server.unixtime;
     c->repl_start_cmd_stream_on_ack = 0;
+    /* 将副本添加到 server.slaves 尾部 */
     listAddNodeTail(server.slaves,c);
     /* We can't use the connection buffers since they are used to accumulate
      * new commands at this stage. But we are sure the socket send buffer is
      * empty so this write will never fail actually. */
+    /* 这里判断副本支持的主从复制版本， 支持 PSYNC2 协议 */
     if (c->slave_capa & SLAVE_CAPA_PSYNC2) {
         buflen = snprintf(buf,sizeof(buf),"+CONTINUE %s\r\n", server.replid);
     } else {
@@ -794,6 +854,7 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
         freeClientAsync(c);
         return C_OK;
     }
+    /* 重要方法，发送复制日志给副本 */
     psync_len = addReplyReplicationBacklog(c,psync_offset);
     serverLog(LL_NOTICE,
         "Partial resynchronization request from %s accepted. Sending %lld bytes of backlog starting from offset %lld.",
@@ -802,16 +863,18 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
     /* Note that we don't need to set the selected DB at server.slaveseldb
      * to -1 to force the master to emit SELECT, since the slave already
      * has this state from the previous connection with the master. */
-
+    /* 一般是对于一轮部分重同步第一次复制的时候会设置 server.slaveseldb 为-1，强制从节点选择正确的
+     * 数据库，这里会记录这些从节点，下一次在同一轮部分重同步的时候做复制，可以不用在加 SELECT*/
     refreshGoodSlavesCount();
 
     /* Fire the replica change modules event. */
+    /* 触发副本改变事件 */
     moduleFireServerEvent(REDISMODULE_EVENT_REPLICA_CHANGE,
                           REDISMODULE_SUBEVENT_REPLICA_CHANGE_ONLINE,
                           NULL);
 
     return C_OK; /* The caller can return, no full resync needed. */
-
+/* 上面出现的一些不符合部分重同步要求的情况，返回错误 */
 need_full_resync:
     /* We need a full resync for some reason... Note that we can't
      * reply to PSYNC right now if a full SYNC is needed. The reply

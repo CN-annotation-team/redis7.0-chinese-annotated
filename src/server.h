@@ -394,21 +394,36 @@ extern int configOOMScoreAdjValuesDefaults[CONFIG_OOM_COUNT];
 
 /* Slave replication state. Used in server.repl_state for slaves to remember
  * what to do next. */
+/* 从服务器复制状态，用于 server.repl.state 属性 */
 typedef enum {
+    /* 未开启主从复制状态 */
     REPL_STATE_NONE = 0,            /* No active replication */
+    /* 需要去连接主服务器 */
     REPL_STATE_CONNECT,             /* Must connect to master */
+    /* 连接主服务器成功（接着需要做一些前置处理） */
     REPL_STATE_CONNECTING,          /* Connecting to master */
     /* --- Handshake states, must be ordered --- */
+    /* 握手，必须是有序的，按照下面的状态进行 */
+    /* 等待接收 ping 回复 */
     REPL_STATE_RECEIVE_PING_REPLY,  /* Wait for PING reply */
+    /* 发送握手序列号到主服务器 */
     REPL_STATE_SEND_HANDSHAKE,      /* Send handshake sequence to master */
+    /* 等待接收认证回复 auth password */
     REPL_STATE_RECEIVE_AUTH_REPLY,  /* Wait for AUTH reply */
+    /* 等待端口回复 REPLCONF listening-port <port> */
     REPL_STATE_RECEIVE_PORT_REPLY,  /* Wait for REPLCONF reply */
+    /* 等待接收 IP 回复 REPLCONF ip-address <ip> */
     REPL_STATE_RECEIVE_IP_REPLY,    /* Wait for REPLCONF reply */
+    /* 告诉主服务器自己支持的主从复制能力，主从复制有经过升级，有不同版本 REPLCONF capa <capablity> */
     REPL_STATE_RECEIVE_CAPA_REPLY,  /* Wait for REPLCONF reply */
+    /* 发送 PSYNC */
     REPL_STATE_SEND_PSYNC,          /* Send PSYNC */
+    /* 接收 PSYNC 回复 */
     REPL_STATE_RECEIVE_PSYNC_REPLY, /* Wait for PSYNC reply */
     /* --- End of handshake states --- */
+    /* 接收主服务器发送来的RDB文件 */
     REPL_STATE_TRANSFER,        /* Receiving .rdb from master */
+    /* 主从复制同步成功 */
     REPL_STATE_CONNECTED,       /* Connected to master */
 } repl_state;
 
@@ -430,8 +445,11 @@ typedef enum {
 #define SLAVE_STATE_ONLINE 9 /* RDB file transmitted, sending just updates. */
 
 /* Slave capabilities. */
+/* 主从复制能力 */
 #define SLAVE_CAPA_NONE 0
+/* 可以解析 RDB EOF */
 #define SLAVE_CAPA_EOF (1<<0)    /* Can parse the RDB EOF streaming format. */
+/* 支持 PSYNC2 协议 */
 #define SLAVE_CAPA_PSYNC2 (1<<1) /* Supports PSYNC2 protocol. */
 
 /* Slave requirements */
@@ -905,11 +923,15 @@ typedef struct clientReplyBlock {
 
 /* Similar with 'clientReplyBlock', it is used for shared buffers between
  * all replica clients and replication backlog. */
+/* 复制缓冲区块结构，一个复制缓冲区由很多块组成 */
 typedef struct replBufBlock {
     int refcount;           /* Number of replicas or repl backlog using. */
     long long id;           /* The unique incremental number. */
+    /* 当前块在复制缓冲区中的位置 */
     long long repl_offset;  /* Start replication offset of the block. */
+    /* 定义块的总大小，和块被使用的大小 */
     size_t size, used;
+    /* 存储数据（主服务器已经处理的命令） */
     char buf[];
 } replBufBlock;
 
@@ -1067,14 +1089,20 @@ typedef struct {
  * it would cost much time to search replication offset on partial resync, so
  * we use one rax tree to index some blocks every REPL_BACKLOG_INDEX_PER_BLOCKS
  * to make searching offset from replication buffer blocks list faster. */
+/* redis7 新加的结构，复制缓冲区（redis6 是直接使用环形数组的方法存储），这里使用链表结构存储
+ * 并且使用 rax 数据结构做了快速索引 */
 typedef struct replBacklog {
+    /* 使用链表的方式将整个复制缓冲区分成一个一个的块存在在链表的节点中 */
     listNode *ref_repl_buf_node; /* Referenced node of replication buffer blocks,
                                   * see the definition of replBufBlock. */
     size_t unindexed_count;      /* The count from last creating index block. */
+    /* 用于在部分重同步的时候快速扫描复制缓冲区的复制偏移量的索引 */
     rax *blocks_index;           /* The index of recorded blocks of replication
                                   * buffer for quickly searching replication
                                   * offset on partial resynchronization. */
+    /* 复制缓冲区中存储命令的数据长度 */
     long long histlen;           /* Backlog actual data length */
+    /* 复制缓冲区中第一个字节的复制偏移量 */
     long long offset;            /* Replication "master offset" of first
                                   * byte in the replication backlog buffer.*/
 } replBacklog;
@@ -1756,8 +1784,12 @@ struct redisServer {
     long long master_repl_offset;   /* My current replication offset */
     long long second_replid_offset; /* Accept offsets up to this for replid2. */
     int slaveseldb;                 /* Last SELECTed DB in replication output */
+    /* 主服务器和从服务器的心跳包的周期，默认为10
+     * 通过 repl-ping-replica-period 或 repl-ping-slave-period 设置 */
     int repl_ping_slave_period;     /* Master pings the slave every N seconds */
+    /* 复制缓冲区，用于存储主服务已经执行且待发送给从服务器的命令信息 */
     replBacklog *repl_backlog;      /* Replication backlog for partial syncs */
+    /* 复制缓冲区大小，可通过 repl-backlog-size设置，默认 1M */
     long long repl_backlog_size;    /* Backlog circular buffer size */
     time_t repl_backlog_time_limit; /* Time without slaves after the backlog
                                        gets released. */
