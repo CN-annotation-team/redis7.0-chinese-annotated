@@ -46,7 +46,7 @@
  * redis 中分为四种 IO 操作
  * 1. file (文件的读写)
  * 2. buffer (直接使用 SDS 字符串)
- * 3. connection (目前只有 RDB 将主节点的rdb文件加载到从服务器内存使用了这种 IO ,只提供读操作)
+ * 3. connection (目前只有 RDB 将主节点的 rdb 文件加载到从服务器内存使用了这种 IO ,只提供读操作)
  * 4. fd (文件描述符)
  */
 #define RIO_TYPE_FILE (1<<0)
@@ -136,7 +136,7 @@ typedef struct _rio rio;
 /* The following functions are our interface with the stream. They'll call the
  * actual implementation of read / write / tell, and will update the checksum
  * if needed. */
-/* 这里抽取了 rio 的 read / write /tell 等操作的公共逻辑，会根据不同 rio 类型执行具体的函数 */
+/* 这里抽取了 rio 的 read / write / tell 等操作的公共逻辑，会根据不同 rio 类型执行具体的函数 */
 
 /* rio 写函数 */
 static inline size_t rioWrite(rio *r, const void *buf, size_t len) {

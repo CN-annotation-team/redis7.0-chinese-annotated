@@ -164,7 +164,7 @@ typedef struct clusterNodeFailReport {
 typedef struct clusterNode {
     /* 节点创建时间 */
     mstime_t ctime; /* Node object creation time. */
-    /* 节点名，有大小限制 40个字符 */
+    /* 节点名，有大小限制40个字符 */
     char name[CLUSTER_NAMELEN]; /* Node name, hex string, sha1-size */
     /* 当前节点的状态，也记录了节点在集群中的角色 */
     int flags;      /* CLUSTER_NODE_... */
@@ -342,7 +342,7 @@ typedef struct {
     char nodename[CLUSTER_NAMELEN];
 } clusterMsgDataFail;
 
-/* publish 包用来广播publish信息 */
+/* publish 包用来广播 publish 信息 */
 typedef struct {
     /* 通道长度 */
     uint32_t channel_len;

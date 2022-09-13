@@ -289,7 +289,7 @@ static size_t rioConnRead(rio *r, void *buf, size_t len) {
         }
         sdsIncrLen(r->io.conn.buf, retval);
     }
-    /* RIO 中 connection 的 buf 从 pos 位置读 len 个数据到给定的 buf中  */
+    /* RIO 中 connection 的 buf 从 pos 位置读 len 个数据到给定的 buf 中  */
     memcpy(buf, (char*)r->io.conn.buf + r->io.conn.pos, len);
     r->io.conn.read_so_far += len;
     r->io.conn.pos += len;
@@ -434,7 +434,7 @@ static off_t rioFdTell(rio *r) {
 
 /* Flushes any buffer to target device if applicable. Returns 1 on success
  * and 0 on failures. */
-/* flush 调用器write */
+/* flush 调用器 write */
 static int rioFdFlush(rio *r) {
     /* Our flush is implemented by the write method, that recognizes a
      * buffer set to NULL with a count of zero as a flush request. */
