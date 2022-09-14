@@ -45,9 +45,11 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [rio.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/rio.c) | 四种 redis IO 类型操作的实现  | 过半 |
 | [bio.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/bio.c) | redis background I/O 线程功能实现  | 完成 |
 | [lazyfree.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/lazyfree.c) | redis 惰性释放对象空间实现  | 完成 |
+| [ae.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.h) | redis 时间事件和文件（ socket ）事件数据结构定义  | 完成 |
+| [ae.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.c) | redis 时间和文件事件实现  | 完成 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/9/13
+更新日期：2022/9/14
 
 
 ## 关于提交 PR 的方法：
