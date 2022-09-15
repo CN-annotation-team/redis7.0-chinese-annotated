@@ -74,9 +74,13 @@ ConnectionType CT_Socket;
  * be embedded in different structs, not just client.
  */
 
+/* 创建一个 connection 实例结构体 */
 connection *connCreateSocket() {
+    /* 分配空间 */
     connection *conn = zcalloc(sizeof(connection));
+    /* ConnectionType 连接类型为 Socket，目前 connection 只有 socket 这一个类型 */
     conn->type = &CT_Socket;
+    /* 初始化文件描述符 -1 */
     conn->fd = -1;
 
     return conn;
@@ -92,9 +96,12 @@ connection *connCreateSocket() {
  * is not in an error state (which is not possible for a socket connection,
  * but could but possible with other protocols).
  */
+/* 将接收到的 一个客户端的 socket fd 包装成一个 connection，之后和该客户端进行通信，通过该 connection 进行 */
 connection *connCreateAcceptedSocket(int fd) {
     connection *conn = connCreateSocket();
+    /* 设置文件描述符为给定的 fd */
     conn->fd = fd;
+    /* 设置连接状态 */
     conn->state = CONN_STATE_ACCEPTING;
     return conn;
 }
@@ -129,11 +136,14 @@ int connHasReadHandler(connection *conn) {
 }
 
 /* Associate a private data pointer with the connection */
+/* 设置 conn 的私有数据为 data
+ * 不同的功能有不同的私有数据，接收客户端连接，私有数据就是 client 实例*/
 void connSetPrivateData(connection *conn, void *data) {
     conn->private_data = data;
 }
 
 /* Get the associated private data pointer */
+/* 获取 conn 的私有数据 */
 void *connGetPrivateData(connection *conn) {
     return conn->private_data;
 }
@@ -145,24 +155,30 @@ void *connGetPrivateData(connection *conn) {
  */
 
 /* Close the connection and free resources. */
+/* 关闭一个 socket */
 static void connSocketClose(connection *conn) {
     if (conn->fd != -1) {
+        /* 删除该 socket fd 注册到事件循环处理器中的事件 */
         aeDeleteFileEvent(server.el,conn->fd, AE_READABLE | AE_WRITABLE);
+        /* 关闭 socket fd */
         close(conn->fd);
+        /* 将 conn 中的 fd 置为 -1 */
         conn->fd = -1;
     }
 
     /* If called from within a handler, schedule the close but
      * keep the connection until the handler returns.
      */
+    /* 如果目前 socket 还被处理器持有，不删除该 socket */
     if (connHasRefs(conn)) {
         conn->flags |= CONN_FLAG_CLOSE_SCHEDULED;
         return;
     }
-
+    /* 释放 conn 的空间 */
     zfree(conn);
 }
 
+/* socket write 操作 */
 static int connSocketWrite(connection *conn, const void *data, size_t data_len) {
     int ret = write(conn->fd, data, data_len);
     if (ret < 0 && errno != EAGAIN) {
@@ -178,6 +194,7 @@ static int connSocketWrite(connection *conn, const void *data, size_t data_len) 
     return ret;
 }
 
+/* socket writev 操作 */
 static int connSocketWritev(connection *conn, const struct iovec *iov, int iovcnt) {
     int ret = writev(conn->fd, iov, iovcnt);
     if (ret < 0 && errno != EAGAIN) {
@@ -193,7 +210,9 @@ static int connSocketWritev(connection *conn, const struct iovec *iov, int iovcn
     return ret;
 }
 
+/* socket read 操作 */
 static int connSocketRead(connection *conn, void *buf, size_t buf_len) {
+    /* 调用 read 函数，将数据读到 buf 中 */
     int ret = read(conn->fd, buf, buf_len);
     if (!ret) {
         conn->state = CONN_STATE_CLOSED;
@@ -210,14 +229,17 @@ static int connSocketRead(connection *conn, void *buf, size_t buf_len) {
     return ret;
 }
 
+/* accept 到一个客户端端连接之后，需要开始对该连接进行处理 */
 static int connSocketAccept(connection *conn, ConnectionCallbackFunc accept_handler) {
     int ret = C_OK;
 
     if (conn->state != CONN_STATE_ACCEPTING) return C_ERR;
     conn->state = CONN_STATE_CONNECTED;
-
+    /* 引用计数+1 */
     connIncrRefs(conn);
+    /* 这里其实就是调用 accept_handler 回调函数 */
     if (!callHandler(conn, accept_handler)) ret = C_ERR;
+    /*引用计数-1 */
     connDecrRefs(conn);
 
     return ret;
@@ -231,17 +253,23 @@ static int connSocketAccept(connection *conn, ConnectionCallbackFunc accept_hand
  * always called before and not after the read handler in a single event
  * loop.
  */
+/* 给 conn 注册写处理器 */
 static int connSocketSetWriteHandler(connection *conn, ConnectionCallbackFunc func, int barrier) {
     if (func == conn->write_handler) return C_OK;
 
     conn->write_handler = func;
+    /* 设置写栅栏，确保在单个事件循环器中写在读之前执行 */
     if (barrier)
         conn->flags |= CONN_FLAG_WRITE_BARRIER;
     else
         conn->flags &= ~CONN_FLAG_WRITE_BARRIER;
+    /* 如果传入的写回调函数是 NULL */
     if (!conn->write_handler)
+        /* 在全局事件循环器中将该 fd 的 AE_WRITABLE 类型的事件删除 */
         aeDeleteFileEvent(server.el,conn->fd,AE_WRITABLE);
     else
+        /* 否则的话创建一个 AE_WRITEABLE 类型的文件事件到全局事件循环器中
+         * 这里可以看到注册到事件循环器中的回调函数是 ae_handler 也就是 connSocketEventHandler 函数*/
         if (aeCreateFileEvent(server.el,conn->fd,AE_WRITABLE,
                     conn->type->ae_handler,conn) == AE_ERR) return C_ERR;
     return C_OK;
@@ -249,6 +277,7 @@ static int connSocketSetWriteHandler(connection *conn, ConnectionCallbackFunc fu
 
 /* Register a read handler, to be called when the connection is readable.
  * If NULL, the existing handler is removed.
+ * 注册读处理器，和上面的注册写处理器差不多，少了栅栏逻辑
  */
 static int connSocketSetReadHandler(connection *conn, ConnectionCallbackFunc func) {
     if (func == conn->read_handler) return C_OK;
@@ -266,6 +295,8 @@ static const char *connSocketGetLastError(connection *conn) {
     return strerror(conn->last_errno);
 }
 
+/* 该函数就是 conn 相关事件注册到 eventLoop 中，事件运行的时候的回调函数
+ * 该函数其实就是一个分发器，根据执行的事件类型调用 conn 中不同事件类型的处理器*/
 static void connSocketEventHandler(struct aeEventLoop *el, int fd, void *clientData, int mask)
 {
     UNUSED(el);
@@ -300,12 +331,16 @@ static void connSocketEventHandler(struct aeEventLoop *el, int fd, void *clientD
      * This is useful when, for instance, we want to do things
      * in the beforeSleep() hook, like fsync'ing a file to disk,
      * before replying to a client. */
+    /* 这里其实和 ae.c 中处理文件事件的逻辑差不多，正常情况下先执行读再执行写
+     * 但是应用里面存在需要先写后读情况，所以会判断是否有 barrier 标志，如果有
+     * 就需要逆转读写操作的顺序*/
     int invert = conn->flags & CONN_FLAG_WRITE_BARRIER;
 
     int call_write = (mask & AE_WRITABLE) && conn->write_handler;
     int call_read = (mask & AE_READABLE) && conn->read_handler;
 
     /* Handle normal I/O flows */
+    /* 不需要逆转操作 */
     if (!invert && call_read) {
         if (!callHandler(conn, conn->read_handler)) return;
     }
@@ -315,6 +350,7 @@ static void connSocketEventHandler(struct aeEventLoop *el, int fd, void *clientD
     }
     /* If we have to invert the call, fire the readable event now
      * after the writable one. */
+    /* 这里是需要逆转读写操作顺序 */
     if (invert && call_read) {
         if (!callHandler(conn, conn->read_handler)) return;
     }
@@ -341,7 +377,7 @@ static int connSocketBlockingConnect(connection *conn, const char *addr, int por
 /* Connection-based versions of syncio.c functions.
  * NOTE: This should ideally be refactored out in favor of pure async work.
  */
-
+/* 下面三个函数是同步 IO 读写函数 */
 static ssize_t connSocketSyncWrite(connection *conn, char *ptr, ssize_t size, long long timeout) {
     return syncWrite(conn->fd, ptr, size, timeout);
 }
@@ -360,6 +396,7 @@ static int connSocketGetType(connection *conn) {
     return CONN_TYPE_SOCKET;
 }
 
+/* 函数指针和具体函数进行绑定 */
 ConnectionType CT_Socket = {
     .ae_handler = connSocketEventHandler,
     .close = connSocketClose,
@@ -379,6 +416,7 @@ ConnectionType CT_Socket = {
 };
 
 
+/* 获取 conn 包装的 socket 的配置信息 */
 int connGetSocketError(connection *conn) {
     int sockerr = 0;
     socklen_t errlen = sizeof(sockerr);
@@ -387,6 +425,8 @@ int connGetSocketError(connection *conn) {
         sockerr = errno;
     return sockerr;
 }
+
+/* 下面的方法就是对 anet.c 中的方法进行代理，anet.c 中封装了网络通信 socket 的底层接口 */
 
 int connPeerToString(connection *conn, char *ip, size_t ip_len, int *port) {
     return anetFdToString(conn ? conn->fd : -1, ip, ip_len, port, FD_TO_PEER_NAME);

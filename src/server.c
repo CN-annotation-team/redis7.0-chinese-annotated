@@ -2232,21 +2232,27 @@ void checkTcpBacklogSettings(void) {
 #endif
 }
 
+/* 关闭所有给定的 socket fd 以及其对应的文件事件 */
 void closeSocketListeners(socketFds *sfd) {
     int j;
 
     for (j = 0; j < sfd->count; j++) {
         if (sfd->fd[j] == -1) continue;
-
+        /* 删除该 fd 上的文件事件 */
         aeDeleteFileEvent(server.el, sfd->fd[j], AE_READABLE);
+        /* 关闭该 socket fd */
         close(sfd->fd[j]);
     }
-
+    /* 数量置0 */
     sfd->count = 0;
 }
 
 /* Create an event handler for accepting new connections in TCP or TLS domain sockets.
  * This works atomically for all socket fds */
+/* 对所有创建好的 socket fd 创建一个文件事件，添加可读标识，然后处理函数是 accept 处理函数，会执行
+ * accept 系统调用。
+ * 注：文件事件处理只有可读可写两种，由于添加了 AE_READABLE 标识， accept_handler 会被设置成该事件可读回调函数，只要全局事件处理器
+ * 启动，就会调用该 accept_handler */
 int createSocketAcceptHandler(socketFds *sfd, aeFileProc *accept_handler) {
     int j;
 
@@ -2278,25 +2284,31 @@ int createSocketAcceptHandler(socketFds *sfd, aeFileProc *accept_handler) {
  * impossible to bind, or no bind addresses were specified in the server
  * configuration but the function is not able to bind * for at least
  * one of the IPv4 or IPv6 protocols. */
+/* 使用给定端口创建并监听 socket */
 int listenToPort(int port, socketFds *sfd) {
     int j;
     char **bindaddr = server.bindaddr;
 
     /* If we have no bind address, we don't listen on a TCP socket */
+    /* 如果没有设置绑定地址，将不会进行 tcp socket 连接，直接返回 */
     if (server.bindaddr_count == 0) return C_OK;
 
     for (j = 0; j < server.bindaddr_count; j++) {
         char* addr = bindaddr[j];
         int optional = *addr == '-';
         if (optional) addr++;
+        /* 判断是 IPV4 还是 IPV6 */
         if (strchr(addr,':')) {
             /* Bind IPv6 address. */
             sfd->fd[sfd->count] = anetTcp6Server(server.neterr,port,addr,server.tcp_backlog);
         } else {
             /* Bind IPv4 address. */
+            /* 绑定 IPV4 地址，sfd->count 是目前有的 socket fd 数量，这里使用其作为下标，每次在 sfd->fd 数组最后添加 fd，
+             * 这里做了 socket,listen,bind 三个系统调用 */
             sfd->fd[sfd->count] = anetTcpServer(server.neterr,port,addr,server.tcp_backlog);
         }
         if (sfd->fd[sfd->count] == ANET_ERR) {
+            /* 如果创建 tcp socket 出错了 */
             int net_errno = errno;
             serverLog(LL_WARNING,
                 "Warning: Could not create server TCP listening socket %s:%d: %s",
@@ -2309,11 +2321,14 @@ int listenToPort(int port, socketFds *sfd) {
                 continue;
 
             /* Rollback successful listens before exiting */
+            /* 失败回滚，里面做了删除对应的文件事件和关闭 socket fd */
             closeSocketListeners(sfd);
             return C_ERR;
         }
         if (server.socket_mark_id > 0) anetSetSockMarkId(NULL, sfd->fd[sfd->count], server.socket_mark_id);
+        /* 设置 fd 非阻塞 */
         anetNonBlock(NULL,sfd->fd[sfd->count]);
+        /* 防止子进程无法关闭文件问题 */
         anetCloexec(sfd->fd[sfd->count]);
         sfd->count++;
     }
@@ -2455,6 +2470,7 @@ void initServer(void) {
     adjustOpenFilesLimit();
     const char *clk_msg = monotonicInit();
     serverLog(LL_NOTICE, "monotonic clock: %s", clk_msg);
+    /* 创建当前节点的全局事件处理器 */
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -2462,9 +2478,11 @@ void initServer(void) {
             strerror(errno));
         exit(1);
     }
+    /* 给 redis 的数据库分配空间 */
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
     /* Open the TCP listening socket for the user commands. */
+    /* 打开 TCP 并监听该 SOCKET 接收用户发送来的命令 */
     if (server.port != 0 &&
         listenToPort(server.port,&server.ipfd) == C_ERR) {
         /* Note: the following log text is matched by the test suite. */
@@ -2479,6 +2497,8 @@ void initServer(void) {
     }
 
     /* Open the listening Unix domain socket. */
+    /* 打开域套接字功能 （对于本地进程之间的通信，不再经过网络协议栈，直接是进程之间的数据传输，
+     * 正常本地 tcp 需要经过网络协议栈的传输层和网络层）*/
     if (server.unixsocket != NULL) {
         unlink(server.unixsocket); /* don't care if this fails */
         server.sofd = anetUnixServer(server.neterr,server.unixsocket,
@@ -2492,6 +2512,7 @@ void initServer(void) {
     }
 
     /* Abort if there are no listening sockets at all. */
+    /* 如果没有配置要监听的 socket ，退出服务 */
     if (server.ipfd.count == 0 && server.tlsfd.count == 0 && server.sofd < 0) {
         serverLog(LL_WARNING, "Configured to not listen anywhere, exiting.");
         exit(1);
@@ -2573,6 +2594,7 @@ void initServer(void) {
     /* Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
      * expired keys and so forth. */
+    /* 在全局事件循环器中创建一个定时任务，每毫秒执行一次 serverCron 函数（非常重要的函数） */
     if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
         serverPanic("Can't create event loop timers.");
         exit(1);
@@ -2580,12 +2602,15 @@ void initServer(void) {
 
     /* Create an event handler for accepting new connections in TCP and Unix
      * domain sockets. */
+    /* 上面已经对 tcp socket 进行了创建和监听，这里添加接收客户端连接功能，
+     * 注意：这里是添加了一个文件事件，真正执行 accept 调用是主函数最后启动事件循环处理器(即调用 aeMain 函数的时候才会 accept)*/
     if (createSocketAcceptHandler(&server.ipfd, acceptTcpHandler) != C_OK) {
         serverPanic("Unrecoverable error creating TCP socket accept handler.");
     }
     if (createSocketAcceptHandler(&server.tlsfd, acceptTLSHandler) != C_OK) {
         serverPanic("Unrecoverable error creating TLS socket accept handler.");
     }
+    /* unix 域套接字的 accept 处理器 */
     if (server.sofd > 0 && aeCreateFileEvent(server.el,server.sofd,AE_READABLE,
         acceptUnixHandler,NULL) == AE_ERR) serverPanic("Unrecoverable error creating server.sofd file event.");
 
@@ -2600,7 +2625,11 @@ void initServer(void) {
 
     /* Register before and after sleep handlers (note this needs to be done
      * before loading persistence since it is used by processEventsWhileBlocked. */
+    /* 给全局事件循环处理器添加前置处理器，
+     * 对于 socket fd 类型的文件事件，前后置处理器是针对 多路复用库 获取就绪事件，例如 select 的 select 调用，epoll 的 epoll_wait
+     * */
     aeSetBeforeSleepProc(server.el,beforeSleep);
+    /* 给全局事件循环处理器添加后置处理器 */
     aeSetAfterSleepProc(server.el,afterSleep);
 
     /* 32 bit instances are limited to 4GB of address space, so if there is
@@ -2630,8 +2659,11 @@ void initServer(void) {
  * Specifically, creation of threads due to a race bug in ld.so, in which
  * Thread Local Storage initialization collides with dlopen call.
  * see: https://sourceware.org/bugzilla/show_bug.cgi?id=19329 */
+/* 服务初始化的时候有些步骤需要到最后做（模块被加载之后） */
 void InitServerLast() {
+    /* 后台 IO 线程初始化，三个后台线程做三类事（具体见 bio.c ） */
     bioInit();
+    /* 初始化多线程做 IO 读 */
     initThreadedIO();
     set_jemalloc_bg_thread(server.jemalloc_bg_thread);
     server.initial_memory_usage = zmalloc_used_memory();
@@ -6835,8 +6867,11 @@ int main(int argc, char **argv) {
     /* We need to init sentinel right now as parsing the configuration file
      * in sentinel mode will have the effect of populating the sentinel
      * data structures with master nodes to monitor. */
+    /* 判断是否是以 sentinel 模式启动的节点 */
     if (server.sentinel_mode) {
+        /* 使用 sentinel 配置覆盖默认配置 */
         initSentinelConfig();
+        /* 初始化 sentinel 节点 */
         initSentinel();
     }
 
@@ -6967,6 +7002,7 @@ int main(int argc, char **argv) {
         moduleInitModulesSystemLast();
         moduleLoadFromQueue();
         ACLLoadUsersAtStartup();
+        /* 初始化服务最后需要做的一些事，多线程(bio, IO thread,jemalloc 后台线程)初始化 */
         InitServerLast();
         aofLoadManifestFromDisk();
         loadDataFromDisk();
@@ -7010,6 +7046,7 @@ int main(int argc, char **argv) {
     redisSetCpuAffinity(server.server_cpulist);
     setOOMScoreAdj(-1);
 
+    /* 启动全局的事件循环器，这里 redis 开始正式运行，可以接收请求 */
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;

@@ -61,6 +61,7 @@ static void anetSetError(char *err, const char *fmt, ...)
     va_end(ap);
 }
 
+/* 设置给定 fd 是否阻塞，调用 fcntl 在 fd 的标志位添加了 O_NONBLOCK 标识 */
 int anetSetBlock(char *err, int fd, int non_block) {
     int flags;
 
@@ -88,7 +89,7 @@ int anetSetBlock(char *err, int fd, int non_block) {
     }
     return ANET_OK;
 }
-
+/* 设置指定 fd 非阻塞 */
 int anetNonBlock(char *err, int fd) {
     return anetSetBlock(err,fd,1);
 }
@@ -100,6 +101,9 @@ int anetBlock(char *err, int fd) {
 /* Enable the FD_CLOEXEC on the given fd to avoid fd leaks. 
  * This function should be invoked for fd's on specific places 
  * where fork + execve system calls are called. */
+/* 打开 fd 的 FD_CLOEXEC 标志，防止 fd 泄露。
+ * FD_CLOEXEC 主要是用来解决子进程在执行 execve 的时候，它所持有的文件描述符被新程序替代，
+ * 导致无法关闭的问题 */
 int anetCloexec(int fd) {
     int r;
     int flags;
@@ -257,6 +261,7 @@ int anetResolve(char *err, char *host, char *ipbuf, size_t ipbuf_len,
     return ANET_OK;
 }
 
+/* 设置处于 timewait 状态的 socket 地址可重用，不用再等待 2msl 时间之后在使用 */
 static int anetSetReuseAddr(char *err, int fd) {
     int yes = 1;
     /* Make sure connection-intensive things like the redis benchmark
@@ -407,6 +412,7 @@ int anetUnixGenericConnect(char *err, const char *path, int flags)
     return s;
 }
 
+/* 监听端口 */
 static int anetListen(char *err, int s, struct sockaddr *sa, socklen_t len, int backlog) {
     if (bind(s,sa,len) == -1) {
         anetSetError(err, "bind: %s", strerror(errno));
@@ -431,15 +437,19 @@ static int anetV6Only(char *err, int s) {
     return ANET_OK;
 }
 
+/* 创建并监听一个 tcp socket */
 static int _anetTcpServer(char *err, int port, char *bindaddr, int af, int backlog)
 {
+    /* tcp socket 创建和监听通用写法 */
     int s = -1, rv;
     char _port[6];  /* strlen("65535") */
     struct addrinfo hints, *servinfo, *p;
 
     snprintf(_port,6,"%d",port);
     memset(&hints,0,sizeof(hints));
+    /* 设置协议族为 AF_INET 表示使用 IPV4 网络协议 */
     hints.ai_family = af;
+    /* 设置套接字类型为 SOCK_STREAM 表示是 tcp 协议 */
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;    /* No effect if bindaddr != NULL */
     if (bindaddr && !strcmp("*", bindaddr))
@@ -452,11 +462,14 @@ static int _anetTcpServer(char *err, int port, char *bindaddr, int af, int backl
         return ANET_ERR;
     }
     for (p = servinfo; p != NULL; p = p->ai_next) {
+        /* 创建 socket */
         if ((s = socket(p->ai_family,p->ai_socktype,p->ai_protocol)) == -1)
             continue;
 
         if (af == AF_INET6 && anetV6Only(err,s) == ANET_ERR) goto error;
+        /* 设置 timewait 状态的 socket 可重用 */
         if (anetSetReuseAddr(err,s) == ANET_ERR) goto error;
+        /* 绑定端口，并进行监听 */
         if (anetListen(err,s,p->ai_addr,p->ai_addrlen,backlog) == ANET_ERR) s = ANET_ERR;
         goto end;
     }
@@ -473,6 +486,7 @@ end:
     return s;
 }
 
+/* 创建 IPV4 tcp 服务 */
 int anetTcpServer(char *err, int port, char *bindaddr, int backlog)
 {
     return _anetTcpServer(err, port, bindaddr, AF_INET, backlog);
@@ -507,6 +521,7 @@ int anetUnixServer(char *err, char *path, mode_t perm, int backlog)
 
 /* Accept a connection and also make sure the socket is non-blocking, and CLOEXEC.
  * returns the new socket FD, or -1 on error. */
+/* 调用 accept 接受一个客户端连接，并设置该连接为非阻塞，和子进程执行 execve 时可以关闭文件描述符 */
 static int anetGenericAccept(char *err, int s, struct sockaddr *sa, socklen_t *len) {
     int fd;
     do {
@@ -515,6 +530,7 @@ static int anetGenericAccept(char *err, int s, struct sockaddr *sa, socklen_t *l
 #ifdef HAVE_ACCEPT4
         fd = accept4(s, sa, len,  SOCK_NONBLOCK | SOCK_CLOEXEC);
 #else
+        /* accept 调用，获取到一个客户端连接的 socket fd */
         fd = accept(s,sa,len);
 #endif
     } while(fd == -1 && errno == EINTR);
@@ -523,11 +539,13 @@ static int anetGenericAccept(char *err, int s, struct sockaddr *sa, socklen_t *l
         return ANET_ERR;
     }
 #ifndef HAVE_ACCEPT4
+    /* 设置 CLOEXEC */
     if (anetCloexec(fd) == -1) {
         anetSetError(err, "anetCloexec: %s", strerror(errno));
         close(fd);
         return ANET_ERR;
     }
+    /* 设置非阻塞 */
     if (anetNonBlock(err, fd) != ANET_OK) {
         close(fd);
         return ANET_ERR;
@@ -538,6 +556,7 @@ static int anetGenericAccept(char *err, int s, struct sockaddr *sa, socklen_t *l
 
 /* Accept a connection and also make sure the socket is non-blocking, and CLOEXEC.
  * returns the new socket FD, or -1 on error. */
+/* 接收一次 socket 连接，并打开该连接的 fd 标识的 O_NONBLOCK 和 FD_CLOEXEC 上面的方法已经讲解过其作用了  */
 int anetTcpAccept(char *err, int serversock, char *ip, size_t ip_len, int *port) {
     int fd;
     struct sockaddr_storage sa;
@@ -547,7 +566,9 @@ int anetTcpAccept(char *err, int serversock, char *ip, size_t ip_len, int *port)
 
     if (sa.ss_family == AF_INET) {
         struct sockaddr_in *s = (struct sockaddr_in *)&sa;
+        /* 这里对客户端 ip 进行赋值，使用 inet_ntop 进行网络地址转字符串，格式化一下 */
         if (ip) inet_ntop(AF_INET,(void*)&(s->sin_addr),ip,ip_len);
+        /* 这里对客户端端口进行赋值，使用 ntohs 大小端处理，n(network) to(->) hs(host 主机) */
         if (port) *port = ntohs(s->sin_port);
     } else {
         struct sockaddr_in6 *s = (struct sockaddr_in6 *)&sa;
