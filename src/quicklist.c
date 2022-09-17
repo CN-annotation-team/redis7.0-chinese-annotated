@@ -518,6 +518,10 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist,
  * Insert 'new_node' before 'old_node' if 'after' is 0.
  * Note: 'new_node' is *always* uncompressed, so if we assign it to
  *       head or tail, we do not need to uncompress it. */
+/* 若 'after' 的值为1，在 'old_node' 之后插入 'new_node'。
+ * 若 'after' 的值为0，在 'old_node' 之前插入 'new_node'。
+ * 注意： 'new_node' 始终是未压缩的，因此我们将其分配给
+ * 头或者尾节点，我们不需要去解压它。 */
 REDIS_STATIC void __quicklistInsertNode(quicklist *quicklist,
                                         quicklistNode *old_node,
                                         quicklistNode *new_node, int after) {
@@ -543,11 +547,13 @@ REDIS_STATIC void __quicklistInsertNode(quicklist *quicklist,
             quicklist->head = new_node;
     }
     /* If this insert creates the only element so far, initialize head/tail. */
+    /* 如果此次插入创建了唯一的元素，则初始化头/尾。 */
     if (quicklist->len == 0) {
         quicklist->head = quicklist->tail = new_node;
     }
 
     /* Update len first, so in __quicklistCompress we know exactly len */
+    /* 首先更新快速列表长度，以便在 __quicklistCompress 中我们能准确的知道长度 */
     quicklist->len++;
 
     if (old_node)
@@ -557,6 +563,7 @@ REDIS_STATIC void __quicklistInsertNode(quicklist *quicklist,
 }
 
 /* Wrappers for node inserting around existing node. */
+/* 在现有节点周围插入节点的多个包装函数。 */
 REDIS_STATIC void _quicklistInsertNodeBefore(quicklist *quicklist,
                                              quicklistNode *old_node,
                                              quicklistNode *new_node) {
