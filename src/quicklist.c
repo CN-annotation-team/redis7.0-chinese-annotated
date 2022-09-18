@@ -102,7 +102,7 @@ int quicklistisSetPackedThreshold(size_t sz) {
 
 /* listapck entry 占用的 header 和 backlen 的估算最大值。
  * 因为 qucklistNode 的最大长度实际上为 64k, 所以我们只要算出在插入64k的 listpack entry 的情况下,
- * 它的 header 和 backlen 总共占多大（header:5, baklen:3, 所以是8）。（感谢 pr #26 中 @sundb 的解释）
+ * 它的 header 和 backlen 总共占多大（header:5, backlen:3, 所以是8）。（感谢 pr #26 中 @sundb 的解释）
  * 尽管在最坏的情况下（sz < 64），我们将在一个快速列表节点中浪费6个字节，
  * 但当 listpack 超过大小限制的几个字节时（例如：16388）可以避免由于内部碎片造成的内存浪费 */
 #define SIZE_ESTIMATE_OVERHEAD 8
@@ -518,6 +518,10 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist,
  * Insert 'new_node' before 'old_node' if 'after' is 0.
  * Note: 'new_node' is *always* uncompressed, so if we assign it to
  *       head or tail, we do not need to uncompress it. */
+/* 若 'after' 的值为1，在 'old_node' 之后插入 'new_node'。
+ * 若 'after' 的值为0，在 'old_node' 之前插入 'new_node'。
+ * 注意： 'new_node' 始终是未压缩的，因此我们将其分配给
+ * 头或者尾节点，我们不需要去解压它。 */
 REDIS_STATIC void __quicklistInsertNode(quicklist *quicklist,
                                         quicklistNode *old_node,
                                         quicklistNode *new_node, int after) {
@@ -543,11 +547,13 @@ REDIS_STATIC void __quicklistInsertNode(quicklist *quicklist,
             quicklist->head = new_node;
     }
     /* If this insert creates the only element so far, initialize head/tail. */
+    /* 如果此次插入创建了唯一的元素，则初始化头/尾。 */
     if (quicklist->len == 0) {
         quicklist->head = quicklist->tail = new_node;
     }
 
     /* Update len first, so in __quicklistCompress we know exactly len */
+    /* 首先更新快速列表长度，以便在 __quicklistCompress 中我们能准确的知道长度 */
     quicklist->len++;
 
     if (old_node)
@@ -557,6 +563,7 @@ REDIS_STATIC void __quicklistInsertNode(quicklist *quicklist,
 }
 
 /* Wrappers for node inserting around existing node. */
+/* 在现有节点周围插入节点的多个包装函数。 */
 REDIS_STATIC void _quicklistInsertNodeBefore(quicklist *quicklist,
                                              quicklistNode *old_node,
                                              quicklistNode *new_node) {
@@ -602,11 +609,18 @@ REDIS_STATIC int _quicklistNodeAllowInsert(const quicklistNode *node,
      * below the lowest limit of 4k (see optimization_level).
      * Note: No need to check for overflow below since both `node->sz` and
      * `sz` are to be less than 1GB after the plain/large element check above. */
+    /* 用这个入口估计有多少字节会被添加到 listpack 中。
+     * 我们更加倾向于去高估，虽然糟糕的情况下会造成有几个字节
+     * 会低于4k（optimization_level）的最低限制。
+     * 注意：我们无需检查下面的溢出，因为 `node->sz` 和 `sz` 
+     * 在 plain/large 元素检查之后都会小于 1GB。 */
     size_t new_sz = node->sz + sz + SIZE_ESTIMATE_OVERHEAD;
     if (likely(_quicklistNodeSizeMeetsOptimizationRequirement(new_sz, fill)))
         return 1;
     /* when we return 1 above we know that the limit is a size limit (which is
      * safe, see comments next to optimization_level and SIZE_SAFETY_LIMIT) */
+    /* 当返回值为1时，我们知道这个限制是一个大小限制（这是安全的限制，
+     * 参考 optimization_level 和 SIZE_SAFETY_LIMIT 旁的注释）*/
     else if (!sizeMeetsSafetyLimit(new_sz))
         return 0;
     else if ((int)node->count < fill)
