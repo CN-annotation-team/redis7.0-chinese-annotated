@@ -678,6 +678,10 @@ static void __quicklistInsertPlainNode(quicklist *quicklist, quicklistNode *old_
  *
  * Returns 0 if used existing head.
  * Returns 1 if new head created. */
+/* 将一个新的 entry 添加到 quicklist 的 head 节点
+ *
+ * 如果使用现有的 head 返回0。
+ * 如果创建了一个新的 head 返回1。 */
 int quicklistPushHead(quicklist *quicklist, void *value, size_t sz) {
     quicklistNode *orig_head = quicklist->head;
 
@@ -706,6 +710,10 @@ int quicklistPushHead(quicklist *quicklist, void *value, size_t sz) {
  *
  * Returns 0 if used existing tail.
  * Returns 1 if new tail created. */
+/* 将一个新的 entry 添加到 quicklist 的 tail 节点
+ *
+ * 如果使用现有的 tail 返回0。
+ * 如果创建了一个新的 tail 返回1。 */
 int quicklistPushTail(quicklist *quicklist, void *value, size_t sz) {
     quicklistNode *orig_tail = quicklist->tail;
     if (unlikely(isLargeElement(sz))) {
@@ -732,6 +740,8 @@ int quicklistPushTail(quicklist *quicklist, void *value, size_t sz) {
 /* Create new node consisting of a pre-formed listpack.
  * Used for loading RDBs where entire listpacks have been stored
  * to be retrieved later. */
+/* 创建由预先形成的 listpack 组成的新节点。 
+ * 用于加载 Redis 数据库，其中存储了整个 listpack 以备稍后检查。 */
 void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
     quicklistNode *node = quicklistCreateNode();
 
@@ -747,6 +757,10 @@ void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
  * Used for loading RDBs where entire plain node has been stored
  * to be retrieved later.
  * data - the data to add (pointer becomes the responsibility of quicklist) */
+/* 创建一个由预先形成的 plain 节点组成的新节点。
+ * 用于加载 Redis 数据库，其中存储了所有的 plain 节点以备稍后检查。
+ * 
+ */
 void quicklistAppendPlainNode(quicklist *quicklist, unsigned char *data, size_t sz) {
     quicklistNode *node = quicklistCreateNode();
 
