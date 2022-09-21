@@ -758,7 +758,7 @@ void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
  * to be retrieved later.
  * data - the data to add (pointer becomes the responsibility of quicklist) */
 /* 创建一个由预先形成的 plain 节点组成的新节点。
- * 用于加载 Redis 数据库，其中存储了所有的 plain 节点以备稍后检查。
+ * 用于从存储了整个 plain 节点的 RDB 文件中进行快速列表节点的恢复。
  * data - 要添加的 data（data 指针成为 quicklist 的责任）
  */
 void quicklistAppendPlainNode(quicklist *quicklist, unsigned char *data, size_t sz) {
