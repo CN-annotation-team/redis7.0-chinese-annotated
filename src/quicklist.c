@@ -808,7 +808,7 @@ REDIS_STATIC void __quicklistDelNode(quicklist *quicklist,
     }
 
     /* Update len first, so in __quicklistCompress we know exactly len */
-        /* 首先更新快速列表长度，以便在 __quicklistCompress 中我们能准确的知道长度 */
+    /* 首先更新快速列表长度，以便在 __quicklistCompress 中我们能准确的知道长度 */
     quicklist->len--;
     quicklist->count -= node->count;
 
