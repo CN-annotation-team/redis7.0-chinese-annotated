@@ -789,7 +789,7 @@ REDIS_STATIC void __quicklistDelNode(quicklist *quicklist,
     if (bm) {
         bm->node = node->next;
         /* if the bookmark was to the last node, delete it. */
-        /* 如果书签指向的最后一个节点，将其删除。 */
+        /* 如果书签指向快速列表的最后一个节点，将书签删除。 */
         if (!bm->node)
             _quicklistBookmarkDelete(quicklist, bm);
     }
