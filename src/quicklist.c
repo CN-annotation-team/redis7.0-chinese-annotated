@@ -757,7 +757,7 @@ void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
  * Used for loading RDBs where entire plain node has been stored
  * to be retrieved later.
  * data - the data to add (pointer becomes the responsibility of quicklist) */
-/* 创建一个由预先形成的 plain 节点组成的新节点。
+/* 使用一个已经预先形成的 plain 节点来创建快速列表的新节点。
  * 用于从存储了整个 plain 节点的 RDB 文件中进行快速列表节点的恢复。
  * data - 要添加的 data（data 指针成为 quicklist 的责任）
  */
