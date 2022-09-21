@@ -759,7 +759,7 @@ void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
  * data - the data to add (pointer becomes the responsibility of quicklist) */
 /* 创建一个由预先形成的 plain 节点组成的新节点。
  * 用于加载 Redis 数据库，其中存储了所有的 plain 节点以备稍后检查。
- * 
+ * data - 要添加的 data（data 指针成为 quicklist 的责任）
  */
 void quicklistAppendPlainNode(quicklist *quicklist, unsigned char *data, size_t sz) {
     quicklistNode *node = quicklistCreateNode();
@@ -784,10 +784,12 @@ void quicklistAppendPlainNode(quicklist *quicklist, unsigned char *data, size_t 
 REDIS_STATIC void __quicklistDelNode(quicklist *quicklist,
                                      quicklistNode *node) {
     /* Update the bookmark if any */
+    /* 更新书签（如果有） */
     quicklistBookmark *bm = _quicklistBookmarkFindByNode(quicklist, node);
     if (bm) {
         bm->node = node->next;
         /* if the bookmark was to the last node, delete it. */
+        /* 如果书签指向的最后一个节点，将其删除 */
         if (!bm->node)
             _quicklistBookmarkDelete(quicklist, bm);
     }
@@ -806,11 +808,13 @@ REDIS_STATIC void __quicklistDelNode(quicklist *quicklist,
     }
 
     /* Update len first, so in __quicklistCompress we know exactly len */
+        /* 首先更新快速列表长度，以便在 __quicklistCompress 中我们能准确的知道长度 */
     quicklist->len--;
     quicklist->count -= node->count;
 
     /* If we deleted a node within our compress depth, we
      * now have compressed nodes needing to be decompressed. */
+    /* 如果在压缩深度内删除节点，现在需要解压缩已经压缩的节点*/
     __quicklistCompress(quicklist, NULL);
 
     zfree(node->entry);
