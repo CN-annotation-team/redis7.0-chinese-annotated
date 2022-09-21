@@ -814,7 +814,7 @@ REDIS_STATIC void __quicklistDelNode(quicklist *quicklist,
 
     /* If we deleted a node within our compress depth, we
      * now have compressed nodes needing to be decompressed. */
-    /* 如果在压缩深度内删除节点，现在需要解压缩已经压缩的节点。 */
+    /* 如果在压缩深度内删除了节点，现在需要将转移到压缩深度外的压缩节点进行解压。 */
     __quicklistCompress(quicklist, NULL);
 
     zfree(node->entry);
