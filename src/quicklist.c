@@ -740,7 +740,7 @@ int quicklistPushTail(quicklist *quicklist, void *value, size_t sz) {
 /* Create new node consisting of a pre-formed listpack.
  * Used for loading RDBs where entire listpacks have been stored
  * to be retrieved later. */
-/* 创建由预先形成的 listpack 组成的新节点。 
+/* 使用一个已经预先形成的 listpack 创建新的快速列表节点。 
  * 用于加载 Redis 数据库，其中存储了整个 listpack 以备稍后检查。 */
 void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
     quicklistNode *node = quicklistCreateNode();
