@@ -710,7 +710,7 @@ int quicklistPushHead(quicklist *quicklist, void *value, size_t sz) {
  *
  * Returns 0 if used existing tail.
  * Returns 1 if new tail created. */
-/* 将一个新的 entry 添加到 quicklist 的 tail 节点
+/* 将一个新的 entry 添加到 quicklist 的 tail 节点。
  *
  * 如果使用现有的 tail 返回0。
  * 如果创建了一个新的 tail 返回1。 */
@@ -789,7 +789,7 @@ REDIS_STATIC void __quicklistDelNode(quicklist *quicklist,
     if (bm) {
         bm->node = node->next;
         /* if the bookmark was to the last node, delete it. */
-        /* 如果书签指向的最后一个节点，将其删除 */
+        /* 如果书签指向的最后一个节点，将其删除。 */
         if (!bm->node)
             _quicklistBookmarkDelete(quicklist, bm);
     }
@@ -814,7 +814,7 @@ REDIS_STATIC void __quicklistDelNode(quicklist *quicklist,
 
     /* If we deleted a node within our compress depth, we
      * now have compressed nodes needing to be decompressed. */
-    /* 如果在压缩深度内删除节点，现在需要解压缩已经压缩的节点*/
+    /* 如果在压缩深度内删除节点，现在需要解压缩已经压缩的节点。 */
     __quicklistCompress(quicklist, NULL);
 
     zfree(node->entry);
