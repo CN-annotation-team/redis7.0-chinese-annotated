@@ -56,15 +56,20 @@
 #include "server.h"
 
 /* ------------------------- Buffer I/O implementation ----------------------- */
+/* buffer RIO 的功能 */
 
 /* Returns 1 or 0 for success/failure. */
+/* buffer 类型的 RIO 写入操作，就是 sds 字符串操作 */
 static size_t rioBufferWrite(rio *r, const void *buf, size_t len) {
+    /* 将 buf 写入 rio 的 buffer 缓冲区中 */
     r->io.buffer.ptr = sdscatlen(r->io.buffer.ptr,(char*)buf,len);
+    /* 偏移量增加 */
     r->io.buffer.pos += len;
     return 1;
 }
 
 /* Returns 1 or 0 for success/failure. */
+/* buffer RIO 读取操作，和写逻辑类似 */
 static size_t rioBufferRead(rio *r, void *buf, size_t len) {
     if (sdslen(r->io.buffer.ptr)-r->io.buffer.pos < len)
         return 0; /* not enough buffer to return len bytes. */
@@ -74,22 +79,27 @@ static size_t rioBufferRead(rio *r, void *buf, size_t len) {
 }
 
 /* Returns read/write position in buffer. */
+/* 获取 buffer RIO 的读写偏移量 */
 static off_t rioBufferTell(rio *r) {
     return r->io.buffer.pos;
 }
 
 /* Flushes any buffer to target device if applicable. Returns 1 on success
  * and 0 on failures. */
+/* buffer 存在于内存中，没有 flush ,不做任何操作 */
 static int rioBufferFlush(rio *r) {
     UNUSED(r);
     return 1; /* Nothing to do, our write just appends to the buffer. */
 }
 
+/* 定义了一个 rio 结构的实体 */
 static const rio rioBufferIO = {
+    /* 四个方法 */
     rioBufferRead,
     rioBufferWrite,
     rioBufferTell,
     rioBufferFlush,
+    /* buffer 无需校验 */
     NULL,           /* update_checksum */
     0,              /* current checksum */
     0,              /* flags */
@@ -98,6 +108,7 @@ static const rio rioBufferIO = {
     { { NULL, 0 } } /* union for io-specific vars */
 };
 
+/* 初始化 buffer rio */
 void rioInitWithBuffer(rio *r, sds s) {
     *r = rioBufferIO;
     r->io.buffer.ptr = s;
@@ -105,24 +116,38 @@ void rioInitWithBuffer(rio *r, sds s) {
 }
 
 /* --------------------- Stdio file pointer implementation ------------------- */
+/* file rio 功能 */
 
 /* Returns 1 or 0 for success/failure. */
+/* file rio 写数据 */
 static size_t rioFileWrite(rio *r, const void *buf, size_t len) {
     if (!r->io.file.autosync) return fwrite(buf,len,1,r->io.file.fp);
 
+    /* 记录已经写入的数据的大小 */
     size_t nwritten = 0;
     /* Incrementally write data to the file, avoid a single write larger than
      * the autosync threshold (so that the kernel's buffer cache never has too
      * many dirty pages at once). */
+    /* 增量写数据到文件中，避免单次写的数据量大于 autosync 的阈值
+     * 注： 为了避免内核缓冲区一次出现太多的脏页 */
     while (len != nwritten) {
         serverAssert(r->io.file.autosync > r->io.file.buffered);
+        /* 计算 autosync 阈值（可以看做一个中转空间的大小，如果达到这个值表示中转空间放满了，需要直接刷到磁盘，清空中转空间）还剩下多少 */
         size_t nalign = (size_t)(r->io.file.autosync - r->io.file.buffered);
+        /* 计算要写入文件的字节数，判断规则
+         * 如果 len - nwritten (即 buf 中剩下要写的字节数) < nalign (即 autosync 剩下的字节数)
+         * 这种的情况表示 autosync 阈值剩下的空间可以存放下 buf 中要写入的字节数，直接一次写入，否则只能
+         * 写入 autosync 剩下空间的字节数*/
         size_t towrite = nalign > len-nwritten ? len-nwritten : nalign;
 
+        /* 将被给的 buf 的 nwritten(该位置之前的数据是已经写入文件的数据) ~ towrite(要写入的数据量) 之间的数据写入文件 */
         if (fwrite((char*)buf+nwritten,towrite,1,r->io.file.fp) == 0) return 0;
+        /* 已写入文件的数据量增加加 */
         nwritten += towrite;
+        /* 从上次 fsync 到现在写入的字节数大小增加 */
         r->io.file.buffered += towrite;
 
+        /* 如果从上次 fsync 之后写入的字节数达到了 autosync 阈值，则自动将文件缓冲区刷到磁盘 */
         if (r->io.file.buffered >= r->io.file.autosync) {
             fflush(r->io.file.fp);
 
@@ -157,26 +182,31 @@ static size_t rioFileWrite(rio *r, const void *buf, size_t len) {
 }
 
 /* Returns 1 or 0 for success/failure. */
+/* 将文件读到 buf 中 */
 static size_t rioFileRead(rio *r, void *buf, size_t len) {
     return fread(buf,len,1,r->io.file.fp);
 }
 
 /* Returns read/write position in file. */
+/* 文件大小 */
 static off_t rioFileTell(rio *r) {
     return ftello(r->io.file.fp);
 }
 
 /* Flushes any buffer to target device if applicable. Returns 1 on success
  * and 0 on failures. */
+/* flush 刷盘操作 */
 static int rioFileFlush(rio *r) {
     return (fflush(r->io.file.fp) == 0) ? 1 : 0;
 }
 
 static const rio rioFileIO = {
+    /* file rio 的四个操作函数*/
     rioFileRead,
     rioFileWrite,
     rioFileTell,
     rioFileFlush,
+    /* 文件读取，无需校验 */
     NULL,           /* update_checksum */
     0,              /* current checksum */
     0,              /* flags */
@@ -185,6 +215,7 @@ static const rio rioFileIO = {
     { { NULL, 0 } } /* union for io-specific vars */
 };
 
+/* 初始化一个 file rio */
 void rioInitWithFile(rio *r, FILE *fp) {
     *r = rioFileIO;
     r->io.file.fp = fp;
@@ -197,7 +228,8 @@ void rioInitWithFile(rio *r, FILE *fp) {
  * the connection to the memory via rdbLoadRio(), thus this implementation
  * only implements reading from a connection that is, normally,
  * just a socket. */
-
+/* connection rio 功能 */
+/* connection rio 只提供读操作，无写错误，不做事 */
 static size_t rioConnWrite(rio *r, const void *buf, size_t len) {
     UNUSED(r);
     UNUSED(buf);
@@ -206,11 +238,14 @@ static size_t rioConnWrite(rio *r, const void *buf, size_t len) {
 }
 
 /* Returns 1 or 0 for success/failure. */
+/* connection rio 读操作 */
 static size_t rioConnRead(rio *r, void *buf, size_t len) {
+    /* 获取 connection 结构体中可读的数据的起始位置 */
     size_t avail = sdslen(r->io.conn.buf)-r->io.conn.pos;
 
     /* If the buffer is too small for the entire request: realloc. */
     if (sdslen(r->io.conn.buf) + sdsavail(r->io.conn.buf) < len)
+        /* 将 connection 的 buf 空间调整到 len 大小 */
         r->io.conn.buf = sdsMakeRoomFor(r->io.conn.buf, len - sdslen(r->io.conn.buf));
 
     /* If the remaining unused buffer is not large enough: memmove so that we
@@ -241,6 +276,7 @@ static size_t rioConnRead(rio *r, void *buf, size_t len) {
         {
             toread = r->io.conn.read_limit - r->io.conn.read_so_far - buffered;
         }
+        /* 这里调用了 connection 的 read 方法 */
         int retval = connRead(r->io.conn.conn,
                           (char*)r->io.conn.buf + sdslen(r->io.conn.buf),
                           toread);
@@ -253,7 +289,7 @@ static size_t rioConnRead(rio *r, void *buf, size_t len) {
         }
         sdsIncrLen(r->io.conn.buf, retval);
     }
-
+    /* RIO 中 connection 的 buf 从 pos 位置读 len 个数据到给定的 buf 中  */
     memcpy(buf, (char*)r->io.conn.buf + r->io.conn.pos, len);
     r->io.conn.read_so_far += len;
     r->io.conn.pos += len;
@@ -261,12 +297,14 @@ static size_t rioConnRead(rio *r, void *buf, size_t len) {
 }
 
 /* Returns read/write position in file. */
+/* 获取 connection 已经读取的数据大小 */
 static off_t rioConnTell(rio *r) {
     return r->io.conn.read_so_far;
 }
 
 /* Flushes any buffer to target device if applicable. Returns 1 on success
  * and 0 on failures. */
+/* 没有写操作，直接写空数据 */
 static int rioConnFlush(rio *r) {
     /* Our flush is implemented by the write method, that recognizes a
      * buffer set to NULL with a count of zero as a flush request. */
@@ -288,6 +326,7 @@ static const rio rioConnIO = {
 
 /* Create an RIO that implements a buffered read from an fd
  * read_limit argument stops buffering when the reaching the limit. */
+/* 初始化一个 connection rio */
 void rioInitWithConn(rio *r, connection *conn, size_t read_limit) {
     *r = rioConnIO;
     r->io.conn.conn = conn;
@@ -300,6 +339,7 @@ void rioInitWithConn(rio *r, connection *conn, size_t read_limit) {
 
 /* Release the RIO stream. Optionally returns the unread buffered data
  * when the SDS pointer 'remaining' is passed. */
+/* 释放 rio connection 资源 */
 void rioFreeConn(rio *r, sds *remaining) {
     if (remaining && (size_t)r->io.conn.pos < sdslen(r->io.conn.buf)) {
         if (r->io.conn.pos > 0) sdsrange(r->io.conn.buf, r->io.conn.pos, -1);
@@ -317,14 +357,20 @@ void rioFreeConn(rio *r, sds *remaining) {
  * (diskless replication option).
  * It only implements writes. */
 
+/* fd rio 功能 */
+
 /* Returns 1 or 0 for success/failure.
  *
  * When buf is NULL and len is 0, the function performs a flush operation
  * if there is some pending buffer, so this function is also used in order
  * to implement rioFdFlush(). */
+/* fd rio 写操作，
+ * 如果提供的 buf 是 NULL 且 len 为0，当 fd 存在内核缓冲区，会执行 flush 操作
+ * 所以 fd rio 的 flush 方法也是调用该方法，可以看到 rioFdFlush 的参数 buf 为 NULL, len 为0*/
 static size_t rioFdWrite(rio *r, const void *buf, size_t len) {
     ssize_t retval;
     unsigned char *p = (unsigned char*) buf;
+    /* buf == NULL and len == 0 表示需要 flush */
     int doflush = (buf == NULL && len == 0);
 
     /* For small writes, we rather keep the data in user-space buffer, and flush
@@ -372,6 +418,7 @@ static size_t rioFdWrite(rio *r, const void *buf, size_t len) {
 }
 
 /* Returns 1 or 0 for success/failure. */
+/* rio fd 没有读操作 */
 static size_t rioFdRead(rio *r, void *buf, size_t len) {
     UNUSED(r);
     UNUSED(buf);
@@ -380,12 +427,14 @@ static size_t rioFdRead(rio *r, void *buf, size_t len) {
 }
 
 /* Returns read/write position in file. */
+/* 获取写位置 */
 static off_t rioFdTell(rio *r) {
     return r->io.fd.pos;
 }
 
 /* Flushes any buffer to target device if applicable. Returns 1 on success
  * and 0 on failures. */
+/* flush 调用器 write */
 static int rioFdFlush(rio *r) {
     /* Our flush is implemented by the write method, that recognizes a
      * buffer set to NULL with a count of zero as a flush request. */
