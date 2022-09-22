@@ -710,10 +710,11 @@ int quicklistPushHead(quicklist *quicklist, void *value, size_t sz) {
  *
  * Returns 0 if used existing tail.
  * Returns 1 if new tail created. */
-/* 将一个新的 entry 添加到 quicklist 的 tail 节点。
+/* 往 quicklist 尾部插入一个新 entry
+ * 即将一个新的 entry 添加到 quicklist 的 tail 节点。
  *
- * 如果使用现有的 tail 返回0。
- * 如果创建了一个新的 tail 返回1。 */
+ * 如果是在现有的 tail 节点插入 entry，返回 0。
+ * 如果创建了一个新的 tail 节点插入 entry，返回 1。 */
 int quicklistPushTail(quicklist *quicklist, void *value, size_t sz) {
     quicklistNode *orig_tail = quicklist->tail;
     if (unlikely(isLargeElement(sz))) {
