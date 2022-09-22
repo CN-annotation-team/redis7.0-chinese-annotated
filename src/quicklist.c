@@ -759,7 +759,7 @@ void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
  * data - the data to add (pointer becomes the responsibility of quicklist) */
 /* 使用一个已经预先形成的 plain 节点来创建快速列表的新节点。
  * 用于从存储了整个 plain 节点的 RDB 文件中进行快速列表节点的恢复。
- * data - 要添加的 data（data 指针成为 quicklist 的责任）
+ * data - 要添加的新节点数据（新节点的 entry 即为 data）
  */
 void quicklistAppendPlainNode(quicklist *quicklist, unsigned char *data, size_t sz) {
     quicklistNode *node = quicklistCreateNode();
