@@ -678,10 +678,11 @@ static void __quicklistInsertPlainNode(quicklist *quicklist, quicklistNode *old_
  *
  * Returns 0 if used existing head.
  * Returns 1 if new head created. */
-/* 将一个新的 entry 添加到 quicklist 的 head 节点
+/* 往 quicklist 头部插入一个新 entry
+ * 即将一个新的 entry 添加到 quicklist 的 head 节点
  *
- * 如果使用现有的 head 返回0。
- * 如果创建了一个新的 head 返回1。 */
+ * 如果是在现有的 head 节点插入 entry，返回 0。
+ * 如果创建了一个新的 head 节点插入 entry，返回 1。 */
 int quicklistPushHead(quicklist *quicklist, void *value, size_t sz) {
     quicklistNode *orig_head = quicklist->head;
 
