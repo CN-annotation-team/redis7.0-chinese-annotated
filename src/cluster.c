@@ -1279,6 +1279,7 @@ list *clusterGetNodesServingMySlots(clusterNode *node) {
     list *nodes_for_slot = listCreate();
     /* 获取当前节点的主节点，如果自己是主就直接指定自己 */
     clusterNode *my_primary = nodeIsMaster(node) ? node : node->slaveof;
+
     /* This function is only valid for fully connected nodes, so
      * they should have a known primary. */
     serverAssert(my_primary);
