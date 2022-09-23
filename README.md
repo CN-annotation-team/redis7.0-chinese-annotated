@@ -43,7 +43,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [rio.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/rio.c) | 四种 redis IO 类型操作的实现  | 过半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/9/14
+更新日期：2022/9/23
 
 
 ## 关于提交 PR 的方法：
