@@ -129,7 +129,7 @@ static size_t rioFileWrite(rio *r, const void *buf, size_t len) {
      * the autosync threshold (so that the kernel's buffer cache never has too
      * many dirty pages at once). */
     /* 增量写数据到文件中，避免单次写的数据量大于 autosync 的阈值
-     * 注： 为了避免内核缓冲区一次出现太多的脏页 */
+     * 注：为了避免内核缓冲区一次出现太多的脏页 */
     while (len != nwritten) {
         serverAssert(r->io.file.autosync > r->io.file.buffered);
         /* 计算 autosync 阈值（可以看做一个中转空间的大小，如果达到这个值表示中转空间放满了，需要直接刷到磁盘，清空中转空间）还剩下多少 */
@@ -137,7 +137,7 @@ static size_t rioFileWrite(rio *r, const void *buf, size_t len) {
         /* 计算要写入文件的字节数，判断规则
          * 如果 len - nwritten (即 buf 中剩下要写的字节数) < nalign (即 autosync 剩下的字节数)
          * 这种的情况表示 autosync 阈值剩下的空间可以存放下 buf 中要写入的字节数，直接一次写入，否则只能
-         * 写入 autosync 剩下空间的字节数*/
+         * 写入 autosync 剩下空间的字节数 */
         size_t towrite = nalign > len-nwritten ? len-nwritten : nalign;
 
         /* 将被给的 buf 的 nwritten(该位置之前的数据是已经写入文件的数据) ~ towrite(要写入的数据量) 之间的数据写入文件 */
@@ -201,7 +201,7 @@ static int rioFileFlush(rio *r) {
 }
 
 static const rio rioFileIO = {
-    /* file rio 的四个操作函数*/
+    /* file rio 的四个操作函数 */
     rioFileRead,
     rioFileWrite,
     rioFileTell,
@@ -289,7 +289,7 @@ static size_t rioConnRead(rio *r, void *buf, size_t len) {
         }
         sdsIncrLen(r->io.conn.buf, retval);
     }
-    /* RIO 中 connection 的 buf 从 pos 位置读 len 个数据到给定的 buf 中  */
+    /* RIO 中 connection 的 buf 从 pos 位置读 len 个数据到给定的 buf 中 */
     memcpy(buf, (char*)r->io.conn.buf + r->io.conn.pos, len);
     r->io.conn.read_so_far += len;
     r->io.conn.pos += len;
@@ -366,7 +366,7 @@ void rioFreeConn(rio *r, sds *remaining) {
  * to implement rioFdFlush(). */
 /* fd rio 写操作，
  * 如果提供的 buf 是 NULL 且 len 为0，当 fd 存在内核缓冲区，会执行 flush 操作
- * 所以 fd rio 的 flush 方法也是调用该方法，可以看到 rioFdFlush 的参数 buf 为 NULL, len 为0*/
+ * 所以 fd rio 的 flush 方法也是调用该方法，可以看到 rioFdFlush 的参数 buf 为 NULL, len 为0 */
 static size_t rioFdWrite(rio *r, const void *buf, size_t len) {
     ssize_t retval;
     unsigned char *p = (unsigned char*) buf;
