@@ -314,8 +314,10 @@ int clusterLoadConfig(char *filename) {
         if (atoi(argv[4])) n->ping_sent = mstime();
         if (atoi(argv[5])) n->pong_received = mstime();
 
-        /* Set configEpoch for this node. */
-        n->configEpoch = strtoull(argv[6],NULL,10);
+        /* Set configEpoch for this node.
+         * If the node is a replica, set its config epoch to 0.
+         * If it's a primary, load the config epoch from the configuration file. */
+        n->configEpoch = (nodeIsSlave(n) && n->slaveof) ? 0 : strtoull(argv[6],NULL,10);
 
         /* Populate hash slots served by this instance. */
         for (j = 8; j < argc; j++) {
@@ -464,8 +466,8 @@ void clusterSaveConfigOrDie(int do_fsync) {
     }
 }
 
-/* Lock the cluster config using flock(), and leaks the file descriptor used to
- * acquire the lock so that the file will be locked forever.
+/* Lock the cluster config using flock(), and retain the file descriptor used to
+ * acquire the lock so that the file will be locked as long as the process is up.
  *
  * This works because we always update nodes.conf with a new version
  * in-place, reopening the file, and writing to it in place (later adjusting
@@ -512,8 +514,8 @@ int clusterLockConfig(char *filename) {
         close(fd);
         return C_ERR;
     }
-    /* Lock acquired: leak the 'fd' by not closing it, so that we'll retain the
-     * lock to the file as long as the process exists.
+    /* Lock acquired: leak the 'fd' by not closing it until shutdown time, so that
+     * we'll retain the lock to the file as long as the process exists.
      *
      * After fork, the child process will get the fd opened by the parent process,
      * we need save `fd` to `cluster_config_file_lock_fd`, so that in redisFork(),
@@ -1015,6 +1017,7 @@ clusterNode *createClusterNode(char *nodename, int flags) {
     node->numslaves = 0;
     node->slaves = NULL;
     node->slaveof = NULL;
+    node->last_in_ping_gossip = 0;
     node->ping_sent = node->pong_received = 0;
     node->data_received = 0;
     node->fail_time = 0;
@@ -2070,7 +2073,7 @@ int writeHostnamePingExt(clusterMsgPingExt **cursor) {
     uint32_t extension_size = getHostnamePingExtSize();
 
     /* Move the write cursor */
-    (*cursor)->type = CLUSTERMSG_EXT_TYPE_HOSTNAME;
+    (*cursor)->type = htons(CLUSTERMSG_EXT_TYPE_HOSTNAME);
     (*cursor)->length = htonl(extension_size);
     /* Make sure the string is NULL terminated by adding 1 */
     *cursor = (clusterMsgPingExt *) (ext->hostname + EIGHT_BYTE_ALIGN(sdslen(myself->hostname) + 1));
@@ -2990,18 +2993,6 @@ void clusterBuildMessageHdr(clusterMsg *hdr, int type) {
      * totlen field is up to the caller. */
 }
 
-/* Return non zero if the node is already present in the gossip section of the
- * message pointed by 'hdr' and having 'count' gossip entries. Otherwise
- * zero is returned. Helper for clusterSendPing(). */
-int clusterNodeIsInGossipSection(clusterMsg *hdr, int count, clusterNode *n) {
-    int j;
-    for (j = 0; j < count; j++) {
-        if (memcmp(hdr->data.ping.gossip[j].nodename,n->name,
-                CLUSTER_NAMELEN) == 0) break;
-    }
-    return j != count;
-}
-
 /* Set the i-th entry of the gossip section in the message pointed by 'hdr'
  * to the info of the specified node 'n'. */
 void clusterSetGossipEntry(clusterMsg *hdr, int i, clusterNode *n) {
@@ -3022,6 +3013,8 @@ void clusterSetGossipEntry(clusterMsg *hdr, int i, clusterNode *n) {
  * gossip information. */
 /* 发送一个 PING 或者 PONG 包到指定的节点，确保添加了足够的 gossip 信息 */
 void clusterSendPing(clusterLink *link, int type) {
+    static unsigned long long cluster_pings_sent = 0;
+    cluster_pings_sent++;
     unsigned char *buf;
     clusterMsg *hdr;
     int gossipcount = 0; /* Number of gossip sections added so far. */
@@ -3072,7 +3065,7 @@ void clusterSendPing(clusterLink *link, int type) {
      * to put inside the packet. */
     estlen = sizeof(clusterMsg) - sizeof(union clusterMsgData);
     estlen += (sizeof(clusterMsgDataGossip)*(wanted + pfail_wanted));
-    estlen += sizeof(clusterMsgPingExt) + getHostnamePingExtSize();
+    estlen += getHostnamePingExtSize();
 
     /* Note: clusterBuildMessageHdr() expects the buffer to be always at least
      * sizeof(clusterMsg) or more. */
@@ -3111,10 +3104,11 @@ void clusterSendPing(clusterLink *link, int type) {
         }
 
         /* Do not add a node we already have. */
-        if (clusterNodeIsInGossipSection(hdr,gossipcount,this)) continue;
+        if (this->last_in_ping_gossip == cluster_pings_sent) continue;
 
         /* Add it */
         clusterSetGossipEntry(hdr,gossipcount,this);
+        this->last_in_ping_gossip = cluster_pings_sent;
         freshnodes--;
         gossipcount++;
     }
@@ -3131,7 +3125,6 @@ void clusterSendPing(clusterLink *link, int type) {
             if (node->flags & CLUSTER_NODE_NOADDR) continue;
             if (!(node->flags & CLUSTER_NODE_PFAIL)) continue;
             clusterSetGossipEntry(hdr,gossipcount,node);
-            freshnodes--;
             gossipcount++;
             /* We take the count of the slots we allocated, since the
              * PFAIL stats may not match perfectly with the current number
@@ -5482,7 +5475,7 @@ void clusterReplyShards(client *c) {
      * information and an empty slots array. */
     while((de = dictNext(di)) != NULL) {
         clusterNode *n = dictGetVal(de);
-        if (nodeIsSlave(n)) {
+        if (!nodeIsMaster(n)) {
             /* You can force a replica to own slots, even though it'll get reverted,
              * so freeing the slot pair here just in case. */
             clusterFreeNodesSlotsInfo(n);
@@ -6476,7 +6469,7 @@ migrateCachedSocket* migrateGetSocket(client *c, robj *host, robj *port, long ti
 
     /* Create the socket */
     conn = server.tls_cluster ? connCreateTLS() : connCreateSocket();
-    if (connBlockingConnect(conn, c->argv[1]->ptr, atoi(c->argv[2]->ptr), timeout)
+    if (connBlockingConnect(conn, host->ptr, atoi(port->ptr), timeout)
             != C_OK) {
         addReplyError(c,"-IOERR error or timeout connecting to the client");
         connClose(conn);
@@ -6955,7 +6948,8 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
     int multiple_keys = 0;
     multiState *ms, _ms;
     multiCmd mc;
-    int i, slot = 0, migrating_slot = 0, importing_slot = 0, missing_keys = 0;
+    int i, slot = 0, migrating_slot = 0, importing_slot = 0, missing_keys = 0,
+        existing_keys = 0;
 
     /* Allow any key to be set if a module disabled cluster redirections. */
     if (server.cluster_module_flags & CLUSTER_MODULE_FLAG_NO_REDIRECTION)
@@ -7067,10 +7061,10 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
              * node until the migration completes with CLUSTER SETSLOT <slot>
              * NODE <node-id>. */
             int flags = LOOKUP_NOTOUCH | LOOKUP_NOSTATS | LOOKUP_NONOTIFY;
-            if ((migrating_slot || importing_slot) && !is_pubsubshard &&
-                lookupKeyReadWithFlags(&server.db[0], thiskey, flags) == NULL)
+            if ((migrating_slot || importing_slot) && !is_pubsubshard)
             {
-                missing_keys++;
+                if (lookupKeyReadWithFlags(&server.db[0], thiskey, flags) == NULL) missing_keys++;
+                else existing_keys++;
             }
         }
         getKeysFreeResult(&result);
@@ -7114,10 +7108,16 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
         return myself;
 
     /* If we don't have all the keys and we are migrating the slot, send
-     * an ASK redirection. */
+     * an ASK redirection or TRYAGAIN. */
     if (migrating_slot && missing_keys) {
-        if (error_code) *error_code = CLUSTER_REDIR_ASK;
-        return server.cluster->migrating_slots_to[slot];
+        /* If we have keys but we don't have all keys, we return TRYAGAIN */
+        if (existing_keys) {
+            if (error_code) *error_code = CLUSTER_REDIR_UNSTABLE;
+            return NULL;
+        } else {
+            if (error_code) *error_code = CLUSTER_REDIR_ASK;
+            return server.cluster->migrating_slots_to[slot];
+        }
     }
 
     /* If we are receiving the slot, and the client correctly flagged the

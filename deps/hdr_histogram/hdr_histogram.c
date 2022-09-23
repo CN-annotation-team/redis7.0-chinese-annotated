@@ -165,16 +165,6 @@ static int32_t count_leading_zeros_64(int64_t value)
 #endif
 }
 
-static int64_t get_count_at_index_given_bucket_base_idx(const struct hdr_histogram* h, int32_t bucket_base_idx, int32_t sub_bucket_idx)
-{
-    return h->counts[(bucket_base_idx + sub_bucket_idx) - h->sub_bucket_half_count];
-}
-
-static int32_t get_bucket_base_index(const struct hdr_histogram* h, int32_t bucket_index)
-{
-    return (bucket_index + 1) << h->sub_bucket_half_count_magnitude;
-}
-
 static int32_t get_bucket_index(const struct hdr_histogram* h, int64_t value)
 {
     int32_t pow2ceiling = 64 - count_leading_zeros_64(value | h->sub_bucket_mask); /* smallest power of 2 containing value */
@@ -690,30 +680,6 @@ static int64_t get_value_from_idx_up_to_count(const struct hdr_histogram* h, int
         }
     }
 
-    struct hdr_iter iter;
-    const int64_t total_count = h->total_count;
-    // to avoid allocations we use the values array for intermediate computation
-    // i.e. to store the expected cumulative count at each percentile
-    for (size_t i = 0; i < length; i++)
-    {
-        const double requested_percentile = percentiles[i] < 100.0 ? percentiles[i] : 100.0;
-        const int64_t count_at_percentile =
-        (int64_t) (((requested_percentile / 100) * total_count) + 0.5);
-        values[i] = count_at_percentile > 1 ? count_at_percentile : 1;
-    }
-
-    hdr_iter_init(&iter, h);
-    int64_t total = 0;
-    size_t at_pos = 0;
-    while (hdr_iter_next(&iter) && at_pos < length)
-    {
-        total += iter.count;
-        while (at_pos < length && total >= values[at_pos])
-        {
-            values[at_pos] = highest_equivalent_value(h, iter.value);
-            at_pos++;
-        }
-    }
     return 0;
 }
 
