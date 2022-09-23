@@ -365,8 +365,8 @@ void rioFreeConn(rio *r, sds *remaining) {
  * if there is some pending buffer, so this function is also used in order
  * to implement rioFdFlush(). */
 /* fd rio 写操作，
- * 如果提供的 buf 是 NULL 且 len 为0，当 fd 存在内核缓冲区，会执行 flush 操作
- * 所以 fd rio 的 flush 方法也是调用该方法，可以看到 rioFdFlush 的参数 buf 为 NULL, len 为0 */
+ * 如果提供的 buf 是 NULL 且 len 为 0，当 fd 存在内核缓冲区，会执行 flush 操作
+ * 所以 fd rio 的 flush 方法也是调用该方法，可以看到 rioFdFlush 的参数 buf 为 NULL, len 为 0 */
 static size_t rioFdWrite(rio *r, const void *buf, size_t len) {
     ssize_t retval;
     unsigned char *p = (unsigned char*) buf;
