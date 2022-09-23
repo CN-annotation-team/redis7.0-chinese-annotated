@@ -1275,7 +1275,6 @@ clusterNode *clusterLookupNode(const char *name, int length) {
 }
 
 /* Get all the nodes serving the same slots as the given node. */
-/* 获取所有和当前节点管理同样槽位的节点 */
 list *clusterGetNodesServingMySlots(clusterNode *node) {
     list *nodes_for_slot = listCreate();
     /* 获取当前节点的主节点，如果自己是主就直接指定自己 */
@@ -1283,7 +1282,6 @@ list *clusterGetNodesServingMySlots(clusterNode *node) {
     /* This function is only valid for fully connected nodes, so
      * they should have a known primary. */
     serverAssert(my_primary);
-    /* 把主节点加入列表中 */
     listAddNodeTail(nodes_for_slot, my_primary);
     /* 把主节点的所有从节点加入列表中 */
     for (int i=0; i < my_primary->numslaves; i++) {
