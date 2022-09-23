@@ -678,6 +678,11 @@ static void __quicklistInsertPlainNode(quicklist *quicklist, quicklistNode *old_
  *
  * Returns 0 if used existing head.
  * Returns 1 if new head created. */
+/* 往 quicklist 头部插入一个新 entry
+ * 即将一个新的 entry 添加到 quicklist 的 head 节点
+ *
+ * 如果是在现有的 head 节点插入 entry，返回 0。
+ * 如果创建了一个新的 head 节点插入 entry，返回 1。 */
 int quicklistPushHead(quicklist *quicklist, void *value, size_t sz) {
     quicklistNode *orig_head = quicklist->head;
 
@@ -706,6 +711,11 @@ int quicklistPushHead(quicklist *quicklist, void *value, size_t sz) {
  *
  * Returns 0 if used existing tail.
  * Returns 1 if new tail created. */
+/* 往 quicklist 尾部插入一个新 entry
+ * 即将一个新的 entry 添加到 quicklist 的 tail 节点。
+ *
+ * 如果是在现有的 tail 节点插入 entry，返回 0。
+ * 如果创建了一个新的 tail 节点插入 entry，返回 1。 */
 int quicklistPushTail(quicklist *quicklist, void *value, size_t sz) {
     quicklistNode *orig_tail = quicklist->tail;
     if (unlikely(isLargeElement(sz))) {
@@ -732,6 +742,8 @@ int quicklistPushTail(quicklist *quicklist, void *value, size_t sz) {
 /* Create new node consisting of a pre-formed listpack.
  * Used for loading RDBs where entire listpacks have been stored
  * to be retrieved later. */
+/* 使用一个已经预先形成的 listpack 创建新的快速列表节点。 
+ * 用于从存储了整个 listpack 的 RDB 文件中进行快速列表节点的恢复。 */
 void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
     quicklistNode *node = quicklistCreateNode();
 
@@ -747,6 +759,10 @@ void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
  * Used for loading RDBs where entire plain node has been stored
  * to be retrieved later.
  * data - the data to add (pointer becomes the responsibility of quicklist) */
+/* 使用一个已经预先形成的 plain 节点来创建快速列表的新节点。
+ * 用于从存储了整个 plain 节点的 RDB 文件中进行快速列表节点的恢复。
+ * data - 要添加的新节点数据（新节点的 entry 即为 data）
+ */
 void quicklistAppendPlainNode(quicklist *quicklist, unsigned char *data, size_t sz) {
     quicklistNode *node = quicklistCreateNode();
 
@@ -770,10 +786,12 @@ void quicklistAppendPlainNode(quicklist *quicklist, unsigned char *data, size_t 
 REDIS_STATIC void __quicklistDelNode(quicklist *quicklist,
                                      quicklistNode *node) {
     /* Update the bookmark if any */
+    /* 更新书签（如果有） */
     quicklistBookmark *bm = _quicklistBookmarkFindByNode(quicklist, node);
     if (bm) {
         bm->node = node->next;
         /* if the bookmark was to the last node, delete it. */
+        /* 如果书签指向快速列表的最后一个节点，将书签删除。 */
         if (!bm->node)
             _quicklistBookmarkDelete(quicklist, bm);
     }
@@ -792,11 +810,13 @@ REDIS_STATIC void __quicklistDelNode(quicklist *quicklist,
     }
 
     /* Update len first, so in __quicklistCompress we know exactly len */
+    /* 首先更新快速列表长度，以便在 __quicklistCompress 中我们能准确地知道长度 */
     quicklist->len--;
     quicklist->count -= node->count;
 
     /* If we deleted a node within our compress depth, we
      * now have compressed nodes needing to be decompressed. */
+    /* 如果在压缩深度内删除了节点，现在需要将转移到压缩深度外的压缩节点进行解压。 */
     __quicklistCompress(quicklist, NULL);
 
     zfree(node->entry);
