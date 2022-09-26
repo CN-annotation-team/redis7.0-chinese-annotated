@@ -8,7 +8,7 @@
  * 1) lazyfreeXXX 执行实际释放对象空间的函数 (这些函数只有该文件内部使用，对外部不可见)
  * 2) lazyfreeGetXXX，lazyfreeResetXXX 获取和设置懒加载的一些信息和限制函数 （对外部可见）
  * 3) XXXAsync 提交惰性释放任务给后台线程，不执行实际删除任务，这里会把1)中的函数传递给 bio_job
- * */
+ */
 /* 待执行对象的数量 */
 static redisAtomic size_t lazyfree_objects = 0;
 /* 已经执行释放对象的数量 */
@@ -19,7 +19,7 @@ static redisAtomic size_t lazyfreed_objects = 0;
 /* 将对象的引用计数 -1 */
 void lazyfreeFreeObject(void *args[]) {
     robj *o = (robj *) args[0];
-    /* 这里方法的逻辑会对引用计数为1的 robj 对象进行空间释放 */
+    /* 这里方法的逻辑会对引用计数为 1 的 robj 对象进行空间释放 */
     decrRefCount(o);
     /* 待释放对象 -1 */
     atomicDecr(lazyfree_objects,1);
@@ -32,12 +32,16 @@ void lazyfreeFreeObject(void *args[]) {
  * when the database was logically deleted. */
 /* 释放数据库，逻辑和 lazyfreeFreeObject 类似，只是具体调用的释放方法不同 */
 void lazyfreeFreeDatabase(void *args[]) {
+    /* 获取具体对象，ht1 是数据库的字典，ht2 是数据库的过期数据字典 */
     dict *ht1 = (dict *) args[0];
     dict *ht2 = (dict *) args[1];
 
+    /* 获取数据库字典大小 */
     size_t numkeys = dictSize(ht1);
+    /* 释放两个字典的空间 */
     dictRelease(ht1);
     dictRelease(ht2);
+    /* 修改两个计数器 */
     atomicDecr(lazyfree_objects,numkeys);
     atomicIncr(lazyfreed_objects,numkeys);
 }
@@ -75,8 +79,10 @@ void lazyFreeFunctionsCtx(void *args[]) {
 /* Release replication backlog referencing memory. */
 /* 释放复制缓冲区，逻辑同上 */
 void lazyFreeReplicationBacklogRefMem(void *args[]) {
+    /* 获取缓冲区块列表和块索引 */
     list *blocks = args[0];
     rax *index = args[1];
+    /* 两者大小相加为总对象数 */
     long long len = listLength(blocks);
     len += raxSize(index);
     listRelease(blocks);
@@ -131,15 +137,15 @@ size_t lazyfreeGetFreeEffort(robj *key, robj *obj, int dbid) {
         quicklist *ql = obj->ptr;
         return ql->len;
     } else if (obj->type == OBJ_SET && obj->encoding == OBJ_ENCODING_HT) {
-        /* 对象的类型是 OBJ_SET 且编码是 OBJ_ENCODING_HT ，返回该字典的大小 */
+        /* 对象的类型是 OBJ_SET 且编码是 OBJ_ENCODING_HT，返回该字典的大小 */
         dict *ht = obj->ptr;
         return dictSize(ht);
     } else if (obj->type == OBJ_ZSET && obj->encoding == OBJ_ENCODING_SKIPLIST){
-        /* 对象的类型是 OBJ_ZSET 且编码是 OBJ_ENCODING_SKIPLIST ，返回该压缩表的长度 */
+        /* 对象的类型是 OBJ_ZSET 且编码是 OBJ_ENCODING_SKIPLIST，返回该压缩表的长度 */
         zset *zs = obj->ptr;
         return zs->zsl->length;
     } else if (obj->type == OBJ_HASH && obj->encoding == OBJ_ENCODING_HT) {
-        /* 对象的类型是 OBJ_HASH 且编码是 OBJ_ENCODING_HT ，返回该字典的大小 */
+        /* 对象的类型是 OBJ_HASH 且编码是 OBJ_ENCODING_HT，返回该字典的大小 */
         dict *ht = obj->ptr;
         return dictSize(ht);
     } else if (obj->type == OBJ_STREAM) {
@@ -177,13 +183,13 @@ size_t lazyfreeGetFreeEffort(robj *key, robj *obj, int dbid) {
         return effort;
     } else if (obj->type == OBJ_MODULE) {
         /* 对象类型是 OBJ_MODULE，module.c 实现了自己计算释放代价的逻辑。
-         * 默认是1，如果该函数返回0，表示代价很高，需要异步释放 */
+         * 默认是 1，如果该函数返回 0，表示代价很高，需要异步释放 */
         size_t effort = moduleGetFreeEffort(key, obj, dbid);
         /* If the module's free_effort returns 0, we will use asynchronous free
          * memory by default. */
         return effort == 0 ? ULONG_MAX : effort;
     } else {
-        /* 其他类型的 robj 都返回1 */
+        /* 其他类型的 robj 都返回 1 */
         return 1; /* Everything else is a single allocation. */
     }
 }
@@ -219,30 +225,36 @@ void freeObjAsync(robj *key, robj *obj, int dbid) {
 /* Empty a Redis DB asynchronously. What the function does actually is to
  * create a new empty set of hash tables and scheduling the old ones for
  * lazy freeing. */
-/* 异步清空数据库，删除数据库的数据字典以及过期数据字典，逻辑同上个方法 */
+/* 异步清空数据库，删除数据库的数据字典以及过期数据字典 */
 void emptyDbAsync(redisDb *db) {
+    /* 获取数据库字典和过期数据字典 */
     dict *oldht1 = db->dict, *oldht2 = db->expires;
+    /* 重新初始化两个字典 */
     db->dict = dictCreate(&dbDictType);
     db->expires = dictCreate(&dbExpiresDictType);
     atomicIncr(lazyfree_objects,dictSize(oldht1));
+    /* 对旧的两个字典进行异步释放空间 */
     bioCreateLazyFreeJob(lazyfreeFreeDatabase,2,oldht1,oldht2);
 }
 
 /* Free the key tracking table.
  * If the table is huge enough, free it in async way. */
-/* 异步释放追踪字典书，逻辑同上 */
+/* 异步释放追踪字典书 */
 void freeTrackingRadixTreeAsync(rax *tracking) {
     /* Because this rax has only keys and no values so we use numnodes. */
+    /* 判断 rax 的节点数是否大于 LAZYFREE_THRESHOLD */
     if (tracking->numnodes > LAZYFREE_THRESHOLD) {
         atomicIncr(lazyfree_objects,tracking->numele);
+        /* 异步释放 rax */
         bioCreateLazyFreeJob(lazyFreeTrackingTable,1,tracking);
     } else {
+        /* 同步释放 rax */
         freeTrackingRadixTree(tracking);
     }
 }
 
 /* Free lua_scripts dict, if the dict is huge enough, free it in async way. */
-/* 异步释放 lua 脚本，逻辑同上 */
+/* 异步释放 lua 脚本，逻辑同上个方法 */
 void freeLuaScriptsAsync(dict *lua_scripts) {
     if (dictSize(lua_scripts) > LAZYFREE_THRESHOLD) {
         atomicIncr(lazyfree_objects,dictSize(lua_scripts));
@@ -253,7 +265,7 @@ void freeLuaScriptsAsync(dict *lua_scripts) {
 }
 
 /* Free functions ctx, if the functions ctx contains enough functions, free it in async way. */
-/* 异步释放 functionsLibCtx，逻辑同上 */
+/* 异步释放 functionsLibCtx，逻辑同上个方法 */
 void freeFunctionsAsync(functionsLibCtx *functions_lib_ctx) {
     if (functionsLibCtxfunctionsLen(functions_lib_ctx) > LAZYFREE_THRESHOLD) {
         atomicIncr(lazyfree_objects,functionsLibCtxfunctionsLen(functions_lib_ctx));
@@ -264,8 +276,10 @@ void freeFunctionsAsync(functionsLibCtx *functions_lib_ctx) {
 }
 
 /* Free replication backlog referencing buffer blocks and rax index. */
-/* 异步释放复制缓冲区，主要缓冲区块的数量大于阈值，或者快速索引大于阈值，就异步释放，逻辑同上 */
+/* 异步释放复制缓冲区，主要缓冲区块的数量大于阈值，或者快速索引大于阈值，就异步释放，逻辑同上个方法
+ * 由于复制缓冲区主要有 缓冲区块列表和块索引两个结构，所以需要释放两个数据结构 */
 void freeReplicationBacklogRefMemAsync(list *blocks, rax *index) {
+    /* 只要有一个数据结构的释放代价大于了阈值，就使用异步释放空间 */
     if (listLength(blocks) > LAZYFREE_THRESHOLD ||
         raxSize(index) > LAZYFREE_THRESHOLD)
     {
