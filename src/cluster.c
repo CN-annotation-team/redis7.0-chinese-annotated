@@ -1691,8 +1691,11 @@ int clusterStartHandshake(char *ip, int port, int cport) {
  * Note that this function assumes that the packet is already sanity-checked
  * by the caller, not in the content of the gossip section, but in the
  * length. */
+/* 处理 PING,PONG 包的 gossip 部分。
+ * 注意：该函数是假定给出的包已经被该函数的调用者检查过了，这个检查是指包的长度检查，不是包的内容检查 */
 void clusterProcessGossipSection(clusterMsg *hdr, clusterLink *link) {
     uint16_t count = ntohs(hdr->count);
+    /* 获取 gossip 数组 */
     clusterMsgDataGossip *g = (clusterMsgDataGossip*) hdr->data.ping.gossip;
     clusterNode *sender = link->node ? link->node : clusterLookupNode(hdr->sender, CLUSTER_NAMELEN);
 
@@ -2367,9 +2370,11 @@ int clusterProcessPacket(clusterLink *link) {
             link->node ? link->node->name : "NULL");
         /* 如果 link 的 node 为 null， link->inbound 为 1，相当于发送方第一次进行消息发送，不会进入 if 逻辑 */
         if (!link->inbound) {
+            /* 节点和当前节点处于握手状态，也就是接收的请求是 PONG 请求 */
             if (nodeInHandshake(link->node)) {
                 /* If we already have this node, try to change the
                  * IP/port of the node with the new one. */
+                /* 如果已经知道发送方节点了，如果是第一次进行 PING PONG，sender 是 NULL */
                 if (sender) {
                     serverLog(LL_VERBOSE,
                         "Handshake: we already know node %.40s, "
@@ -2387,11 +2392,15 @@ int clusterProcessPacket(clusterLink *link) {
 
                 /* First thing to do is replacing the random name with the
                  * right node name if this was a handshake stage. */
+                /* 第一次握手，更改节点名字为消息提供的 hdr->sender 字符串 */
                 clusterRenameNode(link->node, hdr->sender);
                 serverLog(LL_DEBUG,"Handshake with node %.40s completed.",
                     link->node->name);
+                /* 清除握手标识 */
                 link->node->flags &= ~CLUSTER_NODE_HANDSHAKE;
+                /* 更新节点的角色，是主节点还是从节点 */
                 link->node->flags |= flags&(CLUSTER_NODE_MASTER|CLUSTER_NODE_SLAVE);
+                /* 注册一个保存配置的任务 */
                 clusterDoBeforeSleep(CLUSTER_TODO_SAVE_CONFIG);
             } else if (memcmp(link->node->name,hdr->sender,
                         CLUSTER_NAMELEN) != 0)
@@ -2399,6 +2408,7 @@ int clusterProcessPacket(clusterLink *link) {
                 /* If the reply has a non matching node ID we
                  * disconnect this node and set it as not having an associated
                  * address. */
+                /* 如果连接的节点名和请求给定的节点名不相同，会断开连接并且设置该节点没有联系地址 */
                 serverLog(LL_DEBUG,"PONG contains mismatching sender ID. About node %.40s added %d ms ago, having flags %d",
                     link->node->name,
                     (int)(now-(link->node->ctime)),
@@ -4306,7 +4316,7 @@ void clusterCron(void) {
          */
         /* 这里可以看做既是重连功能，也可以看做是建立 tcp 客户端
          * 注，集群的 tcp 和主线程处理命令的 tcp 不一样，处理命令只需要有 TCP 服务端即可
-         * 而集群通信，一个 redis 实例既要有客户端（只做写处理），又要有服务端（只做读处理）
+         * 而集群通信，一个 redis 实例既要有客户端，又要有服务端
          * 这里就是对集群的所有每个已知节点都建立一个客户端 */
         if(clusterNodeCronHandleReconnect(node, handshake_timeout, now)) continue;
     }

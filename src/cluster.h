@@ -22,7 +22,7 @@
 #define CLUSTER_FAIL_REPORT_VALIDITY_MULT 2 /* Fail report validity. */
 /* 撤销主节点 FAIL 状态的乘法因子 */
 #define CLUSTER_FAIL_UNDO_TIME_MULT 2 /* Undo fail if master is back. */
-/* 在进行手动自愈之前需要等待的超时时间 */
+/* 在进行手动故障转移之前需要等待的超时时间 */
 #define CLUSTER_MF_TIMEOUT 5000 /* Milliseconds to do a manual failover. */
 #define CLUSTER_MF_PAUSE_MULT 2 /* Master pause manual failover mult. */
 #define CLUSTER_SLAVE_MIGRATION_DELAY 5000 /* Delay for slave migration. */
@@ -50,7 +50,7 @@ struct clusterNode;
 
 /* clusterLink encapsulates everything needed to talk with a remote node. */
 /* clusterLink 包含和其他节点通信的所有信息
- * 注：可以和 client 结构联想到一起，在服务端口（6379）获取到 socket 连接最后会创建一个 client 实例,
+ * 注：可以和 client 结构联想到一起，在服务端口（6379）获取到 socket 连接最后会创建一个 client 实例
  * 在集群端口（16379）获取到的 socket 连接最后会创建 clusterLink 实例*/
 typedef struct clusterLink {
     /* 连接创建时间 */
@@ -68,7 +68,7 @@ typedef struct clusterLink {
     /* 当前连接相关的节点 */
     struct clusterNode *node;   /* Node related to this link. Initialized to NULL when unknown */
     /* 是否是入站连接，这里其实就是当前链接有没有和具体的节点实例进行关联，
-     * 如果没有关联，inbound 就是1，关联好了就是0 */
+     * 如果没有关联，inbound 就是 1，关联好了就是 0 */
     int inbound;                /* 1 if this link is an inbound link accepted from the related node */
 } clusterLink;
 
@@ -89,7 +89,7 @@ typedef struct clusterLink {
 #define CLUSTER_NODE_NOADDR   64  /* We don't know the address of this node */
 /* 该节点发送了 meet 包给当前节点 */
 #define CLUSTER_NODE_MEET 128     /* Send a MEET message to this node */
-/* 有资格做副本迁移的主节点（这里其实就是说被该标识标记的节点是孤儿主节点,它下面没有副本节点，需要从其他主节点迁移副本节点给它） */
+/* 有资格做副本迁移的主节点（这里其实就是说被该标识标记的节点是孤儿主节点，它下面没有副本节点，需要从其他主节点迁移副本节点给它） */
 #define CLUSTER_NODE_MIGRATE_TO 256 /* Master eligible for replica migration. */
 /* 从节点不会去做故障转移 */
 #define CLUSTER_NODE_NOFAILOVER 512 /* Slave will not try to failover. */
@@ -129,7 +129,7 @@ typedef struct clusterLink {
  * as a node (if it is not already in the list). */
 /* redis 集群节点之前的通信的消息分为以下11种，
  * 最后一个 CLUSTERMSG_TYPE_COUNT 是包类型计数边界，代码中做判断
- * 5（是否可以故障转移）,6（回复可以故障转移）,8（在手动故障转移的时候通知集群暂停处理客户端请求）三种包只有包头没有包体
+ * 5（是否可以故障转移），6（回复可以故障转移），8（在手动故障转移的时候通知集群暂停处理客户端请求）三种包只有包头没有包体
  * 其他类型的包都由包头和包体两部分组成，包头格式相同，包体内容根据具体的类型填充 */
 #define CLUSTERMSG_TYPE_PING 0          /* Ping */
 #define CLUSTERMSG_TYPE_PONG 1          /* Pong (reply to Ping) */
@@ -167,7 +167,7 @@ typedef struct clusterNodeFailReport {
 typedef struct clusterNode {
     /* 节点创建时间 */
     mstime_t ctime; /* Node object creation time. */
-    /* 节点名，有大小限制40个字符 */
+    /* 节点名，有大小限制 40 个字符 */
     char name[CLUSTER_NAMELEN]; /* Node name, hex string, sha1-size */
     /* 当前节点的状态，也记录了节点在集群中的角色 */
     int flags;      /* CLUSTER_NODE_... */
@@ -213,12 +213,14 @@ typedef struct clusterNode {
     /* 该节点的集群端口号 */
     int cport;                  /* Latest known cluster port of this node. */
     /* 下面的两个 link 需要注意一下，集群通信每个节点既要有客户端又要有服务端，
-     * redis 集群设计，TCP 服务端只做 read 也就是读取其他节点发送来的数据，
+     * redis 集群设计，TCP 服务端做 read 也就是读取其他节点发送来的数据，
      * TCP 客户端服务写数据给其他节点，这里 link 是客户端生成的 socket fd 封装的。
-     * inbound_link (入站连接，从名字就能看出是接收数据) 由服务端 accept 到的 socket fd 封装的。*/
+     * inbound_link (入站连接，从名字就能看出是接收数据) 由服务端 accept 到的 socket fd 封装的。
+     * 注：集群中两个节点之间如果是处于握手状态的时候，TCP 服务端会发送 PING 包，只有这里会做写，
+     * TCP 客户端也类似，会读取握手阶段 TCP 服务端发送来的 PING 包，也只有这里会做读处理 */
     /* 该节点相关的连接对象（连接状态是 established ），这个 link 是 TCP 客户端发送数据的 link */
     clusterLink *link;          /* TCP/IP link established toward this node */
-    /* accept 到的连接，这个是 TCP 服务端生成的 link ,用来接收数据 */
+    /* accept 到的连接，这个是 TCP 服务端生成的 link，用来接收数据 */
     clusterLink *inbound_link;  /* TCP/IP link accepted from this node */
     /* 该节点保存下线通知的链表 */
     list *fail_reports;         /* List of nodes signaling this as failing */
@@ -237,7 +239,7 @@ typedef struct slotToKeys {
 /* Slot to keys mapping for all slots, opaque outside this file. */
 /* 集群槽位信息 */
 struct clusterSlotToKeyMapping {
-    /* 所有槽位信息，一个16384大小的数组 */
+    /* 所有槽位信息，一个 16384 大小的数组 */
     slotToKeys by_slot[CLUSTER_SLOTS];
 };
 
@@ -260,7 +262,7 @@ typedef struct clusterState {
     int size;             /* Num of master nodes with at least one slot */
     /* 保存集群节点的字典，键是节点名称，值是 clusterNode 结构的指针 */
     dict *nodes;          /* Hash table of name -> clusterNode structures */
-    /* 集群节点黑名单（包括 myself ），可以防止在集群中的节点二次加入集群
+    /* 集群节点黑名单（包括 myself），可以防止在集群中的节点二次加入集群
      * 黑名单可以防止被 forget 的节点重新添加到集群节点 */
     dict *nodes_black_list; /* Nodes we don't re-add for a few seconds. */
     /* 记录要从当前节点迁移到目标节点的槽，以及迁移的目标节点 */
@@ -275,12 +277,13 @@ typedef struct clusterState {
     mstime_t failover_auth_time; /* Time of previous or next election. */
     /* 节点获得支持的票数，从节点 */
     int failover_auth_count;    /* Number of votes received so far. */
-    /* 如果为 True ，表示该节点已经向其他节点发送了投票请求 */
+    /* 如果为 True，表示该节点已经向其他节点发送了投票请求 */
     int failover_auth_sent;     /* True if we already asked for votes. */
-    /* 该从节点在当前请求中的评分，该值根据复制偏移量计算而来，最终用于确定 slave 节点发起投票的时间
-     * 注：评分就是当前从节点对应的主节点下所有从节点复制偏移量大于当前节点复制偏移量的数量，
-     * 也就是说偏移量越大，评分越低，而评分会用作 failover_auth_time 的计算，评分越大，
-     * failover_auth_tim 也就越大，发起投票的时间越晚*/
+    /* 该从节点在当前请求中的排名，该值根据复制偏移量计算而来，最终用于确定 slave 节点发起投票的时间
+     * 注：排名就是当前从节点对应的主节点下所有从节点复制偏移量大于当前节点复制偏移量的数量，
+     * 也就是说复制偏移量越大，排名越前，而排名会用作 failover_auth_time 的计算，排名越后，
+     * failover_auth_time 也就越大，发起选举的时间越晚，
+     * 即 rank 值越小的节点通常有更大的复制偏移量，它能越早发起选举竞争主节点 */
     int failover_auth_rank;     /* This slave rank for current auth request. */
     /* 当前选举的纪元 */
     uint64_t failover_auth_epoch; /* Epoch of the current election. */
@@ -288,7 +291,7 @@ typedef struct clusterState {
     int cant_failover_reason;   /* Why a slave is currently not able to
                                    failover. See the CANT_FAILOVER_* macros. */
     /* Manual failover state in common. */
-    /* 为0表示没有正在进行手动故障转移，否则表示手动故障转移的时间限制
+    /* 为 0 表示没有正在进行手动故障转移，否则表示手动故障转移的时间限制
      * 代码逻辑里会使用该属性来判断是手动故障转移，还是自动故障转移 */
     mstime_t mf_end;            /* Manual failover time limit (ms unixtime).
                                    It is zero if there is no MF in progress. */
@@ -299,7 +302,7 @@ typedef struct clusterState {
     /* 从节点记录手动故障转移时的主节点偏移量 */
     long long mf_master_offset; /* Master offset the slave needs to start MF
                                    or -1 if still not received. */
-    /* 非0表示可以手动故障转移 */
+    /* 非 0 表示可以手动故障转移 */
     int mf_can_start;           /* If non-zero signal that the manual failover
                                    can start requesting masters vote. */
     /* The following fields are used by masters to take state on elections. */
@@ -445,7 +448,7 @@ typedef struct {
     char sig[4];        /* Signature "RCmb" (Redis Cluster message bus). */
     /* 消息的总长度 */
     uint32_t totlen;    /* Total length of this message */
-    /* 协议版本，当前设置为1 */
+    /* 协议版本，当前设置为 1 */
     uint16_t ver;       /* Protocol version, currently set to 1. */
     /* 发送方监听的端口 */
     uint16_t port;      /* TCP base port number. */
