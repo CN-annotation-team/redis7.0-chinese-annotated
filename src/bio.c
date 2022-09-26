@@ -65,7 +65,7 @@
  * redis 后台 I/O 线程功能实现，做一些异步操作（BIO_AOF_FSYNC,BIO_LAZY_FREE,BIO_CLOSE_FILE）：
  * 1) AOF 会用后台线程做 AOF 文件 fsync 刷盘操作
  * 2) LazyFree 功能会评估释放一个数据结构实例需要的代价（大概就是对于集合类型，1个元素
- *    代价加1，字符串代价1），代价大于 LAZYFREE_THRESHOLD（64） 就后台线程删除
+ *    代价加 1，字符串代价 1），代价大于 LAZYFREE_THRESHOLD（64） 就后台线程删除
  * 3) AOF 历史文件关闭（AOF 会用变量记录历史文件路径，交给后台执行关闭操作）*/
 
 /* BIO_NUM_OPS 是3，见 bio.h */
@@ -85,12 +85,12 @@ static list *bio_jobs[BIO_NUM_OPS];
  * that there are no longer jobs of this type to be executed before performing
  * the sensible operation. This data is also useful for reporting. */
 /* 这个数组用来保存每个操作类型线程待执行的任务的数量，主要用于当主线程想要执行一些操作
- * 并且这些操作涉及到的对象被后台线程共享了，主线程会等待这种类型的待执行任务数为0，再执行操作 */
+ * 并且这些操作涉及到的对象被后台线程共享了，主线程会等待这种类型的待执行任务数为 0，再执行操作 */
 static unsigned long long bio_pending[BIO_NUM_OPS];
 
 /* This structure represents a background Job. It is only used locally to this
  * file as the API does not expose the internals at all. */
-/* 后台 IO 结构体，仅仅在本地使用，相关的API不会被暴露出去 */
+/* 后台 IO 结构体，仅仅在本地使用，相关的 API 不会被暴露出去 */
 struct bio_job {
     /* Job specific arguments.*/
     /* 后台任务持有的文件描述符 */
@@ -165,7 +165,7 @@ void bioSubmitJob(int type, struct bio_job *job) {
  *
  * 主要步骤就是创建 bio_job 结构体，然后填充 free_fn 和 arg_count
  * 最后把 bio_job 实例提交到任务列表
- * */
+ */
 void bioCreateLazyFreeJob(lazy_free_fn free_fn, int arg_count, ...) {
     va_list valist;
     /* Allocate memory for the job structure and all required
@@ -223,7 +223,7 @@ void *bioProcessBackgroundJobs(void *arg) {
         break;
     }
 
-    /* 设置 cpu 亲和度，线程绑定具体 cpu 核，和主线程分开了，具体可以看 redis.conf 2248-2271行 */
+    /* 设置 cpu 亲和度，线程绑定具体 cpu 核，和主线程分开了，具体可以看 redis.conf 2248-2271 行 */
     redisSetCpuAffinity(server.bio_cpulist);
 
     makeThreadKillable();
@@ -282,7 +282,7 @@ void *bioProcessBackgroundJobs(void *arg) {
                 atomicSet(server.aof_bio_fsync_status,C_OK);
             }
         } else if (type == BIO_LAZY_FREE) {
-            /* 调用懒释放函数释放对象 */
+            /* 调用惰性释放函数释放对象 */
             job->free_fn(job->free_args);
         } else {
             serverPanic("Wrong job type in bioProcessBackgroundJobs().");
