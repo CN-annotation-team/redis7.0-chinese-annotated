@@ -805,7 +805,7 @@ clusterLink *createClusterLink(clusterNode *node) {
     /* Related node can only possibly be known at link creation time if this is an outbound link */
     /* 如果给的 node 是 NULL 设置 inbound 为 1，
      * 注，相当于就是如果 link 知道自己是和哪个节点进行通信的时候，就会把 inbound 置为 0
-     * TCP 服务端部分功能调用该方法传入的 node 是 NULL , 而 TCP 客户端部分功能会传入已知的 node 实例
+     * TCP 服务端部分功能调用该方法传入的 node 是 NULL，而 TCP 客户端部分功能会传入已知的 node 实例
      * node->link 指向的是客户端连接 */
     link->inbound = (node == NULL);
     if (!link->inbound) {
@@ -842,7 +842,7 @@ void freeClusterLink(clusterLink *link) {
 }
 
 /* 把集群节点和 TCP 服务端的连接进行关联
- * 注： 这里 link 是作为 node 的 inbound_link ，该函数在 TCP 服务端部分被调用 */
+ * 注： 这里 link 是作为 node 的 inbound_link，该函数在 TCP 服务端部分被调用 */
 void setClusterNodeToInboundClusterLink(clusterNode *node, clusterLink *link) {
     serverAssert(!link->node);
     serverAssert(link->inbound);
@@ -874,7 +874,7 @@ static void clusterConnAcceptHandler(connection *conn) {
      * which node is, but the right node is references once we know the
      * node identity. */
     /* 创建一个 clusterLink 实例 ，当数据可用会执行读处理；
-     * 这里给的参数是 NULL ,因为目前我们才刚刚 accept 到连接，
+     * 这里给的参数是 NULL，因为目前我们才刚刚 accept 到连接，
      * 并没有获取到实际的数据，不知道给我们发 connect 的是集群里面的哪个节点，后面如果我们一旦知道是哪个节点就会给给该
      * clusterLink 实例填充节点 */
     link = createClusterLink(NULL);
@@ -931,7 +931,7 @@ void clusterAcceptHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
         /* Accept the connection now.  connAccept() may call our handler directly
          * or schedule it for later depending on connection implementation.
          */
-        /* 开始处理接收到的连接，这里可以忽略 connAccept ,相当于是直接调用 clusterConnAcceptHandler
+        /* 开始处理接收到的连接，这里可以忽略 connAccept，相当于是直接调用 clusterConnAcceptHandler
          * connAccept 只是给 conn 加了引用计数，防止 conn 被处理的时候在其他地方关闭 */
         if (connAccept(conn, clusterConnAcceptHandler) == C_ERR) {
             if (connGetState(conn) == CONN_STATE_ERROR)
@@ -997,7 +997,7 @@ unsigned int keyHashSlot(char *key, int keylen) {
  * The node is created and returned to the user, but it is not automatically
  * added to the nodes hash table. */
 /* 创建一个新的集群节点，并且指定 flags 标识
- * 如果参数 nodename 是 NULL , 任务是第一次握手的节点，会随机生成一个 nodename 给该
+ * 如果参数 nodename 是 NULL，认为是第一次握手的节点，会随机生成一个 nodename 给该
  * 集群节点使用（之后如果接收到该节点发来的 PONG ，会将 nodename 重新赋值）
  * 这里没有自动将集群节点添加到集群几点字典表中 */
 clusterNode *createClusterNode(char *nodename, int flags) {
@@ -1691,7 +1691,7 @@ int clusterStartHandshake(char *ip, int port, int cport) {
  * Note that this function assumes that the packet is already sanity-checked
  * by the caller, not in the content of the gossip section, but in the
  * length. */
-/* 处理 PING,PONG 包的 gossip 部分。
+/* 处理 PING / PONG 包的 gossip 部分。
  * 注意：该函数是假定给出的包已经被该函数的调用者检查过了，这个检查是指包的长度检查，不是包的内容检查 */
 void clusterProcessGossipSection(clusterMsg *hdr, clusterLink *link) {
     uint16_t count = ntohs(hdr->count);
@@ -2129,8 +2129,7 @@ static clusterNode *getNodeFromLinkAndMsg(clusterLink *link, clusterMsg *hdr) {
          * be an inbound link because only for inbound links we didn't know which node
          * to associate when they were created. */
         /* 已经发送和接收过 ping pong 了，但是 link 和 node 还没进行关联的情况
-         * 这里会把 link 和 node 关联起来，但是 link 是作为 node 的 inbound_link
-         */
+         * 这里会把 link 和 node 关联起来，但是 link 是作为 node 的 inbound_link */
         if (sender && !link->node) {
             setClusterNodeToInboundClusterLink(sender, link);
         }
@@ -2160,13 +2159,13 @@ int clusterProcessPacket(clusterLink *link) {
 
     /* 判断包的类型有没有越界，包的类型应该是 1 - 10，CLUSTERMSG_TYPE_COUNT 是 11，小于这个数的包类型为合法包 */
     if (type < CLUSTERMSG_TYPE_COUNT)
-        /* 接收到该类型的包数量+1 */
+        /* 接收到该类型的包计数 + 1 */
         server.cluster->stats_bus_messages_received[type]++;
     serverLog(LL_DEBUG,"--- Processing packet of type %s, %lu bytes",
         clusterGetMessageTypeString(type), (unsigned long) totlen);
 
     /* Perform sanity checks */
-    /* 总长度小于 16 个字节，直接返回，也就是 clusterMsg 的前6个属性是必须要的 */
+    /* 总长度小于 16 个字节，直接返回，也就是 clusterMsg 的前 6 个属性是必须要的 */
     if (totlen < 16) return 1; /* At least signature, version, totlen, count. */
     /* 总长度大于接收缓冲区的长度，包不完整，直接返回 */
     if (totlen > link->rcvbuf_len) return 1;
@@ -2190,7 +2189,7 @@ int clusterProcessPacket(clusterLink *link) {
     clusterNode *sender;
 
     /* 下面是计算每种类型包应该是多大
-     * 计算方式都是 sizeof(clusterMsg 整个包的大小 )-sizeof(union clusterMsgData 包体大小 ) = 包头大小
+     * 计算方式都是 sizeof(clusterMsg 整个包的大小) - sizeof(union clusterMsgData 包体大小) = 包头大小
      * 然后根据不同类型的包有不同的包体（也有一些没有包体）根据具体的包体结构计算包体应该有多大 */
     if (type == CLUSTERMSG_TYPE_PING || type == CLUSTERMSG_TYPE_PONG ||
         type == CLUSTERMSG_TYPE_MEET)
@@ -2335,7 +2334,7 @@ int clusterProcessPacket(clusterLink *link) {
             clusterNode *node;
 
             /* 创建一个 clusterNode 实例，并标记该节点需要进行握手，也就是需要发送 ping 给该节点
-             * 传入的 nodename 是 NULL , 会随机生成一个节点名来赋值给 node->name */
+             * 传入的 nodename 是 NULL，会随机生成一个节点名来赋值给 node->name */
             node = createClusterNode(NULL,CLUSTER_NODE_HANDSHAKE);
             /* 发送方的端口信息我们是知道了，进行填充，缓冲区中有 */
             nodeIp2String(node->ip,link,hdr->myip);
@@ -2368,7 +2367,7 @@ int clusterProcessPacket(clusterLink *link) {
         serverLog(LL_DEBUG,"%s packet received: %.40s",
             clusterGetMessageTypeString(type),
             link->node ? link->node->name : "NULL");
-        /* 如果 link 的 node 为 null， link->inbound 为 1，相当于发送方第一次进行消息发送，不会进入 if 逻辑 */
+        /* 如果 link 的 node 为 null，link->inbound 为 1，相当于发送方第一次进行消息发送，不会进入 if 逻辑 */
         if (!link->inbound) {
             /* 节点和当前节点处于握手状态，也就是接收的请求是 PONG 请求 */
             if (nodeInHandshake(link->node)) {
@@ -2798,13 +2797,13 @@ void clusterReadHandler(connection *conn) {
     unsigned int readlen, rcvbuflen;
 
     while(1) { /* Read as long as there is data to read. */
-        /* 第一次进入这里，link 初始化时 rcvbuf_len 为0，所以会先进入第一个 if 分支 */
+        /* 第一次进入这里，link 初始化时 rcvbuf_len 为 0，所以会先进入第一个 if 分支 */
         rcvbuflen = link->rcvbuf_len;
         if (rcvbuflen < 8) {
             /* First, obtain the first 8 bytes to get the full message
              * length. */
             /* 首先会获取消息的前 8 个字节，这 8 个字节里的后四个字节表示整个消息的字节长度
-             * rcvbuflen 最开始是等于 rcvbuf_len 也就是 0，所以这里 8 - 0 = 8，表示要读 8 个字节*/
+             * rcvbuflen 最开始是等于 rcvbuf_len 也就是 0，所以这里 8 - 0 = 8，表示要读 8 个字节 */
             readlen = 8 - rcvbuflen;
         } else {
             /* Finally read the full message. */
@@ -3382,8 +3381,7 @@ void clusterPropagatePublish(robj *channel, robj *message, int sharded) {
  * but only the masters are supposed to reply to our query. */
 /* 该函数发送一个 FAILOVER_AUTH_REQUEST 消息给其他每一个节点。
  * 注意只有集群中的主节点会处理这类型的消息，如果其他主节点同意当前节点做 failover ，就会
- * 回复确认包
- */
+ * 回复确认包 */
 void clusterRequestFailoverAuth(void) {
     clusterMsg buf[1];
     clusterMsg *hdr = (clusterMsg*) buf;
@@ -3967,7 +3965,7 @@ void clusterHandleSlaveMigration(int max_slaves) {
     int j, okslaves = 0;
     /* 设置当前节点的主节点，
      * target 表示需要做副本迁移的孤儿主节点
-     * candidate 被迁移的副本几点*/
+     * candidate 被迁移的副本节点 */
     clusterNode *mymaster = myself->slaveof, *target = NULL, *candidate = NULL;
     dictIterator *di;
     dictEntry *de;
