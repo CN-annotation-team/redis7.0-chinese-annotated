@@ -3820,8 +3820,8 @@ void clusterHandleSlaveFailover(void) {
         /* We add another delay that is proportional to the slave rank.
          * Specifically 1 second * rank. This way slaves that have a probably
          * less updated replication offset, are penalized. */
-        /* 根据评分来计算发起投票请求的时间，评分越低，越先发起投票，网络通信耗时相同的情况，先投票的会被选举成主节点
-         * 且这里评分的系数是 1000，是随机数最大值的两倍，可以避免随机数的影响超过评分，评分相同的情况下就看随机数大小
+        /* 根据排名来计算发起投票请求的时间，排名越前，越先发起投票，网络通信耗时相同的情况，先投票的会被选举成主节点
+         * 且这里评分的系数是 1000，是随机数最大值的两倍，可以避免随机数的影响超过排名，排名相同的情况下就看随机数大小
          *
          * 目前 poxas 衍生出来的协议 raft 也使用这种多个选举候选人不同时发起提案请求，这可以保证快速选举出 leader
          * 降低选举阶段的耗时，先发起的人成为 leader */
