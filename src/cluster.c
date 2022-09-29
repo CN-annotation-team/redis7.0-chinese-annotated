@@ -3828,7 +3828,7 @@ void clusterHandleSlaveFailover(void) {
         server.cluster->failover_auth_time +=
             server.cluster->failover_auth_rank * 1000;
         /* However if this is a manual failover, no delay is needed. */
-        /* 手动故障转移不需要看评分，直接指定当前节点做 failover */
+        /* 手动故障转移不需要看排名，直接指定当前节点做 failover */
         if (server.cluster->mf_end) {
             server.cluster->failover_auth_time = mstime();
             server.cluster->failover_auth_rank = 0;
