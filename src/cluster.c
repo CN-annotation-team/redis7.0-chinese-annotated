@@ -3564,15 +3564,21 @@ void clusterSendFailoverAuthIfNeeded(clusterNode *node, clusterMsg *request) {
  * The slave rank is used to add a delay to start an election in order to
  * get voted and replace a failing master. Slaves with better replication
  * offsets are more likely to win. */
-/* 该函数返回当前从节点的评分，
+/* 该函数返回当前从节点的排名，
  *
- * 评分的计算是 master 下所有从节点复制偏移量大于当前节点复制偏移量的数量
+ * 排名的计算是 master 下所有从节点复制偏移量大于当前节点复制偏移量的数量
  *
  * 主要是来比较当前从节点服务的主节点下的所有从节点之间的复制偏移量
- * 复制偏移量越大，表示节点的数据越新，复制偏移量比它大的从节点就越少，评分也就会越低
+ * 复制偏移量越大，表示节点的数据越新，复制偏移量比它大的从节点就越少，排名也就会越前
+ * rank 为 0 的 slave 是具有最大或者最新的复制偏移量的 slave，依次类推
+ * 多个 slave 可能会有相同的 rank 排名，如果它们有相同的复制偏移量的话
  *
- * 如果评分为 0，表示和其他节点的复制偏移量一样，在这种情况下，就出现多个节点评分相同的情况
- * redis 针对这种情况会加一个随机数，但是随机数会小于评分的系数（例如在投票的时候，随机数是 500 以内，评分的系数是 1000）*/
+ * 从节点的 rank 用于添加延迟以进行选举，进行投票选举并且替换故障的主节点
+ * 即如果排名越前，即 rank 越小，从节点会越快发起选举
+ *
+ * 如果所有从节点排名都为 0，即所有从节点的复制偏移量一样，在这种情况下，就出现多个节点评分相同的情况
+ * redis 针对这种情况会加一个随机数，但是随机数会小于评分的系数（例如在投票的时候，随机数是 500 以内，评分的系数是 1000）
+ * 额外增加一个随机数是为了避免节点们同时发起选举，来规避选票瓜分、打平等造成选举无效 */
 int clusterGetSlaveRank(void) {
     long long myoffset;
     int j, rank = 0;
