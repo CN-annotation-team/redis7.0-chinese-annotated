@@ -3587,7 +3587,7 @@ int clusterGetSlaveRank(void) {
     for (j = 0; j < master->numslaves; j++)
         if (master->slaves[j] != myself &&
             !nodeCantFailover(master->slaves[j]) &&
-            /* 这里判断其他从节点的复制偏移量大于当前节点的复制偏移量，评分就 +1 */
+            /* 这里判断其它从节点的复制偏移量大于当前节点的复制偏移量，排名越靠后，rank +1 */
             master->slaves[j]->repl_offset > myoffset) rank++;
     return rank;
 }
