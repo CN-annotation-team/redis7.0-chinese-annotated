@@ -223,7 +223,7 @@ void *bioProcessBackgroundJobs(void *arg) {
         break;
     }
 
-    /* 设置 cpu 亲和度，线程绑定具体 cpu 核，和主线程分开了，具体可以看 redis.conf 2248-2271 行 */
+    /* 设置 cpu 亲和度，线程绑定具体 cpu 核，和主线程分开了，具体可以看 redis.conf bio_cpulist 配置项 */
     redisSetCpuAffinity(server.bio_cpulist);
 
     makeThreadKillable();
