@@ -160,7 +160,7 @@ void bioSubmitJob(int type, struct bio_job *job) {
 
 /* 创建一个 lazy free 任务
  * free_fn 释放空间的函数
- * arg_count 要释放的对象数量，
+ * arg_count 要释放的对象数量
  * ... 要释放的对象
  *
  * 主要步骤就是创建 bio_job 结构体，然后填充 free_fn 和 arg_count
