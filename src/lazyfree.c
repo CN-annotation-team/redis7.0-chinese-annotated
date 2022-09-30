@@ -239,7 +239,7 @@ void emptyDbAsync(redisDb *db) {
 
 /* Free the key tracking table.
  * If the table is huge enough, free it in async way. */
-/* 异步释放追踪字典书 */
+/* 异步释放追踪字典树 */
 void freeTrackingRadixTreeAsync(rax *tracking) {
     /* Because this rax has only keys and no values so we use numnodes. */
     /* 判断 rax 的节点数是否大于 LAZYFREE_THRESHOLD */
