@@ -95,7 +95,7 @@ struct bio_job {
     /* Job specific arguments.*/
     /* 后台任务持有的文件描述符 */
     int fd; /* Fd for file based background jobs */
-    /* 懒释放函数，释放的实现的 free_args */
+    /* 懒释放函数，释放在 free_args 中存储的对象 */
     lazy_free_fn *free_fn; /* Function that will free the provided arguments */
     /* 要被释放的对象参数 */
     void *free_args[]; /* List of arguments to be passed to the free function */
