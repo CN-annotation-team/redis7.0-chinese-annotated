@@ -62,13 +62,13 @@
 #include "bio.h"
 
 /* redis BIO(background IO)
- * redis 后台 I/O 线程功能实现，做一些异步操作（BIO_AOF_FSYNC,BIO_LAZY_FREE,BIO_CLOSE_FILE）：
- * 1) AOF 会用后台线程做 AOF 文件 fsync 刷盘操作
- * 2) LazyFree 功能会评估释放一个数据结构实例需要的代价（大概就是对于集合类型，1个元素
+ * redis 后台 I/O 线程功能实现，做一些异步操作：
+ * 1) BIO_AOF_FSYNC：AOF 会用后台线程做 AOF 文件 fsync 刷盘操作
+ * 2) BIO_LAZY_FREE：LazyFree 功能会评估释放一个数据结构实例需要的代价（大概就是对于集合类型，1 个元素
  *    代价加 1，而字符串类型代价为 1），代价大于 LAZYFREE_THRESHOLD（64） 就后台线程删除
- * 3) AOF 历史文件关闭（AOF 会用变量记录历史文件路径，交给后台执行关闭操作）*/
+ * 3) BIO_CLOSE_FILE：异步关闭文件描述符，例如 AOF 历史文件关闭（AOF 会用变量记录历史文件路径，交给后台执行关闭操作） */
 
-/* BIO_NUM_OPS 是3，见 bio.h */
+/* BIO_NUM_OPS 是 3，见 bio.h */
 /* 线程数组 */
 static pthread_t bio_threads[BIO_NUM_OPS];
 /* 互斥锁数组 */
