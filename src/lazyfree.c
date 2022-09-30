@@ -141,7 +141,7 @@ size_t lazyfreeGetFreeEffort(robj *key, robj *obj, int dbid) {
         dict *ht = obj->ptr;
         return dictSize(ht);
     } else if (obj->type == OBJ_ZSET && obj->encoding == OBJ_ENCODING_SKIPLIST){
-        /* 对象的类型是 OBJ_ZSET 且编码是 OBJ_ENCODING_SKIPLIST，返回该压缩表的长度 */
+        /* 对象的类型是 OBJ_ZSET 且编码是 OBJ_ENCODING_SKIPLIST，返回该跳表的长度 */
         zset *zs = obj->ptr;
         return zs->zsl->length;
     } else if (obj->type == OBJ_HASH && obj->encoding == OBJ_ENCODING_HT) {
