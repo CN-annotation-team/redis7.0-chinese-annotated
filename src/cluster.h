@@ -218,7 +218,7 @@ typedef struct clusterNode {
      * inbound_link (入站连接，从名字就能看出是接收数据) 由服务端 accept 到的 socket fd 封装的。
      * 注：集群中两个节点之间如果是处于握手状态的时候，TCP 服务端会发送 PING 包，只有这里会做写，
      * TCP 客户端也类似，会读取握手阶段 TCP 服务端发送来的 PING 包，也只有这里会做读处理 */
-    /* 该节点相关的连接对象（连接状态是 established ），这个 link 是 TCP 客户端发送数据的 link */
+    /* 该节点相关的连接对象（连接状态是 established），这个 link 是 TCP 客户端发送数据的 link */
     clusterLink *link;          /* TCP/IP link established toward this node */
     /* accept 到的连接，这个是 TCP 服务端生成的 link，用来接收数据 */
     clusterLink *inbound_link;  /* TCP/IP link accepted from this node */
