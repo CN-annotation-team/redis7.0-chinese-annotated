@@ -36,7 +36,7 @@ void lazyfreeFreeDatabase(void *args[]) {
     dict *ht1 = (dict *) args[0];
     dict *ht2 = (dict *) args[1];
 
-    /* 获取数据库字典大小 */
+    /* 获取数据库键空间字典的大小 */
     size_t numkeys = dictSize(ht1);
     /* 释放两个字典的空间 */
     dictRelease(ht1);
