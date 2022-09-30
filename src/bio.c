@@ -189,7 +189,7 @@ void bioCreateCloseJob(int fd) {
     bioSubmitJob(BIO_CLOSE_FILE, job);
 }
 
-/* 和上面的函数类似 */
+/* 创建 AOF file fsync 任务，填充 fd 属性，提交任务 */
 void bioCreateFsyncJob(int fd) {
     struct bio_job *job = zmalloc(sizeof(*job));
     job->fd = fd;
