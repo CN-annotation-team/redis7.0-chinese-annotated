@@ -7,7 +7,7 @@
  * 当前文件的函数可以分为三类
  * 1) lazyfreeXXX 执行实际释放对象空间的函数 (这些函数只有该文件内部使用，对外部不可见)
  * 2) lazyfreeGetXXX，lazyfreeResetXXX 获取和设置懒加载的一些信息和限制函数 （对外部可见）
- * 3) XXXAsync 提交惰性释放任务给后台线程，不执行实际删除任务，这里会把1)中的函数传递给 bio_job
+ * 3) XXXAsync 提交惰性释放任务给后台线程，不执行实际删除任务，这里会把 1 中的函数传递给 bio_job
  */
 /* 待执行对象的数量 */
 static redisAtomic size_t lazyfree_objects = 0;
