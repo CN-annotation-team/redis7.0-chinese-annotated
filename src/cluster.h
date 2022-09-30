@@ -176,7 +176,7 @@ typedef struct clusterNode {
     /* 由这个节点负责处理的槽
      * 一共有 CLUSTER_SLOTS / 8 个字节长 （一个字节 8 比特位，一位标识一个槽）
      * 每个字节的每位记录一个槽的保存状态
-     * 位的值为1，标识槽正由本节点处理，为0标识非本节点处理的槽 */
+     * 位的值为 1，标识槽正由本节点处理，为 0 标识非本节点处理的槽 */
     unsigned char slots[CLUSTER_SLOTS/8]; /* slots handled by this node */
     uint16_t *slot_info_pairs; /* Slots info represented as (start/end) pair (consecutive index). */
     int slot_info_pairs_count; /* Used number of slots in slot_info_pairs */
