@@ -32,7 +32,7 @@ void lazyfreeFreeObject(void *args[]) {
  * when the database was logically deleted. */
 /* 释放数据库，逻辑和 lazyfreeFreeObject 类似，只是具体调用的释放方法不同 */
 void lazyfreeFreeDatabase(void *args[]) {
-    /* 获取具体对象，ht1 是数据库的字典，ht2 是数据库的过期数据字典 */
+    /* 获取具体对象，ht1 是数据库的键空间字典，ht2 是数据库的过期字典 */
     dict *ht1 = (dict *) args[0];
     dict *ht2 = (dict *) args[1];
 
