@@ -49,7 +49,7 @@
 
 /* Include the best multiplexing layer supported by this system.
  * The following should be ordered by performances, descending. */
-/* 这里会根据当前处理器架构和性能来选择一种多路复用器，性能排序 evport > epoll > kqueue > select */
+/* 这里会根据当前处理器架构和性能来选择一种多路复用器 */
 #ifdef HAVE_EVPORT
 #include "ae_evport.c"
 #else
@@ -64,7 +64,7 @@
     #endif
 #endif
 
-/* 初始化事件循环处理器，该函数在 server.c 的 initServer 函数中被调用，setsize是个固定值 */
+/* 初始化事件循环处理器，该函数在 server.c 的 initServer 函数中被调用，setsize是个固定值，表示要监听的 fd 数量*/
 aeEventLoop *aeCreateEventLoop(int setsize) {
     aeEventLoop *eventLoop;
     int i;
@@ -401,9 +401,9 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
  * if flags has AE_CALL_BEFORE_SLEEP set, the beforesleep callback is called.
  *
  * The function returns the number of events processed. */
-/* 处理事件，通过 flags 来指定处理事件类型，具体类型可见 ae.h 56-68 行
+/* 处理事件，通过 flags 来指定处理事件类型
  * 这里直接看 aeMain 函数调用该函数时提供的 flags
- * AE_ALL_EVENTS(AE_FILE_EVENTS|AE_TIME_EVENTS)|AE_CALL_BEFORE_SLEEP|AE_CALL_AFTER_SLEEP*/
+ * AE_ALL_EVENTS(AE_FILE_EVENTS|AE_TIME_EVENTS)|AE_CALL_BEFORE_SLEEP|AE_CALL_AFTER_SLEEP */
 int aeProcessEvents(aeEventLoop *eventLoop, int flags)
 {
     int processed = 0, numevents;
@@ -490,9 +490,9 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
              * 立即对这个查询进行回复。
              *
              * 如果设置了 AE_BARRIER 掩码，
-             * 在一些情况下，应用可能要求我们不要再执行可读事件之后执行可写事件，
+             * 在一些情况下，应用可能要求我们不要在执行可读事件之后执行可写事件，
              * 在这种情况下，我们需要反转调用，例如我们需要在回复客户端之前在
-             * beforeSleep 钩子函数中同步文件到磁盘，*/
+             * beforeSleep 钩子函数中同步文件到磁盘，例如保证 AOF fsync always 策略 */
             int invert = fe->mask & AE_BARRIER;
 
             /* Note the "fe->mask & mask & ..." code: maybe an already
@@ -545,7 +545,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
 
 /* Wait for milliseconds until the given file descriptor becomes
  * writable/readable/exception */
-/* 等待 milliseconds 毫秒，知道 fd 有事件触发 */
+/* 等待 milliseconds 毫秒，直到 fd 有事件触发 */
 int aeWait(int fd, int mask, long long milliseconds) {
     struct pollfd pfd;
     int retmask = 0, retval;
