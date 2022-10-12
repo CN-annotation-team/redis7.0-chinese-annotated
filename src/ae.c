@@ -403,7 +403,8 @@ static int processTimeEvents(aeEventLoop *eventLoop) {
  * The function returns the number of events processed. */
 /* 处理事件，通过 flags 来指定处理事件类型
  * 这里直接看 aeMain 函数调用该函数时提供的 flags
- * AE_ALL_EVENTS(AE_FILE_EVENTS|AE_TIME_EVENTS)|AE_CALL_BEFORE_SLEEP|AE_CALL_AFTER_SLEEP */
+ * AE_ALL_EVENTS(AE_FILE_EVENTS|AE_TIME_EVENTS)|AE_CALL_BEFORE_SLEEP|AE_CALL_AFTER_SLEEP
+ * 这两个 sleep 前后回调，指的是多路复用器等待 socket fd 就绪事件前后 */
 int aeProcessEvents(aeEventLoop *eventLoop, int flags)
 {
     int processed = 0, numevents;
