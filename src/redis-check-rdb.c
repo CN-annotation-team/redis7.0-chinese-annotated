@@ -100,7 +100,7 @@ char *rdb_type_string[] = {
 };
 
 /* Show a few stats collected into 'rdbstate' */
-/* 打印检查统计信息，包括key总数量、有过期时间的key数量，已过期的key数量 */
+/* 打印检查统计信息，包括 key 总数量、有过期时间的 key 数量，已过期的 key 数量 */
 void rdbShowGenericInfo(void) {
     printf("[info] %lu keys read\n", rdbstate.keys);
     printf("[info] %lu expires\n", rdbstate.expires);
@@ -417,12 +417,12 @@ static sds checkRdbVersion(void) {
 int redis_check_rdb_main(int argc, char **argv, FILE *fp) {
     struct timeval tv;
     
-    /* 判断入参数量是否等于2，并且fp指针不为空，否则打印使用帮助并退出程序 */
+    /* 判断入参数量是否等于2，并且 fp 指针不为空，否则打印使用帮助并退出程序 */
     if (argc != 2 && fp == NULL) {
         fprintf(stderr, "Usage: %s <rdb-file-name>\n", argv[0]);
         exit(1);
     } else if (!strcmp(argv[1],"-v") || !strcmp(argv[1], "--version")) {        
-       /* redis-check-rdb 的参数为 -v 或者 --version时，打印其版本号并退出 */
+       /* redis-check-rdb 的参数为 -v 或者 --version 时，打印其版本号并退出 */
         sds version = checkRdbVersion();
         printf("redis-check-rdb %s\n", version);
         sdsfree(version);
@@ -436,7 +436,7 @@ int redis_check_rdb_main(int argc, char **argv, FILE *fp) {
     /* In order to call the loading functions we need to create the shared
      * integer objects, however since this function may be called from
      * an already initialized Redis instance, check if we really need to. */
-    /* 创建共享    整数对象，调用加载功能 */
+    /* 创建共享整数对象，调用加载功能 */
     if (shared.integers[0] == NULL)
         createSharedObjects();
     server.loading_process_events_interval_bytes = 0;
