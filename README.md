@@ -47,6 +47,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [lazyfree.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/lazyfree.c) | redis 惰性删除功能 | 完成 |
 | [ae.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.h) | redis 事件循环器结构定义 | 完成 |
 | [ae.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.c) | redis 事件循环器功能 | 完成 |
+| [redis-check-rdb.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/redis-check-rdb.c) | redis RDB 文件检查工具 | 低于一半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
 更新日期：2022/10/13
