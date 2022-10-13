@@ -349,7 +349,7 @@ int listTypeDelRange(robj *subject, long start, long count) {
  * 'xx': push if key exists. */
 
 /* push 命令通用实现函数 
-/* 实现的命令：LPUSH/RPUSH/LPUSHX/RPUSHX
+ * 实现的命令：LPUSH/RPUSH/LPUSHX/RPUSHX
  * 'xx': 如果 key 存在才能插入 */
 void pushGenericCommand(client *c, int where, int xx) {
     int j;
