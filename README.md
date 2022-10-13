@@ -40,9 +40,16 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [object.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/object.c) | Redis 的对象系统实现 | 低于一半 |
 | [util.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/util.c) | Redis 工具函数 | 低于一半 |
 | [blocked.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/blocked.c) | Redis 对 BLPOP 和 WAIT 等阻塞操作的通用支持 | 低于一半 |
+| [rio.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/rio.c) | 四种 redis IO 类型操作的实现  | 过半 |
+| [cluster.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/cluster.h) | redis 集群数据结构定义 | 完成 |
+| [cluster.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/cluster.c) | redis 集群实现 | 低于一半 |
+| [bio.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/bio.c) | redis 后台 IO 线程模型 | 完成 |
+| [lazyfree.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/lazyfree.c) | redis 惰性删除功能 | 完成 |
+| [ae.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.h) | redis 事件循环器结构定义 | 完成 |
+| [ae.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.c) | redis 事件循环器功能 | 完成 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/8/10
+更新日期：2022/10/10
 
 
 ## 关于提交 PR 的方法：
