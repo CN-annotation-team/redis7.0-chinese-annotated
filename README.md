@@ -49,7 +49,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [ae.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.c) | redis 事件循环器功能 | 完成 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/10/10
+更新日期：2022/10/13
 
 
 ## 关于提交 PR 的方法：
