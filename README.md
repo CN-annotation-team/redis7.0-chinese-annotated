@@ -45,9 +45,11 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [cluster.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/cluster.c) | redis 集群实现 | 低于一半 |
 | [bio.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/bio.c) | redis 后台 IO 线程模型 | 完成 |
 | [lazyfree.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/lazyfree.c) | redis 惰性删除功能 | 完成 |
+| [ae.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.h) | redis 事件循环器结构定义 | 完成 |
+| [ae.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.c) | redis 事件循环器功能 | 完成 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/10/10
+更新日期：2022/10/13
 
 
 ## 关于提交 PR 的方法：
