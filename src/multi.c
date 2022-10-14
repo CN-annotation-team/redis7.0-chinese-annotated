@@ -196,8 +196,8 @@ void execCommand(client *c) {
      * (technically it is not an error but a special behavior), while
      * in the second an EXECABORT error is returned. */
     /* 如果出现下面的情况需要丢弃 exec
-     * 1）存在被监视的 key 已经被其他客户端持有
-     * 2) 入队命令的时候出错了
+     * 1) 存在被监视的 key 被修改，即客户端有设置 CLIENT_DIRTY_CAS 标识
+     * 2) 入队命令的时候出错了，即客户端有设置 CLIENT_DIRTY_EXEC 标识
      */
     if (c->flags & (CLIENT_DIRTY_CAS | CLIENT_DIRTY_EXEC)) {
         if (c->flags & CLIENT_DIRTY_EXEC) {
@@ -342,7 +342,7 @@ void watchForKey(client *c, robj *key) {
     if (!clients) {
         /* 创建一个列表 */
         clients = listCreate();
-        /* 将 key 加入 watched_keys 字典中 */
+        /* 将 key 加到数据库的 watched_keys 字典中 */
         dictAdd(c->db->watched_keys,key,clients);
         incrRefCount(key);
     }
@@ -361,7 +361,7 @@ void watchForKey(client *c, robj *key) {
 
 /* Unwatch all the keys watched by this client. To clean the EXEC dirty
  * flag is up to the caller. */
-/* 取消客户端对所有键的监视 */
+/* 取消给定客户端对所有自己监视的 key 的监视  */
 void unwatchAllKeys(client *c) {
     listIter li;
     listNode *ln;
@@ -382,7 +382,7 @@ void unwatchAllKeys(client *c) {
         /* 从上面拿到的客户端列表中移除当前客户端 */
         listDelNode(clients,listSearchKey(clients,wk));
         /* Kill the entry at all if this was the only client */
-        /* 如果移除当前客户端之后，列表为 null 了，需要从数据库的 watched_keys 中移除该 key */
+        /* 如果移除当前客户端之后，客户端列表为空了，需要从数据库的 watched_keys 中移除该 key */
         if (listLength(clients) == 0)
             dictDelete(wk->db->watched_keys, wk->key);
         /* Remove this watched key from the client->watched list */
@@ -421,7 +421,7 @@ void touchWatchedKey(redisDb *db, robj *key) {
     listIter li;
     listNode *ln;
 
-    /* 如果数据库中没有被监视的 key，直接范湖 */
+    /* 如果数据库中没有被监视的 key，直接返回 */
     if (dictSize(db->watched_keys) == 0) return;
     /* 获取监视给定 key 的客户端列表 */
     clients = dictFetchValue(db->watched_keys, key);
@@ -436,11 +436,11 @@ void touchWatchedKey(redisDb *db, robj *key) {
         watchedKey *wk = listNodeValue(ln);
         client *c = wk->client;
 
-        /* 如果客户端的 watched_key 过期了 */
+        /* 如果键在 watch 的时候就逻辑过期了 */
         if (wk->expired) {
             /* The key was already expired when WATCH was called. */
-            /* 判断是否 watched_key 对应的 key 是否在数据库中已经被清除了
-             * 如果清除了，可以清除该 watched_key 的过期标识 */
+            /* 判断 watched_key 对应的 key 是否在数据库中已经被删除了
+             * 如果被删除，清除该键的过期标识，逻辑过期的键被删除，不会设置 DIRTY_CAS */
             if (db == wk->db &&
                 equalStringObjects(key, wk->key) &&
                 dictFind(db->dict, key->ptr) == NULL)
@@ -451,15 +451,16 @@ void touchWatchedKey(redisDb *db, robj *key) {
                 /* 这里会使用 continue 将所有监视该 key 的客户端的对应的 watched_key 的过期标识进行修改 */
                 goto skip_client;
             }
-            /* 如果 watched_key 过期，但是对应的 key 还存在，直接退出当前循环 */
+            /* 如果 watched_key 逻辑过期，但是对应的 key 还存在，直接退出当前循环 */
             break;
         }
 
-        /* 没过期的情况，设置 CLIENT_DIRTY_CAS 标识，需要取消客户端对所有键的监视 */
+        /* 没过期的情况，设置 CLIENT_DIRTY_CAS 标识 */
         c->flags |= CLIENT_DIRTY_CAS;
         /* As the client is marked as dirty, there is no point in getting here
          * again in case that key (or others) are modified again (or keep the
          * memory overhead till EXEC). */
+        /* 需要取消客户端对所有该客户端正在监视的键的监视 */
         unwatchAllKeys(c);
 
     skip_client:
@@ -531,7 +532,7 @@ void watchCommand(client *c) {
         return;
     }
     /* No point in watching if the client is already dirty. */
-    /* 如果设置了 CLIENT_DIRTY_CAS 标识，不能使用 watch 命令 */
+    /* 如果设置了 CLIENT_DIRTY_CAS 标识，说明客户端已经 dirty 了，watch 没有意义，直接返回 */
     if (c->flags & CLIENT_DIRTY_CAS) {
         addReply(c,shared.ok);
         return;
