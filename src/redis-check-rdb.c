@@ -100,6 +100,7 @@ char *rdb_type_string[] = {
 };
 
 /* Show a few stats collected into 'rdbstate' */
+/* 打印检查统计信息，包括 key 总数量、有过期时间的 key 数量，已过期的 key 数量 */
 void rdbShowGenericInfo(void) {
     printf("[info] %lu keys read\n", rdbstate.keys);
     printf("[info] %lu expires\n", rdbstate.expires);
@@ -380,6 +381,8 @@ err:
     return 1;
 }
 
+/* redis-check-rdb 打印版本号函数
+ * 根据 REDIS_VERSION 宏定义的值和 git 信息来确定最终的版本号 */
 static sds checkRdbVersion(void) {
     sds version;
     version = sdscatprintf(sdsempty(), "%s", REDIS_VERSION);
@@ -406,37 +409,56 @@ static sds checkRdbVersion(void) {
  * status code according to success (RDB is sane) or error (RDB is corrupted).
  * Otherwise if called with a non NULL fp, the function returns C_OK or
  * C_ERR depending on the success or failure. */
+
+/* redis-check-rdb 工具的主入口函数，用来检查 RDB 文件的正确性，并能对错误文件进行一定程度的修复
+ * 此工具的使用场景：
+ * 1）独立的可执行文件来检查某个 RDB 文件 
+ * 2）被 server 调用去检查已经打开的 fp 文件 */
 int redis_check_rdb_main(int argc, char **argv, FILE *fp) {
     struct timeval tv;
-
+    
+    /* 判断入参数量是否等于2，并且 fp 指针不为空，否则打印使用帮助并退出程序 */
     if (argc != 2 && fp == NULL) {
         fprintf(stderr, "Usage: %s <rdb-file-name>\n", argv[0]);
         exit(1);
-    } else if (!strcmp(argv[1],"-v") || !strcmp(argv[1], "--version")) {
+    } else if (!strcmp(argv[1],"-v") || !strcmp(argv[1], "--version")) {        
+       /* redis-check-rdb 的参数为 -v 或者 --version 时，打印其版本号并退出 */
         sds version = checkRdbVersion();
         printf("redis-check-rdb %s\n", version);
         sdsfree(version);
         exit(0);
     }
 
+    /* 系统调用获取当前时间 */
     gettimeofday(&tv, NULL);
     init_genrand64(((long long) tv.tv_sec * 1000000 + tv.tv_usec) ^ getpid());
 
     /* In order to call the loading functions we need to create the shared
      * integer objects, however since this function may be called from
      * an already initialized Redis instance, check if we really need to. */
+    /* 创建共享整数对象，调用加载功能 */
     if (shared.integers[0] == NULL)
         createSharedObjects();
     server.loading_process_events_interval_bytes = 0;
     server.sanitize_dump_payload = SANITIZE_DUMP_YES;
+    
+    /* 设置 rdbCheck 模式 */
     rdbCheckMode = 1;
     rdbCheckInfo("Checking RDB file %s", argv[1]);
+    
+    /* 设置 RDB 信号处理方式 */
     rdbCheckSetupSignals();
+    
+    /* 对 RDB 文件进行检查，成功返回 0，失败返回 1 */
     int retval = redis_check_rdb(argv[1],fp);
+    
+    /* 如果 RDB 文件检查成功，则输出检查成功以及各类统计信息，并返回 C_OK ，否则返回 C_ERR */
     if (retval == 0) {
         rdbCheckInfo("\\o/ RDB looks OK! \\o/");
         rdbShowGenericInfo();
     }
     if (fp) return (retval == 0) ? C_OK : C_ERR;
+    
+    /* 如果 fp 为空，则以 retval 的值作为异常退出值 */
     exit(retval);
 }
