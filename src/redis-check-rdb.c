@@ -37,9 +37,14 @@
 #include <sys/stat.h>
 
 void createSharedObjects(void);
+
+/* RDB 加载处理回调函数，跟踪加载进度，并可以使用 crc64 算法计算 RDB 校验值 */
 void rdbLoadProgressCallback(rio *r, const void *buf, size_t len);
+
+/* rdbCheck 模式全局变量，会在 rdb.c 中使用 */
 int rdbCheckMode = 0;
 
+/* RDB 状态结构体 */
 struct {
     rio *rio;
     robj *key;                      /* Current key we are reading. */
@@ -54,6 +59,8 @@ struct {
 
 /* At every loading step try to remember what we were about to do, so that
  * we can log this information when an error is encountered. */
+/* 在每个加载步骤尝试记住将要执行的操作，以便在遇到错误时记录并打印此信息 
+ * 共10种状态，和 rdb_check_doing_string 一一对应 */
 #define RDB_CHECK_DOING_START 0
 #define RDB_CHECK_DOING_READ_TYPE 1
 #define RDB_CHECK_DOING_READ_EXPIRE 2
@@ -65,6 +72,7 @@ struct {
 #define RDB_CHECK_DOING_READ_MODULE_AUX 8
 #define RDB_CHECK_DOING_READ_FUNCTIONS 9
 
+/* RDB 执行的操作状态库 */
 char *rdb_check_doing_string[] = {
     "start",
     "read-type",
@@ -78,6 +86,7 @@ char *rdb_check_doing_string[] = {
     "read-functions"
 };
 
+/* RDB 中 value 的类型库 */
 char *rdb_type_string[] = {
     "string",
     "list-linked",
@@ -109,6 +118,7 @@ void rdbShowGenericInfo(void) {
 
 /* Called on RDB errors. Provides details about the RDB and the offset
  * we were when the error was detected. */
+/* 在检查 RDB 有错误时调用，打印 RDB 和偏移量的详细信息 */ 
 void rdbCheckError(const char *fmt, ...) {
     char msg[1024];
     va_list ap;
@@ -136,6 +146,7 @@ void rdbCheckError(const char *fmt, ...) {
 }
 
 /* Print information during RDB checking. */
+/* 打印 RDB 文件的检查进度信息 */
 void rdbCheckInfo(const char *fmt, ...) {
     char msg[1024];
     va_list ap;
@@ -151,6 +162,7 @@ void rdbCheckInfo(const char *fmt, ...) {
 
 /* Used inside rdb.c in order to log specific errors happening inside
  * the RDB loading internals. */
+/* 在 rdb.c 中使用，记录在 RDB 加载内部时发生的特定错误 */ 
 void rdbCheckSetError(const char *fmt, ...) {
     va_list ap;
 
@@ -163,6 +175,8 @@ void rdbCheckSetError(const char *fmt, ...) {
 /* During RDB check we setup a special signal handler for memory violations
  * and similar conditions, so that we can log the offending part of the RDB
  * if the crash is due to broken content. */
+/* 在 RDB 检查期间，为内存违规和类似情况设置了一个特殊的信号处理程序，
+ * 如果崩溃是由于损坏的内容导致的，则可以记录 RDB 的违规部分 */ 
 void rdbCheckHandleCrash(int sig, siginfo_t *info, void *secret) {
     UNUSED(sig);
     UNUSED(info);
@@ -172,6 +186,7 @@ void rdbCheckHandleCrash(int sig, siginfo_t *info, void *secret) {
     exit(1);
 }
 
+/* 设置 RDB 信号处理方式  */
 void rdbCheckSetupSignals(void) {
     struct sigaction act;
 
@@ -189,25 +204,34 @@ void rdbCheckSetupSignals(void) {
  * 1 is returned.
  * The file is specified as a filename in 'rdbfilename' if 'fp' is not NULL,
  * otherwise the already open file 'fp' is checked. */
+/* RDB 文件检查函数，包含了对文件的所有异常检查动作，文件正常返回0异常返回1 */ 
 int redis_check_rdb(char *rdbfilename, FILE *fp) {
     uint64_t dbid;
     int selected_dbid = -1;
     int type, rdbver;
     char buf[1024];
-    long long expiretime, now = mstime();
+    long long expiretime, now = mstime(); /* 毫秒时间戳 */
     static rio rdb; /* Pointed by global struct riostate. */
     struct stat sb;
 
     int closefile = (fp == NULL);
+    
+    /* 如果 fp 为空，并且以只读的方式打开 RDB 文件失败，则直接返回1 */
     if (fp == NULL && (fp = fopen(rdbfilename,"r")) == NULL) return 1;
 
+    /* 获取 fp 的文件描述符信息，并将此文件状态信息复制到 sb */
     if (fstat(fileno(fp), &sb) == -1)
         sb.st_size = 0;
 
+    /* 开始加载 RDB 文件 */
     startLoadingFile(sb.st_size, rdbfilename, RDBFLAGS_NONE);
     rioInitWithFile(&rdb,fp);
     rdbstate.rio = &rdb;
     rdb.update_cksum = rdbLoadProgressCallback;
+    
+	/* 对 RDB 文件前9个字符做判断：
+	 * 1）前5个字符必须为 REDIS
+	 * 2）第6-9个字符为版本号，版本号必须大于等于1，并且小于 RDB_VERSION */    
     if (rioRead(&rdb,buf,9) == 0) goto eoferr;
     buf[9] = '\0';
     if (memcmp(buf,"REDIS",5) != 0) {
@@ -221,14 +245,21 @@ int redis_check_rdb(char *rdbfilename, FILE *fp) {
     }
 
     expiretime = -1;
+    
+    /* 开始循环对 RDB 做检查动作
+     * 首先获取 type 类型信息，然后根据类型信息的不同走不同的检查分支
+     * 在每个检查的时候会先更新 RDB 的 doing 类型
+     * 一旦出现异常会打印此操作类型和其他检查进度等详细信息 */    
     while(1) {
         robj *key, *val;
 
         /* Read type. */
+        /* 获取的 RDB 的类型信息并设置状态为正在读取类型 */
         rdbstate.doing = RDB_CHECK_DOING_READ_TYPE;
         if ((type = rdbLoadType(&rdb)) == -1) goto eoferr;
 
         /* Handle special types. */
+        /* 开始各种类型的分支检查 */
         if (type == RDB_OPCODE_EXPIRETIME) {
             rdbstate.doing = RDB_CHECK_DOING_READ_EXPIRE;
             /* EXPIRETIME: load an expire associated with the next key
@@ -349,6 +380,7 @@ int redis_check_rdb(char *rdbfilename, FILE *fp) {
         expiretime = -1;
     }
     /* Verify the checksum if RDB version is >= 5 */
+    /* 如果 RDB 版本大于5，并且开启了 rdbchecksum 参数则进行 sum 值检查 */
     if (rdbver >= 5 && server.rdb_checksum) {
         uint64_t cksum, expected = rdb.cksum;
 
@@ -366,6 +398,8 @@ int redis_check_rdb(char *rdbfilename, FILE *fp) {
     }
 
     if (closefile) fclose(fp);
+    
+    /* 停止加载 RDB 并停止 server 端阻塞动作 */
     stopLoading(1);
     return 0;
 
