@@ -37,9 +37,14 @@
 #include <sys/stat.h>
 
 void createSharedObjects(void);
+
+/* RDB 加载处理回调函数，跟踪加载进度，并可以使用 crc64 算法计算 RDB 校验值 */
 void rdbLoadProgressCallback(rio *r, const void *buf, size_t len);
+
+/* rdbCheck 模式全局变量，会在 rdb.c 中使用 */
 int rdbCheckMode = 0;
 
+/* RDB 状态结构体 */
 struct {
     rio *rio;
     robj *key;                      /* Current key we are reading. */
@@ -54,6 +59,8 @@ struct {
 
 /* At every loading step try to remember what we were about to do, so that
  * we can log this information when an error is encountered. */
+/* 在每个加载步骤尝试记住将要执行的操作，以便在遇到错误时记录并打印此信息 
+ * 共10种状态，和 rdb_check_doing_string 一一对应 */
 #define RDB_CHECK_DOING_START 0
 #define RDB_CHECK_DOING_READ_TYPE 1
 #define RDB_CHECK_DOING_READ_EXPIRE 2
@@ -65,6 +72,7 @@ struct {
 #define RDB_CHECK_DOING_READ_MODULE_AUX 8
 #define RDB_CHECK_DOING_READ_FUNCTIONS 9
 
+/* RDB 执行的操作状态库 */
 char *rdb_check_doing_string[] = {
     "start",
     "read-type",
@@ -78,6 +86,7 @@ char *rdb_check_doing_string[] = {
     "read-functions"
 };
 
+/* RDB 中 value 的类型库 */
 char *rdb_type_string[] = {
     "string",
     "list-linked",
@@ -109,6 +118,7 @@ void rdbShowGenericInfo(void) {
 
 /* Called on RDB errors. Provides details about the RDB and the offset
  * we were when the error was detected. */
+/* 在检查 RDB 有错误时调用，打印 RDB 和偏移量的详细信息 */ 
 void rdbCheckError(const char *fmt, ...) {
     char msg[1024];
     va_list ap;
@@ -136,6 +146,7 @@ void rdbCheckError(const char *fmt, ...) {
 }
 
 /* Print information during RDB checking. */
+/* 打印 RDB 文件的检查进度信息 */
 void rdbCheckInfo(const char *fmt, ...) {
     char msg[1024];
     va_list ap;
@@ -151,6 +162,7 @@ void rdbCheckInfo(const char *fmt, ...) {
 
 /* Used inside rdb.c in order to log specific errors happening inside
  * the RDB loading internals. */
+/* 在 rdb.c 中使用，记录在 RDB 加载内部时发生的特定错误 */ 
 void rdbCheckSetError(const char *fmt, ...) {
     va_list ap;
 
@@ -163,6 +175,8 @@ void rdbCheckSetError(const char *fmt, ...) {
 /* During RDB check we setup a special signal handler for memory violations
  * and similar conditions, so that we can log the offending part of the RDB
  * if the crash is due to broken content. */
+/* 在 RDB 检查期间，为内存违规和类似情况设置了一个特殊的信号处理程序，
+ * 如果崩溃是由于损坏的内容导致的，则可以记录 RDB 的违规部分 */ 
 void rdbCheckHandleCrash(int sig, siginfo_t *info, void *secret) {
     UNUSED(sig);
     UNUSED(info);
@@ -172,6 +186,7 @@ void rdbCheckHandleCrash(int sig, siginfo_t *info, void *secret) {
     exit(1);
 }
 
+/* 设置 RDB 信号处理方式  */
 void rdbCheckSetupSignals(void) {
     struct sigaction act;
 
