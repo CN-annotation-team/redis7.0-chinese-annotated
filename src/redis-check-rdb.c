@@ -204,19 +204,20 @@ void rdbCheckSetupSignals(void) {
  * 1 is returned.
  * The file is specified as a filename in 'rdbfilename' if 'fp' is not NULL,
  * otherwise the already open file 'fp' is checked. */
-/* RDB 文件检查函数，包含了对文件的所有异常检查动作，文件正常返回0异常返回1 */ 
+/* RDB 文件检查函数，包含了对文件的所有异常检查动作，文件正常返回 0 异常返回 1 */ 
 int redis_check_rdb(char *rdbfilename, FILE *fp) {
     uint64_t dbid;
     int selected_dbid = -1;
     int type, rdbver;
     char buf[1024];
-    long long expiretime, now = mstime(); /* 毫秒时间戳 */
+     /* now 毫秒时间戳 */
+    long long expiretime, now = mstime();
     static rio rdb; /* Pointed by global struct riostate. */
     struct stat sb;
 
     int closefile = (fp == NULL);
     
-    /* 如果 fp 为空，并且以只读的方式打开 RDB 文件失败，则直接返回1 */
+    /* 如果 fp 为空，并且以只读的方式打开 RDB 文件失败，则直接返回 1 */
     if (fp == NULL && (fp = fopen(rdbfilename,"r")) == NULL) return 1;
 
     /* 获取 fp 的文件描述符信息，并将此文件状态信息复制到 sb */
@@ -229,9 +230,9 @@ int redis_check_rdb(char *rdbfilename, FILE *fp) {
     rdbstate.rio = &rdb;
     rdb.update_cksum = rdbLoadProgressCallback;
     
-	/* 对 RDB 文件前9个字符做判断：
-	 * 1）前5个字符必须为 REDIS
-	 * 2）第6-9个字符为版本号，版本号必须大于等于1，并且小于 RDB_VERSION */    
+	/* 对 RDB 文件前 9 个字符做判断：
+	 * 1）前 5 个字符必须为 REDIS
+	 * 2）第 6-9 个字符为版本号，版本号必须大于等于 1，并且小于 RDB_VERSION */    
     if (rioRead(&rdb,buf,9) == 0) goto eoferr;
     buf[9] = '\0';
     if (memcmp(buf,"REDIS",5) != 0) {
@@ -380,7 +381,7 @@ int redis_check_rdb(char *rdbfilename, FILE *fp) {
         expiretime = -1;
     }
     /* Verify the checksum if RDB version is >= 5 */
-    /* 如果 RDB 版本大于5，并且开启了 rdbchecksum 参数则进行 sum 值检查 */
+    /* 如果 RDB 版本大于 5，并且开启了 rdbchecksum 参数则进行 cksum 值检查 */
     if (rdbver >= 5 && server.rdb_checksum) {
         uint64_t cksum, expected = rdb.cksum;
 
