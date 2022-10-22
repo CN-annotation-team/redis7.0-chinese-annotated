@@ -44,9 +44,9 @@
 /* redis7 的 aof 功能和之前版本的 aof 功能在文件管理方面有了很大的改变
  * redis7 对 aof 文件进行了分类，分为以下 4 类文件（临时文件不用管）
  * 1) manifest: 清单文件，该文件的内容对应 aofManifest 结构，记录所有其他类型文件的文件信息，并进行了分类
- * 2) base: 基础文件，就是在执行 bgrewrite 的时候，当前数据的 RDB 快照，该文件的文件名后缀也是以 rdb 结尾
+ * 2) base: 基础文件，就是在执行 bgrewrite 的时候，当前数据的 RDB 快照或者 AOF，该文件的文件名后缀也是以 rdb 或者 aof 结尾，取决于 aof-use-rdb-preamble 配置项
  * 3) incr: 增量命令文件，执行 bgrewrite 之后到的写命令，会存入该文件
- * 4) history: 历史文件，执行 bgrewrite 之后，之前存在的 incr，base 文件就是历史文件，会通过 bio 关闭文件
+ * 4) history: 历史文件，执行 bgrewrite 之后，之前存在的 incr，base 文件就是历史文件，会通过 bio 关闭文件或者删除文件
  */
 
 void freeClientArgv(client *c);
@@ -97,7 +97,7 @@ void aofManifestFreeAndUpdate(aofManifest *am);
 #define INCR_FILE_SUFFIX           ".incr"
 /* 使用 rdb 编码格式在 bgrewrite 的时候存储 base 文件的文件后缀标识 */
 #define RDB_FORMAT_SUFFIX          ".rdb"
-/* 增加命令文件使用该后缀 */
+/* 不使用 rdb 编码格式在 bgrewrite 的时候存储 base 文件的文件后缀标识，和 incr 文件使用的后缀标识 */
 #define AOF_FORMAT_SUFFIX          ".aof"
 /* 清单文件后缀，该类型的文件会存储所有其他类型文件的文件名 */
 #define MANIFEST_NAME_SUFFIX       ".manifest"
@@ -128,7 +128,7 @@ void aofInfoFree(aofInfo *ai) {
 }
 
 /* Deep copy an aofInfo. */
-/* 深度复制一份 aofInfo 实例 */
+/* 深拷贝一份 aofInfo 实例 */
 aofInfo *aofInfoDup(aofInfo *orig) {
     serverAssert(orig != NULL);
     aofInfo *ai = aofInfoCreate();
@@ -147,7 +147,7 @@ sds aofInfoFormat(sds buf, aofInfo *ai) {
     if (sdsneedsrepr(ai->file_name))
         filename_repr = sdscatrepr(sdsempty(), ai->file_name, sdslen(ai->file_name));
 
-    /* 格式： file xxx seq xxx type xxx */
+    /* 格式：file xxx seq xxx type xxx */
     sds ret = sdscatprintf(buf, "%s %s %s %lld %s %c\n",
         AOF_MANIFEST_KEY_FILE_NAME, filename_repr ? filename_repr : ai->file_name,
         AOF_MANIFEST_KEY_FILE_SEQ, ai->file_seq,
@@ -946,7 +946,7 @@ cleanup:
  * 为了解决上面的问题，使用了时间限制。当 AOFRW 失败，将会延迟 1 分钟再执行下一次 AOFRW，如果之后还
  * 失败，就延迟 2 分钟，接着是 4,8,16,.... 最大是 60 分钟
  *
- * 在 AOFRW 限制期间，我们任然可以使用 bgrewriteaof 命令立即执行 AOFRW
+ * 在 AOFRW 限制期间，我们仍然可以使用 bgrewriteaof 命令主动并且立即触发 AOFRW
  *
  * 该函数返回 1 表示 AOFRW 被限制了，不能执行，如果是 0 则可以执行 AOFRW
  */
@@ -1159,7 +1159,7 @@ ssize_t aofWrite(int fd, const char *buf, size_t len) {
  *
  * 这里还要注意两种 aof fsync 刷盘策略：
  * always 表示写入磁盘之后就执行刷盘
- * everysec 会使用 bio 做异步刷盘，且该策略下存在非强制刷盘的功能
+ * everysec 会使用 bio 大概每秒做一次异步刷盘，且该策略下存在非强制刷盘的功能
  */
 void flushAppendOnlyFile(int force) {
     ssize_t nwritten;
@@ -1185,7 +1185,7 @@ void flushAppendOnlyFile(int force) {
         }
     }
 
-    /* sync_in_progress 表示是否有正在执行的 aof fsync 任务 */
+    /* sync_in_progress 表示是否有正在执行的 bg aof fsync 任务 */
     if (server.aof_fsync == AOF_FSYNC_EVERYSEC)
         sync_in_progress = aofFsyncInProgress();
 
@@ -1194,7 +1194,7 @@ void flushAppendOnlyFile(int force) {
         /* With this append fsync policy we do background fsyncing.
          * If the fsync is still in progress we can try to delay
          * the write for a couple of seconds. */
-        /* 如果有正在执行的 aof fsync 任务，这里会尝试延迟 2 秒将内存数据写入文件 */
+        /* 如果有正在执行的 bg aof fsync 任务，这里会尝试延迟 2 秒将内存数据写入文件 */
         if (sync_in_progress) {
             /* 这里每次调用完 aofWrite 函数后，会将 server.aof_flush_postponed_start 置 0
              * 该属性为 0 表示现在开始新一次的 aof_buf 写磁盘操作 */
