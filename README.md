@@ -41,9 +41,10 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [util.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/util.c) | Redis 工具函数 | 低于一半 |
 | [blocked.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/blocked.c) | Redis 对 BLPOP 和 WAIT 等阻塞操作的通用支持 | 低于一半 |
 | [rio.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/rio.c) | 四种 redis IO 类型操作的实现  | 过半 |
+| [evict.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/evict.c) | 四种 redis 内存淘汰算法  | 完成 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/9/23
+更新日期：2022/10/22
 
 
 ## 关于提交 PR 的方法：

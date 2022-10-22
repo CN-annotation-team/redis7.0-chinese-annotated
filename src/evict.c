@@ -58,7 +58,7 @@
 #define EVPOOL_CACHED_SDS_SIZE 255
 /* 定义淘汰池中每个节点的数据结构 */
 struct evictionPoolEntry {
-    /* 对象的空闲时间 */
+    /* 存的是 lru/ttl 相关的空闲时间或者 LFU 的反向频率 */
     unsigned long long idle;    /* Object idle time (inverse frequency for LFU) */
     /* 键名 */
     sds key;                    /* Key name. */
@@ -78,7 +78,7 @@ static struct evictionPoolEntry *EvictionPoolLRU;
  * object->lru field of redisObject structures. */
 /* 生成一个 LRU 时钟，LRU_CLOCK_RESOLUTION 是 1000，这里获取的是时间戳的秒数
  * 然后取后 LRU_CLOCK_MAX(24) 位，这个生成的值最后会作为一个 redisObject 实例的 lru 属性上
- * 该属性占用 24bit 位 */
+ * 该属性占用 24 位 */
 unsigned int getLRUClock(void) {
     return (mstime()/LRU_CLOCK_RESOLUTION) & LRU_CLOCK_MAX;
 }
@@ -165,9 +165,9 @@ void evictionPoolPopulate(int dbid, dict *sampledict, dict *keydict, struct evic
     /* 定义一个用来存储样本的临时数组 */
     dictEntry *samples[server.maxmemory_samples];
 
-    /* 从 sampledict 字典中随机拿最多 server.maxmemory_samples(默认为 5，可以在配置文件中通过 maxmemory-samples 设置)
+    /* 从 sampledict 字典中随机拿最多 server.maxmemory_samples (默认为 5，可以在配置文件中通过 maxmemory-samples 设置)
      * 个元素放入 samples 数组中，
-     * 注：这里不是一定会拿 server.maxmemory_samples 个键值对，存在小于该数量的情况，具体看 dict.c 该函数的逻辑*/
+     * 注：这里不是一定会拿 server.maxmemory_samples 个键值对，存在小于该数量的情况，具体看 dict.c 该函数的逻辑 */
     count = dictGetSomeKeys(sampledict,samples,server.maxmemory_samples);
     for (j = 0; j < count; j++) {
         unsigned long long idle;
@@ -205,7 +205,8 @@ void evictionPoolPopulate(int dbid, dict *sampledict, dict *keydict, struct evic
              * frequency of 255. */
             /* LFU 需要根据最后一个访问时间间隔和对象的访问频度来做计算，可以看具体方法，也可以大概看做
              * 访问次数越多，idle 越小
-             * 上一次访问时间距离现在的间隔越小，idle 越小 */
+             * 上一次访问时间距离现在的间隔越小，idle 越小
+             * 即 idle 存储的是反向频率，即使用频率较低的，反向后数值较大，这样升序后是排在后面 */
             idle = 255-LFUDecrAndReturn(o);
         } else if (server.maxmemory_policy == MAXMEMORY_VOLATILE_TTL) {
             /* In this case the sooner the expire the better. */
@@ -362,17 +363,17 @@ uint8_t LFULogIncr(uint8_t counter) {
  * This function is used in order to scan the dataset for the best object
  * to fit: as we check for the candidate, we incrementally decrement the
  * counter of the scanned objects if needed. */
-/* 该函数用来评估 LFU 内存淘汰策略下，对象被使用的 */
+/* 该函数用来评估 LFU 内存淘汰策略下，对象被使用的衰减访问计数 */
 unsigned long LFUDecrAndReturn(robj *o) {
     /* o->lru 总共有 24 bit */
-    /* 获取高 16 位，高 16 位表示最近使用的时间间隔 */
+    /* 获取高 16 位，高 16 位表示最近使用的访问时间 */
     unsigned long ldt = o->lru >> 8;
     /* 获取低 8 位，低 8 位表示最近使用的次数 */
     unsigned long counter = o->lru & 255;
     /* 这里会根据 LFU 时间因子来计算最后一次访问时间的影响，lfu_decay_time 默认为 1
      * num_periods = 对象的最后一次访问时间到当前的间隔（单位是分钟） / 因子 */
     unsigned long num_periods = server.lfu_decay_time ? LFUTimeElapsed(ldt) / server.lfu_decay_time : 0;
-    /* 如果时间影响超过访问频度的影响，直接返回 0，否则返回他们之间的差值 */
+    /* 如果时间影响超过访问频度的影响，直接返回 0，否则返回他们之间的差值，即返回衰减后的访问计数 */
     if (num_periods)
         counter = (num_periods > counter) ? 0 : counter - num_periods;
     return counter;
@@ -571,7 +572,7 @@ static int isSafeToPerformEvictions(void) {
     /* By default replicas should ignore maxmemory
      * and just be masters exact copies. */
     /* 当前节点是从节点且从节点是直接从主节点拷贝数据，不进行内存淘汰
-     * 注：主节点删除数据的时候会告诉从节点也要删除对应的数据*/
+     * 注：主节点删除数据的时候会告诉从节点也要删除对应的数据 */
     if (server.masterhost && server.repl_slave_ignore_maxmemory) return 0;
 
     /* When clients are paused the dataset should be static not just from the
@@ -803,7 +804,7 @@ int performEvictions(void) {
             decrRefCount(keyobj);
             keys_freed++;
 
-            /* 每释放 16 个键值对做一次下面的操作，加速释放 */
+            /* 每释放 16 个键值对做一次下面的操作，加速释放（渐进式淘汰） */
             if (keys_freed % 16 == 0) {
                 /* When the memory to free starts to be big enough, we may
                  * start spending so much time here that is impossible to
