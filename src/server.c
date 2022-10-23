@@ -3048,6 +3048,7 @@ struct redisCommand *lookupCommandOrOriginal(robj **argv ,int argc) {
 }
 
 /* Commands arriving from the master client or AOF client, should never be rejected. */
+/* 绝不应拒绝来自主客户端或AOF客户端的命令 */
 int mustObeyClient(client *c) {
     return c->id == CLIENT_ID_AOF || c->flags & CLIENT_MASTER;
 }

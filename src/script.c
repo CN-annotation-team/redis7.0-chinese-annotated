@@ -31,6 +31,7 @@
 #include "script.h"
 #include "cluster.h"
 
+/* 支持的标记 */
 scriptFlag scripts_flags_def[] = {
     {.flag = SCRIPT_FLAG_NO_WRITES, .str = "no-writes"},
     {.flag = SCRIPT_FLAG_ALLOW_OOM, .str = "allow-oom"},
@@ -43,6 +44,7 @@ scriptFlag scripts_flags_def[] = {
 /* On script invocation, holding the current run context */
 static scriptRunCtx *curr_run_ctx = NULL;
 
+/* 移除脚本的超时模式 */
 static void exitScriptTimedoutMode(scriptRunCtx *run_ctx) {
     serverAssert(run_ctx == curr_run_ctx);
     serverAssert(scriptIsTimedout());
@@ -52,6 +54,7 @@ static void exitScriptTimedoutMode(scriptRunCtx *run_ctx) {
     if (server.masterhost && server.master) queueClientForReprocessing(server.master);
 }
 
+/* 确认脚本进入了超时模式 */
 static void enterScriptTimedoutMode(scriptRunCtx *run_ctx) {
     serverAssert(run_ctx == curr_run_ctx);
     serverAssert(!scriptIsTimedout());
@@ -77,10 +80,14 @@ client* scriptGetCaller() {
 /* interrupt function for scripts, should be call
  * from time to time to reply some special command (like ping)
  * and also check if the run should be terminated. */
+
+/* 脚本的中断函数，应不时调用以回复某些特殊命令（如ping），并检查运行是否应终止 */
 int scriptInterrupt(scriptRunCtx *run_ctx) {
     if (run_ctx->flags & SCRIPT_TIMEDOUT) {
         /* script already timedout
            we just need to precess some events and return */
+
+        /* 脚本已经超时，我们只需要处理一些事件并返回 */
         processEventsWhileBlocked();
         return (run_ctx->flags & SCRIPT_KILLED) ? SCRIPT_KILL : SCRIPT_CONTINUE;
     }
@@ -101,13 +108,18 @@ int scriptInterrupt(scriptRunCtx *run_ctx) {
      * we need to mask the client executing the script from the event loop.
      * If we don't do that the client may disconnect and could no longer be
      * here when the EVAL command will return. */
+
+    /* 一旦脚本超时，我们就重新进入事件循环以允许其他人执行一些命令。因此，我们需要从事件循环中屏蔽执行脚本的客户端。
+     * 如果我们不这样做，当 EVAL 命令返回时，客户端可能会断开连接，并且不再在这里*/
     protectClient(run_ctx->original_client);
 
+    /* 尝试去处理 eventLoop */
     processEventsWhileBlocked();
 
     return (run_ctx->flags & SCRIPT_KILLED) ? SCRIPT_KILL : SCRIPT_CONTINUE;
 }
 
+/* 把脚本的 flag 转换为 cmd 的 flag，包括类似禁止 OOM，可写命令 */
 uint64_t scriptFlagsToCmdFlags(uint64_t cmd_flags, uint64_t script_flags) {
     /* If the script declared flags, clear the ones from the command and use the ones it declared.*/
     cmd_flags &= ~(CMD_STALE | CMD_DENYOOM | CMD_WRITE);
@@ -122,6 +134,8 @@ uint64_t scriptFlagsToCmdFlags(uint64_t cmd_flags, uint64_t script_flags) {
 
     /* In addition the MAY_REPLICATE flag is set for these commands, but
      * if we have flags we know if it's gonna do any writes or not. */
+
+    /* 此外，为这些命令设置了 MAY_REPLICATE 标志，但如果我们有标志，我们就知道它是否会进行任何写入 */
     cmd_flags &= ~CMD_MAY_REPLICATE;
 
     return cmd_flags;
@@ -131,17 +145,22 @@ uint64_t scriptFlagsToCmdFlags(uint64_t cmd_flags, uint64_t script_flags) {
 int scriptPrepareForRun(scriptRunCtx *run_ctx, client *engine_client, client *caller, const char *funcname, uint64_t script_flags, int ro) {
     serverAssert(!curr_run_ctx);
 
+    /* 从节点、且当前主从复制是不正常的 */
     int running_stale = server.masterhost &&
             server.repl_state != REPL_STATE_CONNECTED &&
             server.repl_serve_stale_data == 0;
+    /* 是否是一个 master client 或者是一个 aof client */
     int obey_client = mustObeyClient(caller);
 
+    /* 存在特殊的标记 */
     if (!(script_flags & SCRIPT_FLAG_EVAL_COMPAT_MODE)) {
+        /* 不允许 cluster 模式下执行 */
         if ((script_flags & SCRIPT_FLAG_NO_CLUSTER) && server.cluster_enabled) {
             addReplyError(caller, "Can not run script on cluster, 'no-cluster' flag is set.");
             return C_ERR;
         }
 
+        /* 判断是否允许故障模式下执行 */
         if (running_stale && !(script_flags & SCRIPT_FLAG_ALLOW_STALE)) {
             addReplyError(caller, "-MASTERDOWN Link with MASTER is down, "
                              "replica-serve-stale-data is set to 'no' "
@@ -149,17 +168,24 @@ int scriptPrepareForRun(scriptRunCtx *run_ctx, client *engine_client, client *ca
             return C_ERR;
         }
 
+        /* 判断是否允许写入操作 */
         if (!(script_flags & SCRIPT_FLAG_NO_WRITES)) {
             /* Script may perform writes we need to verify:
              * 1. we are not a readonly replica
              * 2. no disk error detected
              * 3. command is not `fcall_ro`/`eval[sha]_ro` */
+
+            /* 脚本可能会执行我们需要验证的写入：
+             * 1.我们不是只读副本
+             * 2.未检测到磁盘错误
+             * 3.命令不是 `fcall_ro`/`eval[sha]_ro` */
             if (server.masterhost && server.repl_slave_ro && !obey_client) {
                 addReplyError(caller, "-READONLY Can not run script with write flag on readonly replica");
                 return C_ERR;
             }
 
             /* Deny writes if we're unale to persist. */
+            /* 当前写磁盘错误 */
             int deny_write_type = writeCommandsDeniedByDiskError();
             if (deny_write_type != DISK_ERROR_TYPE_NONE && !obey_client) {
                 if (deny_write_type == DISK_ERROR_TYPE_RDB)
@@ -174,6 +200,7 @@ int scriptPrepareForRun(scriptRunCtx *run_ctx, client *engine_client, client *ca
                 return C_ERR;
             }
 
+            /* 当前属于只读模式 */
             if (ro) {
                 addReplyError(caller, "Can not execute a script with write flag using *_ro command.");
                 return C_ERR;
@@ -181,6 +208,8 @@ int scriptPrepareForRun(scriptRunCtx *run_ctx, client *engine_client, client *ca
 
             /* Don't accept write commands if there are not enough good slaves and
              * user configured the min-slaves-to-write option. */
+
+            /* 当前的主节点是否可用 */
             if (server.masterhost == NULL &&
                 server.repl_min_slaves_max_lag &&
                 server.repl_min_slaves_to_write &&
@@ -193,6 +222,8 @@ int scriptPrepareForRun(scriptRunCtx *run_ctx, client *engine_client, client *ca
 
         /* Check OOM state. the no-writes flag imply allow-oom. we tested it
          * after the no-write error, so no need to mention it in the error reply. */
+
+        /* 检查 OOM 状态。no writes 标志表示允许 oom 。我们在无写错误之后测试了它，因此无需在错误回复中提及它 */
         if (server.pre_command_oom_state && server.maxmemory &&
             !(script_flags & (SCRIPT_FLAG_ALLOW_OOM|SCRIPT_FLAG_NO_WRITES)))
         {
@@ -203,6 +234,7 @@ int scriptPrepareForRun(scriptRunCtx *run_ctx, client *engine_client, client *ca
 
     } else {
         /* Special handling for backwards compatibility (no shebang eval[sha]) mode */
+        /* 向后兼容（无 shebang eval[sha]）模式的特殊处理, 如果当前服务故障中，则返回错误 */
         if (running_stale) {
             addReplyErrorObject(caller, shared.masterdownerr);
             return C_ERR;
@@ -213,36 +245,44 @@ int scriptPrepareForRun(scriptRunCtx *run_ctx, client *engine_client, client *ca
     run_ctx->original_client = caller;
     run_ctx->funcname = funcname;
 
+    /* 绑定 client 和上下文的关系 */
     client *script_client = run_ctx->c;
     client *curr_client = run_ctx->original_client;
     server.script_caller = curr_client;
 
     /* Select the right DB in the context of the Lua client */
     selectDb(script_client, curr_client->db->id);
+    /* 设置协议为2 */
     script_client->resp = 2; /* Default is RESP2, scripts can change it. */
 
     /* If we are in MULTI context, flag Lua client as CLIENT_MULTI. */
+    /* 透传事务标识 */
     if (curr_client->flags & CLIENT_MULTI) {
         script_client->flags |= CLIENT_MULTI;
     }
 
+    /* 初始化相关时间信息, 前者用来判断执行时间, 后者用于 key 的过期判断 */
     run_ctx->start_time = getMonotonicUs();
     run_ctx->snapshot_time = mstime();
 
     run_ctx->flags = 0;
+    /* 默认设置 aof 和 repl 标记 */
     run_ctx->repl_flags = PROPAGATE_AOF | PROPAGATE_REPL;
 
+    /* 设置只读标记 */
     if (ro || (!(script_flags & SCRIPT_FLAG_EVAL_COMPAT_MODE) && (script_flags & SCRIPT_FLAG_NO_WRITES))) {
         /* On fcall_ro or on functions that do not have the 'write'
          * flag, we will not allow write commands. */
         run_ctx->flags |= SCRIPT_READ_ONLY;
     }
+    /* 设置 OOM 标记 */
     if (!(script_flags & SCRIPT_FLAG_EVAL_COMPAT_MODE) && (script_flags & SCRIPT_FLAG_ALLOW_OOM)) {
         /* Note: we don't need to test the no-writes flag here and set this run_ctx flag,
          * since only write commands can are deny-oom. */
         run_ctx->flags |= SCRIPT_ALLOW_OOM;
     }
 
+    /* 设置允许跨分片标记 */
     if ((script_flags & SCRIPT_FLAG_EVAL_COMPAT_MODE) || (script_flags & SCRIPT_FLAG_ALLOW_CROSS_SLOT)) {
         run_ctx->flags |= SCRIPT_ALLOW_CROSS_SLOT;
     }
@@ -254,10 +294,14 @@ int scriptPrepareForRun(scriptRunCtx *run_ctx, client *engine_client, client *ca
 }
 
 /* Reset the given run ctx after execution */
+
+/* 执行后重置给定的运行 ctx */
 void scriptResetRun(scriptRunCtx *run_ctx) {
     serverAssert(curr_run_ctx);
 
     /* After the script done, remove the MULTI state. */
+
+    /* 脚本完成后，删除 MULTI 状态 */
     run_ctx->c->flags &= ~CLIENT_MULTI;
 
     server.script_caller = NULL;
@@ -291,6 +335,8 @@ int scriptIsEval() {
 }
 
 /* Kill the current running script */
+
+/* 终止当前运行的脚本 */
 void scriptKill(client *c, int is_eval) {
     if (!curr_run_ctx) {
         addReplyError(c, "-NOTBUSY No scripts in execution right now.");
@@ -300,6 +346,7 @@ void scriptKill(client *c, int is_eval) {
         addReplyError(c,
                 "-UNKILLABLE The busy script was sent by a master instance in the context of replication and cannot be killed.");
     }
+    /* 如果数据已修改，则禁止终止 */
     if (curr_run_ctx->flags & SCRIPT_WRITE_DIRTY) {
         addReplyError(c,
                 "-UNKILLABLE Sorry the script already executed write "
@@ -345,12 +392,16 @@ static int scriptVerifyACL(client *c, sds *err) {
     return C_OK;
 }
 
+/* 校验当前写命令是否能执行成功 */
 static int scriptVerifyWriteCommandAllow(scriptRunCtx *run_ctx, char **err) {
 
     /* A write command, on an RO command or an RO script is rejected ASAP.
      * Note: For scripts, we consider may-replicate commands as write commands.
      * This also makes it possible to allow read-only scripts to be run during
      * CLIENT PAUSE WRITE. */
+
+    /* RO 命令或 RO 脚本上的写入命令将被尽快拒绝。
+     * 注意：对于脚本，我们认为可以将命令复制为写命令。 */
     if (run_ctx->flags & SCRIPT_READ_ONLY &&
         (run_ctx->c->cmd->flags & (CMD_WRITE|CMD_MAY_REPLICATE)))
     {
@@ -360,17 +411,23 @@ static int scriptVerifyWriteCommandAllow(scriptRunCtx *run_ctx, char **err) {
 
     /* The other checks below are on the server state and are only relevant for
      *  write commands, return if this is not a write command. */
+
+    /* 下面的其他检查针对服务器状态，仅与写命令相关，如果这不是写命令，则返回 */
     if (!(run_ctx->c->cmd->flags & CMD_WRITE))
         return C_OK;
 
     /* If the script already made a modification to the dataset, we can't
      * fail it on unpredictable error state. */
+
+    /* 如果脚本已经对数据集进行了修改，我们不能在不可预测的错误状态下使其失败 */
     if ((run_ctx->flags & SCRIPT_WRITE_DIRTY))
         return C_OK;
 
     /* Write commands are forbidden against read-only slaves, or if a
      * command marked as non-deterministic was already called in the context
      * of this script. */
+
+    /* 禁止对只读从属设备执行写入命令，或者如果在脚本上下文中已调用了标记为非确定性的命令，则禁止执行写入命令 */
     int deny_write_type = writeCommandsDeniedByDiskError();
 
     if (server.masterhost && server.repl_slave_ro &&
@@ -389,6 +446,9 @@ static int scriptVerifyWriteCommandAllow(scriptRunCtx *run_ctx, char **err) {
      * user configured the min-slaves-to-write option. Note this only reachable
      * for Eval scripts that didn't declare flags, see the other check in
      * scriptPrepareForRun */
+
+    /* 如果没有足够好的从机，并且用户配置了 min-slavesto-write 选项，则不要接受 write 命令。
+     * 请注意，这只适用于未声明标志的 Eval 脚本，请参阅 scriptPrepareForRun 中的其他检查 */
     if (!checkGoodReplicasStatus()) {
         *err = sdsdup(shared.noreplicaserr->ptr);
         return C_ERR;
@@ -408,6 +468,7 @@ static int scriptVerifyOOM(scriptRunCtx *run_ctx, char **err) {
      * first write in the context of this script, otherwise we can't stop
      * in the middle. */
 
+    /* 如果我们达到了通过 maxmemory 配置的内存限制，则不允许使用可能扩大内存使用量的命令，但前提是这是该脚本上下文中的第一次写入，否则我们不能中途停止 */
     if (server.maxmemory &&                            /* Maxmemory is actually enabled. */
         !mustObeyClient(run_ctx->original_client) &&   /* Don't care about mem for replicas or AOF. */
         !(run_ctx->flags & SCRIPT_WRITE_DIRTY) &&      /* Script had no side effects so far. */
@@ -428,6 +489,8 @@ static int scriptVerifyClusterState(scriptRunCtx *run_ctx, client *c, client *or
     /* If this is a Redis Cluster node, we need to make sure the script is not
      * trying to access non-local keys, with the exception of commands
      * received from our master or when loading the AOF back in memory. */
+
+    /* 如果这是一个 Redis Cluster 节点，我们需要确保脚本没有试图访问非本地密钥，除了从我们的主机接收到的命令或将 AOF 加载回内存时 */
     int error_code;
     /* Duplicate relevant flags in the script client. */
     c->flags &= ~(CLIENT_READONLY | CLIENT_ASKING);
@@ -451,6 +514,8 @@ static int scriptVerifyClusterState(scriptRunCtx *run_ctx, client *c, client *or
     /* If the script declared keys in advanced, the cross slot error would have
      * already been thrown. This is only checking for cross slot keys being accessed
      * that weren't pre-declared. */
+
+    /* 如果脚本以高级方式声明键，那么交叉槽错误可能已经被抛出。这只是检查正在访问的未预先声明的交叉槽密钥 */
     if (hashslot != -1 && !(run_ctx->flags & SCRIPT_ALLOW_CROSS_SLOT)) {
         if (original_c->slot == -1) {
             original_c->slot = hashslot;
@@ -475,6 +540,8 @@ int scriptSetResp(scriptRunCtx *run_ctx, int resp) {
 
 /* set Repl for a given run_ctx
  * either: PROPAGATE_AOF | PROPAGATE_REPL*/
+
+/* 设置当前的行为 */
 int scriptSetRepl(scriptRunCtx *run_ctx, int repl) {
     if ((repl & ~(PROPAGATE_AOF | PROPAGATE_REPL)) != 0) {
         return C_ERR;
@@ -483,6 +550,7 @@ int scriptSetRepl(scriptRunCtx *run_ctx, int repl) {
     return C_OK;
 }
 
+/* 是否禁止故障从节点执行 */
 static int scriptVerifyAllowStale(client *c, sds *err) {
     if (!server.masterhost) {
         /* Not a replica, stale is irrelevant */
@@ -514,6 +582,11 @@ static int scriptVerifyAllowStale(client *c, sds *err) {
  * up to the engine to take and parse.
  * The err out variable is set only if error occurs and describe the error.
  * If err is set on reply is written to the run_ctx client. */
+
+/* 调用 Redis 命令。
+ * 回复被写入 run_ctx 客户端，由引擎获取和解析。
+ * 仅当发生错误并描述错误时，才会设置 err-out 变量。
+ * 如果设置了 err，则会将回复写入 run_ctx 客户端 */
 void scriptCall(scriptRunCtx *run_ctx, robj* *argv, int argc, sds *err) {
     client *c = run_ctx->c;
 
@@ -527,6 +600,7 @@ void scriptCall(scriptRunCtx *run_ctx, robj* *argv, int argc, sds *err) {
     argv = c->argv;
     argc = c->argc;
 
+    /* 查询对应的命令对象 */
     struct redisCommand *cmd = lookupCommand(argv, argc);
     c->cmd = c->lastcmd = c->realcmd = cmd;
     if (scriptVerifyCommandArity(cmd, argc, err) != C_OK) {
@@ -534,29 +608,37 @@ void scriptCall(scriptRunCtx *run_ctx, robj* *argv, int argc, sds *err) {
     }
 
     /* There are commands that are not allowed inside scripts. */
+
+    /* 是否禁止调用脚本不可执行的命令 */
     if (!server.script_disable_deny_script && (cmd->flags & CMD_NOSCRIPT)) {
         *err = sdsnew("This Redis command is not allowed from script");
         goto error;
     }
 
+    /* 是否禁止故障从节点执行 */
     if (scriptVerifyAllowStale(c, err) != C_OK) {
         goto error;
     }
 
+    /* 校验权限状态 */
     if (scriptVerifyACL(c, err) != C_OK) {
         goto error;
     }
 
+    /* 校验写命令是否可执行 */
     if (scriptVerifyWriteCommandAllow(run_ctx, err) != C_OK) {
         goto error;
     }
 
+    /* 校验 oom */
     if (scriptVerifyOOM(run_ctx, err) != C_OK) {
         goto error;
     }
 
     if (cmd->flags & CMD_WRITE) {
         /* signify that we already change the data in this execution */
+
+        /* 表示我们已经更改了此执行中的数据 */
         run_ctx->flags |= SCRIPT_WRITE_DIRTY;
     }
 
@@ -581,6 +663,8 @@ error:
 }
 
 /* Returns the time when the script invocation started */
+
+/* 返回脚本调用开始的时间 */
 mstime_t scriptTimeSnapshot() {
     serverAssert(curr_run_ctx);
     return curr_run_ctx->snapshot_time;
