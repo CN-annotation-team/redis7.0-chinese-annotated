@@ -49,7 +49,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [ae.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.c) | redis 事件循环器功能 | 完成 |
 | [multi.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/multi.c) | redis 事务实现  | 完成 |
 | [redis-check-rdb.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/redis-check-rdb.c) | Redis RDB 检查工具 | 完成 |
-
+| [aof.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/aof.c) | redis AOF功能  | 过半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
 更新日期：2022/10/22
