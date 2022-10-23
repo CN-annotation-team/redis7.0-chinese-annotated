@@ -48,6 +48,18 @@
  *    to clients and perform script kill
  */
 
+/* script.c单元为函数和eval提供了与Redis交互的API。
+ * 交互主要包括执行命令，但也包括调用Redis返回长脚本或检查脚本是否已被删除。
+ * 交互是使用scriptRunCtx对象完成的
+ * 需要由用户创建并使用scriptPrepareForRun初始化。
+ *
+ * 该单元公开的功能的详细列表：
+ * 1.调用命令（包括所有验证检查，如acl、cluster、read-only run等）
+ * 2.设置响应
+ * 3.设置复制方法（AOF/Replication/NONE）
+ * 4.在长时间运行的脚本上调用Redis，以允许Redis回复客户端并执行脚本终止 
+ * 主要定位在于是c语言实现的lua方法 */
+
 /*
  * scriptInterrupt function will return one of those value,
  *
@@ -67,6 +79,7 @@
 #define SCRIPT_ALLOW_CROSS_SLOT       (1ULL<<8) /* Indicate that the current script may access keys from multiple slots */
 typedef struct scriptRunCtx scriptRunCtx;
 
+/* 运行时上下文 */
 struct scriptRunCtx {
     const char *funcname;
     client *c;

@@ -27,6 +27,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ * 该文件中涉及到了很多lua的调用接口
+ * lua 的接口原理可参照：https://www.runoob.com/manual/lua53doc/manual.html
+ * 负责对 redis 提供服务的方法
+ */
+
 #include "server.h"
 #include "sha1.h"
 #include "rand.h"
@@ -59,6 +65,8 @@ static uint64_t dictStrCaseHash(const void *key) {
 }
 
 /* server.lua_scripts sha (as sds string) -> scripts (as luaScript) cache. */
+
+/* server.lua_scripts sha（作为sds字符串）-> scripts（作为luaScript）缓存 */
 dictType shaScriptObjectDictType = {
         dictStrCaseHash,            /* hash function */
         NULL,                       /* key dup */
@@ -71,13 +79,19 @@ dictType shaScriptObjectDictType = {
 
 /* Lua context */
 struct luaCtx {
+    /* lua执行器, 全局唯一  */
     lua_State *lua; /* The Lua interpreter. We use just one for all clients */
+    /* lua客户端，用于调用redis方法  */
     client *lua_client;   /* The "fake client" to query Redis from Lua */
+    /* sha1和lua脚本的映射  */
     dict *lua_scripts;         /* A dictionary of SHA1 -> Lua scripts */
+    /* 脚本的内存空间  */
     unsigned long long lua_scripts_mem;  /* Cached scripts' memory + oh */
 } lctx;
 
 /* Debugger shared state is stored inside this global structure. */
+
+/* 调试器共享状态存储在此全局结构中 */
 #define LDB_BREAKPOINTS_MAX 64  /* Max number of breakpoints. */
 #define LDB_MAX_LEN_DEFAULT 256 /* Default len limit for replies / var dumps. */
 struct ldbState {
@@ -109,6 +123,10 @@ struct ldbState {
  *
  * 'digest' should point to a 41 bytes buffer: 40 for SHA1 converted into an
  * hexadecimal number, plus 1 byte for null term. */
+
+/* 执行输入字符串的 SHA1。我们将其用于散列脚本体以获得 Lua 函数名，并用于 redis.sha1() 的实现。
+ *
+ * “digest” 应该指向一个41字节的缓冲区：40表示 SHA1 转换为十六进制数，加上1字节表示空项 */
 void sha1hex(char *digest, char *script, size_t len) {
     SHA1_CTX ctx;
     unsigned char hash[20];
@@ -131,6 +149,8 @@ void sha1hex(char *digest, char *script, size_t len) {
  * Allows to stop execution during a debugging session from within
  * the Lua code implementation, like if a breakpoint was set in the code
  * immediately after the function. */
+
+/* 允许在调试会话期间从 Lua 代码实现中停止执行，就像在函数之后的代码中设置了断点一样 */
 int luaRedisBreakpointCommand(lua_State *lua) {
     if (ldb.active) {
         ldb.luabp = 1;
@@ -146,6 +166,10 @@ int luaRedisBreakpointCommand(lua_State *lua) {
  * Log a string message into the output console.
  * Can take multiple arguments that will be separated by commas.
  * Nothing is returned to the caller. */
+
+/* 将字符串消息记录到输出控制台中。
+ * 可以接受多个用逗号分隔的参数。
+ * 不会向呼叫者返回任何内容 */
 int luaRedisDebugCommand(lua_State *lua) {
     if (!ldb.active) return 0;
     int argc = lua_gettop(lua);
@@ -165,6 +189,9 @@ int luaRedisDebugCommand(lua_State *lua) {
  * a write command so far, and returns true. Otherwise if the script
  * already started to write, returns false and stick to whole scripts
  * replication, which is our default. */
+
+/* 如果脚本到目前为止从未调用过写命令，则启用单命令复制，并返回 true。否则，如果脚本已经开始编写，则返回 false 并坚持整个脚本 
+ * 现在已经完全通过传播命令来保证lua的正确性，所以全部返回 ture */
 int luaRedisReplicateCommandsCommand(lua_State *lua) {
     lua_pushboolean(lua,1);
     return 1;
@@ -180,9 +207,12 @@ int luaRedisReplicateCommandsCommand(lua_State *lua) {
  * in order to reset the Lua scripting environment.
  *
  * However it is simpler to just call scriptingReset() that does just that. */
+
+/* 初始化脚本环境。setup 表示是否为启动时的初始化.说明当前方法是可以多次调用, 同时必须在 scriptingRelease 执行后，因为后者会对相关空间进行释放 */
 void scriptingInit(int setup) {
     lua_State *lua = lua_open();
 
+    /* 如果首次调用，则初始化lctx上下文、server全局数据、luaDebug信息 */
     if (setup) {
         lctx.lua_client = NULL;
         server.script_caller = NULL;
@@ -202,11 +232,15 @@ void scriptingInit(int setup) {
     lua_getglobal(lua,"redis");
 
     /* redis.breakpoint */
+
+    /* redis.breakpoint() 在 debug 模式下，主动进入断点模式 */
     lua_pushstring(lua,"breakpoint");
     lua_pushcfunction(lua,luaRedisBreakpointCommand);
     lua_settable(lua,-3);
 
     /* redis.debug */
+
+    /* redis.debug(a,b) 在 debug 模式下，打印相关信息 */
     lua_pushstring(lua,"debug");
     lua_pushcfunction(lua,luaRedisDebugCommand);
     lua_settable(lua,-3);
@@ -222,6 +256,9 @@ void scriptingInit(int setup) {
      * Note that when the error is in the C function we want to report the
      * information about the caller, that's what makes sense from the point
      * of view of the user debugging a script. */
+
+    /* 添加一个用于pcall错误报告的帮助函数。
+     * 请注意，当错误发生在C函数中时，我们希望报告有关调用者的信息，从用户调试脚本的角度来看，这是有意义的 */
     {
         char *errh_func =       "local dbg = debug\n"
                                 "debug = nil\n"
@@ -239,7 +276,9 @@ void scriptingInit(int setup) {
                                 "  end"
                                 "  return err\n"
                                 "end\n";
+        /* 将代码压入栈中 */
         luaL_loadbuffer(lua,errh_func,strlen(errh_func),"@err_handler_def");
+        /* 尝试运行一下代码, 使其生效 */
         lua_pcall(lua,0,0,0);
     }
 
@@ -247,6 +286,9 @@ void scriptingInit(int setup) {
      * inside the Lua interpreter.
      * Note: there is no need to create it again when this function is called
      * by scriptingReset(). */
+
+    /* 创建（未连接的）客户端，我们使用该客户端在Lua解释器中执行Redis命令。
+     * 注意：当通过scriptingReset() 调用此函数时，无需再次创建它 */
     if (lctx.lua_client == NULL) {
         lctx.lua_client = createClient(NULL);
         lctx.lua_client->flags |= CLIENT_SCRIPT;
@@ -256,9 +298,13 @@ void scriptingInit(int setup) {
     }
 
     /* Lock the global table from any changes */
+
+    /* 设置全局变量查询错误异常 */
     lua_pushvalue(lua, LUA_GLOBALSINDEX);
     luaSetErrorMetatable(lua);
     /* Recursively lock all tables that can be reached from the global table */
+
+    /* 递归锁定可从全局表访问的所有表, 将其都设置为只读状态 */
     luaSetTableProtectionRecursively(lua);
     lua_pop(lua, 1);
 
@@ -285,6 +331,7 @@ void scriptingReset(int async) {
  * EVAL and SCRIPT commands implementation
  * ------------------------------------------------------------------------- */
 
+/* 计算当前的方法名称，即 f_{sha1 code} */
 static void evalCalcFunctionName(int evalsha, sds script, char *out_funcname) {
     /* We obtain the script SHA1, then check if this function is already
      * defined into the Lua state */
@@ -313,9 +360,18 @@ static void evalCalcFunctionName(int evalsha, sds script, char *out_funcname) {
  * The err arg is optional, can be used to get a detailed error string.
  * The out_shebang_len arg is optional, can be used to trim the shebang from the script.
  * Returns C_OK on success, and C_ERR on error. */
+
+/* Helper 函数尝试从脚本正文中提取 shebang 标志。
+ * 如果未找到 shebang，则返回成功和 COMPAT 模式标志。
+ * err 参数是可选的，可用于获取详细的错误字符串。
+ * out_shebang_len 参数是可选的，可用于从脚本中删除 shebang
+ * 成功时返回 C_OK ，错误时返回 C_ERR
+ * Shebang 的名字来自于 SHArp 和 bang，或 haSH bang 的缩写，指代 Shebang 中 #! 两个符号的典型 Unix 名称
+ * 参考：https://redis.io/docs/manual/programmability/eval-intro/ */
 int evalExtractShebangFlags(sds body, uint64_t *out_flags, ssize_t *out_shebang_len, sds *err) {
     ssize_t shebang_len = 0;
     uint64_t script_flags = SCRIPT_FLAG_EVAL_COMPAT_MODE;
+    /* 是否以 #!开头 */
     if (!strncmp(body, "#!", 2)) {
         int numparts,j;
         char *shebang_end = strchr(body, '\n');
@@ -326,6 +382,7 @@ int evalExtractShebangFlags(sds body, uint64_t *out_flags, ssize_t *out_shebang_
         }
         shebang_len = shebang_end - body;
         sds shebang = sdsnewlen(body, shebang_len);
+        /* 以空格为分隔符, 分割为多块 */
         sds *parts = sdssplitargs(shebang, &numparts);
         sdsfree(shebang);
         if (!parts || numparts == 0) {
@@ -341,6 +398,7 @@ int evalExtractShebangFlags(sds body, uint64_t *out_flags, ssize_t *out_shebang_
             sdsfreesplitres(parts, numparts);
             return C_ERR;
         }
+        /* 移除特殊的兼容标记 */
         script_flags &= ~SCRIPT_FLAG_EVAL_COMPAT_MODE;
         for (j = 1; j < numparts; j++) {
             if (!strncmp(parts[j], "flags=", 6)) {
@@ -380,6 +438,9 @@ int evalExtractShebangFlags(sds body, uint64_t *out_flags, ssize_t *out_shebang_
 
 /* Try to extract command flags if we can, returns the modified flags.
  * Note that it does not guarantee the command arguments are right. */
+
+/* 如果可以，尝试提取命令标志，返回修改后的标志。请注意，它不能保证命令参数是正确的
+ * 主要用于在 processCommand 中判断执行条件 */
 uint64_t evalGetCommandFlags(client *c, uint64_t cmd_flags) {
     char funcname[43];
     int evalsha = c->cmd->proc == evalShaCommand || c->cmd->proc == evalShaRoCommand;
@@ -392,6 +453,7 @@ uint64_t evalGetCommandFlags(client *c, uint64_t cmd_flags) {
     if (!de) {
         if (evalsha)
             return cmd_flags;
+        /* 解析当前脚本的shebang属性 */
         if (evalExtractShebangFlags(c->argv[1]->ptr, &script_flags, NULL, NULL) == C_ERR)
             return cmd_flags;
     } else {
@@ -420,6 +482,14 @@ uint64_t evalGetCommandFlags(client *c, uint64_t cmd_flags) {
  *
  * If 'c' is not NULL, on error the client is informed with an appropriate
  * error describing the nature of the problem and the Lua interpreter error. */
+
+/* 使用指定的主体定义Lua函数。函数名称将以以下形式生成：
+ * f_＜十六进制sha1和＞
+ * 该函数增加 “body” 对象的引用计数，作为成功调用的副作用。
+ * 成功时，将返回一个指向 SDS 字符串的指针，该字符串表示刚刚添加的函数的函数 SHA1（在下一次调用 scriptingReset 函数之前有效），否则返回 NULL
+ * 该函数处理被已经存在的脚本调用的事实，在这种情况下，它的行为与成功的情况类似。
+ * 如果 “c” 不为 NULL，则在出现错误时，会通知客户端一个适当的错误，描述问题的性质和 Lua 解释器错误
+ * 方法解析了 shebang，然后将 sha1 值和 script body、script flag 绑定 */
 sds luaCreateFunction(client *c, robj *body) {
     char funcname[43];
     dictEntry *de;
@@ -442,6 +512,8 @@ sds luaCreateFunction(client *c, robj *body) {
     }
 
     /* Note that in case of a shebang line we skip it but keep the line feed to conserve the user's line numbers */
+
+    /* 请注意，对于shebang行，我们跳过它，但保留换行以保留用户的行号 */
     if (luaL_loadbuffer(lctx.lua,(char*)body->ptr + shebang_len,sdslen(body->ptr) - shebang_len,"@user_script")) {
         if (c != NULL) {
             addReplyErrorFormat(c,
@@ -454,6 +526,7 @@ sds luaCreateFunction(client *c, robj *body) {
 
     serverAssert(lua_isfunction(lctx.lua, -1));
 
+    /* 设置 table 的字段信息 */
     lua_setfield(lctx.lua, LUA_REGISTRYINDEX, funcname);
 
     /* We also save a SHA1 -> Original script map in a dictionary
@@ -486,6 +559,7 @@ void resetLuaClient(void) {
     lctx.lua_client->flags &= ~CLIENT_MULTI;
 }
 
+/* 统一的 lua 执行方法, evalsha 表示算法为 sha1 执行方式 */
 void evalGenericCommand(client *c, int evalsha) {
     lua_State *lua = lctx.lua;
     char funcname[43];
@@ -502,12 +576,17 @@ void evalGenericCommand(client *c, int evalsha) {
         return;
     }
 
+    /* 通过lua脚本获取到对应的sha1作为funcname */
     evalCalcFunctionName(evalsha, c->argv[1]->ptr, funcname);
 
     /* Push the pcall error handler function on the stack. */
+
+    /* 将错误处理方法加载到栈中，用于在调用方法错误时回调 */
     lua_getglobal(lua, "__redis__err__handler");
 
     /* Try to lookup the Lua function */
+
+    /* 加载对应的方法 */
     lua_getfield(lua, LUA_REGISTRYINDEX, funcname);
     if (lua_isnil(lua,-1)) {
         lua_pop(lua,1); /* remove the nil from the stack */
@@ -535,19 +614,24 @@ void evalGenericCommand(client *c, int evalsha) {
     luaScript *l = dictGetVal(de);
     int ro = c->cmd->proc == evalRoCommand || c->cmd->proc == evalShaRoCommand;
 
+    /* 运行时上下文 */
     scriptRunCtx rctx;
+    /* 准备上下文信息 */
     if (scriptPrepareForRun(&rctx, lctx.lua_client, c, lua_cur_script, l->flags, ro) != C_OK) {
         lua_pop(lua,2); /* Remove the function and error handler. */
         return;
     }
+    /* 将当前运行标记为 EVAL（与 FCALL 相反），这样我们将获得适当的错误消息和日志 */
     rctx.flags |= SCRIPT_EVAL_MODE; /* mark the current run as EVAL (as opposed to FCALL) so we'll
                                       get appropriate error messages and logs */
 
+    /* 整体 debug 模式都在下面的方法中通过 hook 实现 */
     luaCallFunction(&rctx, lua, c->argv+3, numkeys, c->argv+3+numkeys, c->argc-3-numkeys, ldb.active);
     lua_pop(lua,1); /* Remove the error handler. */
     scriptResetRun(&rctx);
 }
 
+/* lua 脚本执行入口函数 */
 void evalCommand(client *c) {
     /* Explicitly feed monitor here so that lua commands appear after their
      * script command. */
@@ -558,19 +642,26 @@ void evalCommand(client *c) {
         evalGenericCommandWithDebugging(c,0);
 }
 
+/* lua脚本只读方式（不进行计数）执行入口函数 */
 void evalRoCommand(client *c) {
     evalCommand(c);
 }
 
+/* lua 脚本 sha 执行入口函数 */
 void evalShaCommand(client *c) {
     /* Explicitly feed monitor here so that lua commands appear after their
      * script command. */
+
+    /* 在此处显式馈送监视器，以便 lua 命令出现在其脚本命令之后 */
     replicationFeedMonitors(c,server.monitors,c->db->id,c->argv,c->argc);
     if (sdslen(c->argv[1]->ptr) != 40) {
         /* We know that a match is not possible if the provided SHA is
          * not the right length. So we return an error ASAP, this way
          * evalGenericCommand() can be implemented without string length
          * sanity check */
+
+        /* 我们知道，如果提供的 SHA 长度不正确，则不可能匹配。
+         * 因此，我们会尽快返回一个错误，这样 evalGenericCommand() 就可以在没有字符串长度健全性检查的情况下实现 */
         addReplyErrorObject(c, shared.noscripterr);
         return;
     }
@@ -586,6 +677,7 @@ void evalShaRoCommand(client *c) {
     evalShaCommand(c);
 }
 
+/* script 命令处理，包括 DEBUG 开关、 EXISTS 判断 sha 值、 FLUSH 刷新缓存、KILL 杀死脚本、LOAD 加载脚本 */
 void scriptCommand(client *c) {
     if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"help")) {
         const char *help[] = {
@@ -679,6 +771,8 @@ unsigned long evalScriptsMemory() {
  * ------------------------------------------------------------------------- */
 
 /* Initialize Lua debugger data structures. */
+
+/* 初始化 Lua 调试器数据结构 */
 void ldbInit(void) {
     ldb.conn = NULL;
     ldb.active = 0;
@@ -691,6 +785,8 @@ void ldbInit(void) {
 }
 
 /* Remove all the pending messages in the specified list. */
+
+/* 删除指定列表中的所有待处理的消息 */
 void ldbFlushLog(list *log) {
     listNode *ln;
 
@@ -703,6 +799,8 @@ int ldbIsEnabled(){
 }
 
 /* Enable debug mode of Lua scripts for this client. */
+
+/* 为此客户端启用 Lua 脚本的调试模式, 通过 script debug yes/sync 启动, 标记当前 client 为 deubg 模式 */
 void ldbEnable(client *c) {
     c->flags |= CLIENT_LUA_DEBUG;
     ldbFlushLog(ldb.logs);
@@ -719,11 +817,15 @@ void ldbEnable(client *c) {
 /* Exit debugging mode from the POV of client. This function is not enough
  * to properly shut down a client debugging session, see ldbEndSession()
  * for more information. */
+
+/* 从客户端的 POV 退出调试模式。此函数不足以正确关闭客户端调试会话，有关详细信息，请参阅 ldbEndSession() */
 void ldbDisable(client *c) {
     c->flags &= ~(CLIENT_LUA_DEBUG|CLIENT_LUA_DEBUG_SYNC);
 }
 
 /* Append a log entry to the specified LDB log. */
+
+/* 将日志条目附加到指定的 LDB 日志 */
 void ldbLog(sds entry) {
     listAddNodeTail(ldb.logs,entry);
 }
@@ -732,6 +834,8 @@ void ldbLog(sds entry) {
  * ldb.maxlen. The first time the limit is reached a hint is generated
  * to inform the user that reply trimming can be disabled using the
  * debugger "maxlen" command. */
+
+/* ldbLog() 的一个版本，用于防止生成大于 ldb.maxlen 的日志。第一次达到限制时，会生成一个提示，通知用户可以使用调试器 maxlen 命令禁用回复修剪 */
 void ldbLogWithMaxLen(sds entry) {
     int trimmed = 0;
     if (ldb.maxlen && sdslen(entry) > ldb.maxlen) {
@@ -750,6 +854,8 @@ void ldbLogWithMaxLen(sds entry) {
 /* Send ldb.logs to the debugging client as a multi-bulk reply
  * consisting of simple strings. Log entries which include newlines have them
  * replaced with spaces. The entries sent are also consumed. */
+
+/* 发送 ldb.logs 作为由简单字符串组成的多批量回复记录到调试客户端。包含换行符的日志条目将用空格替换。发送的条目也会被消耗 */
 void ldbSendLogs(void) {
     sds proto = sdsempty();
     proto = sdscatfmt(proto,"*%i\r\n", (int)listLength(ldb.logs));
@@ -765,6 +871,8 @@ void ldbSendLogs(void) {
         /* Avoid warning. We don't check the return value of write()
          * since the next read() will catch the I/O error and will
          * close the debugging session. */
+
+        /* 避免警告。我们不检查 write() 的返回值，因为下一次 read() 将捕获 I/O 错误并关闭调试会话 */
     }
     sdsfree(proto);
 }
@@ -781,7 +889,15 @@ void ldbSendLogs(void) {
  *
  * The caller should call ldbEndSession() only if ldbStartSession()
  * returned 1. */
+
+/* 在调用 EVAL 实现之前启动调试会话。
+ * 我们使用的技术是捕获客户端 socket 描述符，以便从 Lua 挂钩中对其执行直接 I/O。这样，我们就不必为了处理 I/O 而重新输入 Redis。
+ *
+ * 如果调用方继续调用 EVAL，则函数返回1；如果调用方中止操作，则返回0（这发生在分叉会话中的父级，因为由子级继续，或者分叉返回错误时）。
+ *
+ * 仅当ldbStartSession() 返回1时，调用方才应调用 ldbEndSession */
 int ldbStartSession(client *c) {
+    /* 确定当前是否需要 fork 一个子进程来运行 */
     ldb.forked = (c->flags & CLIENT_LUA_DEBUG_SYNC) == 0;
     if (ldb.forked) {
         pid_t cp = redisFork(CHILD_TYPE_LDB);
@@ -790,6 +906,8 @@ int ldbStartSession(client *c) {
             return 0;
         } else if (cp == 0) {
             /* Child. Let's ignore important signals handled by the parent. */
+
+            /* 子进程需要忽略父母处理的重要信号 */
             struct sigaction act;
             sigemptyset(&act.sa_mask);
             act.sa_flags = 0;
@@ -800,9 +918,13 @@ int ldbStartSession(client *c) {
             /* Log the creation of the child and close the listening
              * socket to make sure if the parent crashes a reset is sent
              * to the clients. */
+
+            /* 记录子级的创建并关闭侦听套接字，以确保如果父级崩溃，则向客户端发送重置 */
             serverLog(LL_WARNING,"Redis forked for debugging eval");
         } else {
             /* Parent */
+
+            /* 父进程将当前的子进程编号写入 list 后退出，交给子进程来通信 */
             listAddNodeTail(ldb.children,(void*)(unsigned long)cp);
             freeClientAsync(c); /* Close the client in the parent side. */
             return 0;
@@ -813,12 +935,16 @@ int ldbStartSession(client *c) {
     }
 
     /* Setup our debugging session. */
+
+    /* 设置调试会话，为阻塞模式，因为要么同步，要么子进程模式，再后续会重新设置为非阻塞模式 */
     connBlock(ldb.conn);
     connSendTimeout(ldb.conn,5000);
     ldb.active = 1;
 
     /* First argument of EVAL is the script itself. We split it into different
      * lines since this is the way the debugger accesses the source code. */
+
+    /* EVAL 的第一个参数是脚本本身。我们将它分成不同的行，因为这是调试器访问源代码的方式 */
     sds srcstring = sdsdup(c->argv[1]->ptr);
     size_t srclen = sdslen(srcstring);
     while(srclen && (srcstring[srclen-1] == '\n' ||
@@ -834,12 +960,18 @@ int ldbStartSession(client *c) {
 
 /* End a debugging session after the EVAL call with debugging enabled
  * returned. */
+
+/* 在返回启用调试的EVAL调用后结束调试会话 */
 void ldbEndSession(client *c) {
     /* Emit the remaining logs and an <endsession> mark. */
+
+    /* 发出剩余日志和 ＜endsession＞ 标记 */
     ldbLog(sdsnew("<endsession>"));
     ldbSendLogs();
 
     /* If it's a fork()ed session, we just exit. */
+
+    /* 如果是 fork() 会话，我们就退出 */
     if (ldb.forked) {
         writeToClient(c,0);
         serverLog(LL_WARNING,"Lua debugging session child exiting");
@@ -850,11 +982,16 @@ void ldbEndSession(client *c) {
     }
 
     /* Otherwise let's restore client's state. */
+
+    /* 否则，让我们恢复客户端的状态
+     * 设置连接相关状态 */
     connNonBlock(ldb.conn);
     connSendTimeout(ldb.conn,0);
 
     /* Close the client connection after sending the final EVAL reply
      * in order to signal the end of the debugging session. */
+
+    /* 在发送最终 EVAL 回复后关闭客户端连接，以发出调试会话结束的信号 */
     c->flags |= CLIENT_CLOSE_AFTER_REPLY;
 
     /* Cleanup. */
@@ -866,6 +1003,8 @@ void ldbEndSession(client *c) {
 /* If the specified pid is among the list of children spawned for
  * forked debugging sessions, it is removed from the children list.
  * If the pid was found non-zero is returned. */
+
+/* 如果指定的 pid 在为分叉调试会话生成的子级列表中，则会从子级列表中将其删除。如果找到 pid，则返回非零 */
 int ldbRemoveChild(pid_t pid) {
     listNode *ln = listSearchKey(ldb.children,(void*)(unsigned long)pid);
     if (ln) {
@@ -877,6 +1016,8 @@ int ldbRemoveChild(pid_t pid) {
 
 /* Return the number of children we still did not receive termination
  * acknowledge via wait() in the parent process. */
+
+/* 返回父进程中仍然没有通过 wait() 收到终止确认的子进程数 */
 int ldbPendingChildren(void) {
     return listLength(ldb.children);
 }
@@ -898,7 +1039,10 @@ void ldbKillForkedSessions(void) {
 
 /* Wrapper for EVAL / EVALSHA that enables debugging, and makes sure
  * that when EVAL returns, whatever happened, the session is ended. */
+
+/* EVAL/EVALSHA 的包装器，启用调试，并确保当 EVAL 返回时，无论发生了什么，会话都结束, 如果当前 client 为 lua_debug 模式，则会进入当前逻辑 */
 void evalGenericCommandWithDebugging(client *c, int evalsha) {
+    /* 返回0，说明不需要保持会话，要么就是异步父进程，或者是子进程创建失败 */
     if (ldbStartSession(c)) {
         evalGenericCommand(c,evalsha);
         ldbEndSession(c);
@@ -909,6 +1053,8 @@ void evalGenericCommandWithDebugging(client *c, int evalsha) {
 
 /* Return a pointer to ldb.src source code line, considering line to be
  * one-based, and returning a special string for out of range lines. */
+
+/* 返回指向 ldb 的指针。src 源代码行，将该行视为一行，并为超出范围的行返回一个特殊字符串 */
 char *ldbGetSourceLine(int line) {
     int idx = line-1;
     if (idx < 0 || idx >= ldb.lines) return "<out of range source code line>";
@@ -927,6 +1073,9 @@ int ldbIsBreakpoint(int line) {
 /* Add the specified breakpoint. Ignore it if we already reached the max.
  * Returns 1 if the breakpoint was added (or was already set). 0 if there is
  * no space for the breakpoint or if the line is invalid. */
+
+/* 添加指定的断点。如果我们已经达到最大值，请忽略它。
+ * 如果断点已添加（或已设置），则返回1。如果断点没有空格或该行无效，则为0 */
 int ldbAddBreakpoint(int line) {
     if (line <= 0 || line > ldb.lines) return 0;
     if (!ldbIsBreakpoint(line) && ldb.bpcount != LDB_BREAKPOINTS_MAX) {
@@ -938,6 +1087,8 @@ int ldbAddBreakpoint(int line) {
 
 /* Remove the specified breakpoint, returning 1 if the operation was
  * performed or 0 if there was no such breakpoint. */
+
+/* 删除指定的断点，如果执行了操作，则返回1；如果没有此类断点，则返回0 */
 int ldbDelBreakpoint(int line) {
     int j;
 
@@ -954,6 +1105,9 @@ int ldbDelBreakpoint(int line) {
 /* Expect a valid multi-bulk command in the debugging client query buffer.
  * On success the command is parsed and returned as an array of SDS strings,
  * otherwise NULL is returned and there is to read more buffer. */
+
+/* 调试客户端查询缓冲区中应包含有效的多批量命令。
+ * 成功后，命令被解析并作为 SDS 字符串数组返回，否则返回 NULL，需要读取更多缓冲区*/
 sds *ldbReplParseCommand(int *argcp, char** err) {
     static char* protocol_error = "protocol error";
     sds *argv = NULL;
@@ -962,12 +1116,16 @@ sds *ldbReplParseCommand(int *argcp, char** err) {
 
     /* Working on a copy is simpler in this case. We can modify it freely
      * for the sake of simpler parsing. */
+
+    /* 在这种情况下，处理副本更简单。为了更简单的解析，我们可以自由地修改它 */
     sds copy = sdsdup(ldb.cbuf);
     char *p = copy;
 
     /* This Redis protocol parser is a joke... just the simplest thing that
      * works in this context. It is also very forgiving regarding broken
      * protocol. */
+
+    /* 这个 Redis 协议解析器是一个笑话……在这个上下文中工作的最简单的东西。对于违反协议，这也是非常宽容的 */
 
     /* Seek and parse *<count>\r\n. */
     p = strchr(p,'*'); if (!p) goto protoerr;
@@ -1008,6 +1166,8 @@ keep_reading:
 }
 
 /* Log the specified line in the Lua debugger output. */
+
+/* 在 Lua 调试器输出中记录指定的行 */
 void ldbLogSourceLine(int lnum) {
     char *line = ldbGetSourceLine(lnum);
     char *prefix;
@@ -1031,6 +1191,9 @@ void ldbLogSourceLine(int lnum) {
  * around the specified line is shown. When a line number is specified
  * the amount of context (lines before/after) is specified via the
  * 'context' argument. */
+
+/* 实现 Lua 调试器的 “list” 命令。如果 around 为0，则会列出整个文件，否则只显示指定行周围文件的一小部分。
+ * 当指定行号时，通过 “context” 参数指定上下文量（前后行）*/
 void ldbList(int around, int context) {
     int j;
 
@@ -1047,6 +1210,12 @@ void ldbList(int around, int context) {
  *
  * The element is not automatically removed from the stack, nor it is
  * converted to a different type. */
+
+/* 将 “Lua” 状态堆栈上位置 “idx” 处的 Lua 值的可读表示形式附加到作为参数传递的 SDS 字符串。
+ * 返回附加了表示值的新 SDS 字符串。
+ * 用于实现 ldbLogStackValue() 
+ * 
+ * 元素不会自动从堆栈中移除，也不会转换为其他类型 */
 #define LDB_MAX_VALUES_DEPTH (LUA_MINSTACK/2)
 sds ldbCatStackValueRec(sds s, lua_State *lua, int idx, int level) {
     int t = lua_type(lua,idx);
@@ -1078,6 +1247,8 @@ sds ldbCatStackValueRec(sds s, lua_State *lua, int idx, int level) {
         /* Note: we create two representations at the same time, one
          * assuming the table is an array, one assuming it is not. At the
          * end we know what is true and select the right one. */
+
+        /* 注意：我们同时创建了两个表示，一个假设表是数组，另一个假设它不是数组。最后，我们知道什么是正确的，并选择正确的 */
         sds repr1 = sdsempty();
         sds repr2 = sdsempty();
         lua_pushnil(lua); /* The first key to start the iteration is nil. */
@@ -1133,6 +1304,8 @@ sds ldbCatStackValueRec(sds s, lua_State *lua, int idx, int level) {
 
 /* Higher level wrapper for ldbCatStackValueRec() that just uses an initial
  * recursion level of '0'. */
+
+/* ldbCatStackValueRec() 的高级包装，它只使用初始递归级别 “0” */
 sds ldbCatStackValue(sds s, lua_State *lua, int idx) {
     return ldbCatStackValueRec(s,lua,idx,0);
 }
@@ -1140,6 +1313,9 @@ sds ldbCatStackValue(sds s, lua_State *lua, int idx) {
 /* Produce a debugger log entry representing the value of the Lua object
  * currently on the top of the stack. The element is not popped nor modified.
  * Check ldbCatStackValue() for the actual implementation. */
+
+/* 生成一个调试器日志条目，表示当前位于堆栈顶部的Lua对象的值。不会弹出或修改元素。
+ * 检查 ldbCatStackValue() 以了解实际实现 */
 void ldbLogStackValue(lua_State *lua, char *prefix) {
     sds s = sdsnew(prefix);
     s = ldbCatStackValue(s,lua,-1);
@@ -1161,6 +1337,10 @@ char *ldbRedisProtocolToHuman_Double(sds *o, char *reply);
  *
  * Note that the SDS string is passed by reference (pointer of pointer to
  * char*) so that we can return a modified pointer, as for SDS semantics. */
+
+/* 从 “reply” 中获取 Redis 协议，并将其以人类可读的形式附加到传递的 SDS 字符串 “o” 中。
+ *
+ * 请注意， SDS 字符串是通过引用（指向 char* 的指针）传递的，因此我们可以返回一个修改过的指针，就像 SDS 语义一样*/
 char *ldbRedisProtocolToHuman(sds *o, char *reply) {
     char *p = reply;
     switch(*p) {
@@ -1181,6 +1361,7 @@ char *ldbRedisProtocolToHuman(sds *o, char *reply) {
 /* The following functions are helpers for ldbRedisProtocolToHuman(), each
  * take care of a given Redis return type. */
 
+/* 以下函数是 ldbRedisProtocolToHuman() 的助手，每个函数负责给定的 Redis 返回类型 */
 char *ldbRedisProtocolToHuman_Int(sds *o, char *reply) {
     char *p = strchr(reply+1,'\r');
     *o = sdscatlen(*o,reply+1,p-reply-1);
@@ -1287,6 +1468,9 @@ char *ldbRedisProtocolToHuman_Double(sds *o, char *reply) {
 /* Log a Redis reply as debugger output, in a human readable format.
  * If the resulting string is longer than 'len' plus a few more chars
  * used as prefix, it gets truncated. */
+
+/* 以人类可读的格式将 Redis 回复记录为调试器输出。
+ * 如果生成的字符串比 “len” 长，再加上几个用作前缀的字符，它将被截断 */
 void ldbLogRedisReply(char *reply) {
     sds log = sdsnew("<reply> ");
     ldbRedisProtocolToHuman(&log,reply);
@@ -1296,6 +1480,8 @@ void ldbLogRedisReply(char *reply) {
 /* Implements the "print <var>" command of the Lua debugger. It scans for Lua
  * var "varname" starting from the current stack frame up to the top stack
  * frame. The first matching variable is printed. */
+
+/* 实现 Lua 调试器的 “print＜var＞” 命令。它从当前堆栈帧开始扫描 Lua-var“varname” ，直到堆栈顶部帧。打印第一个匹配变量 */
 void ldbPrint(lua_State *lua, char *varname) {
     lua_Debug ar;
 
@@ -1328,6 +1514,9 @@ void ldbPrint(lua_State *lua, char *varname) {
 
 /* Implements the "print" command (without arguments) of the Lua debugger.
  * Prints all the variables in the current stack frame. */
+
+/* 实现Lua调试器的 “print” 命令（无参数）。
+ * 打印当前堆栈帧中的所有变量 */
 void ldbPrintAll(lua_State *lua) {
     lua_Debug ar;
     int vars = 0;
@@ -1353,6 +1542,8 @@ void ldbPrintAll(lua_State *lua) {
 }
 
 /* Implements the break command to list, add and remove breakpoints. */
+
+/* 实现 break 命令以列出、添加和删除断点 */
 void ldbBreak(sds *argv, int argc) {
     if (argc == 1) {
         if (ldb.bpcount == 0) {
@@ -1397,12 +1588,18 @@ void ldbBreak(sds *argv, int argc) {
 /* Implements the Lua debugger "eval" command. It just compiles the user
  * passed fragment of code and executes it, showing the result left on
  * the stack. */
+
+/* 实现 Lua 调试器 “eval” 命令。它只编译用户传递的代码片段并执行它，显示堆栈上留下的结果 */
 void ldbEval(lua_State *lua, sds *argv, int argc) {
     /* Glue the script together if it is composed of multiple arguments. */
+
+    /* 如果脚本由多个参数组成，请将其粘合在一起 */
     sds code = sdsjoinsds(argv+1,argc-1," ",1);
     sds expr = sdscatsds(sdsnew("return "),code);
 
     /* Try to compile it as an expression, prepending "return ". */
+
+    /* 尝试将其编译为表达式，并在 “return” 之前 */
     if (luaL_loadbuffer(lua,expr,sdslen(expr),"@ldb_eval")) {
         lua_pop(lua,1);
         /* Failed? Try as a statement. */
@@ -1431,6 +1628,9 @@ void ldbEval(lua_State *lua, sds *argv, int argc) {
  * the implementation very simple: we just call the Lua redis.call() command
  * implementation, with ldb.step enabled, so as a side effect the Redis command
  * and its reply are logged. */
+
+/* 执行调试器 “redis” 命令。为了使实现变得非常简单，我们使用了一个技巧：
+ * 我们只需调用 Lua redis.call() 命令实现，使用 ldb.step 已启用，因此作为副作用，Redis 命令及其回复将被记录 */
 void ldbRedis(lua_State *lua, sds *argv, int argc) {
     int j;
 
@@ -1458,6 +1658,8 @@ void ldbRedis(lua_State *lua, sds *argv, int argc) {
 
 /* Implements "trace" command of the Lua debugger. It just prints a backtrace
  * querying Lua starting from the current callframe back to the outer one. */
+
+/* 实现 Lua 调试器的 “trace” 命令。它只打印从当前调用帧开始到外部调用帧的回溯查询 Lua */
 void ldbTrace(lua_State *lua) {
     lua_Debug ar;
     int level = 0;
@@ -1479,6 +1681,8 @@ void ldbTrace(lua_State *lua) {
 
 /* Implements the debugger "maxlen" command. It just queries or sets the
  * ldb.maxlen variable. */
+
+/* 实现调试器 “maxlen” 命令。它只是查询或设置 ldb.maxlen 变量 */
 void ldbMaxlen(sds *argv, int argc) {
     if (argc == 2) {
         int newval = atoi(argv[1]);
@@ -1496,6 +1700,9 @@ void ldbMaxlen(sds *argv, int argc) {
 /* Read debugging commands from client.
  * Return C_OK if the debugging session is continuing, otherwise
  * C_ERR if the client closed the connection or is timing out. */
+
+/* 从客户端读取调试命令。
+ * 如果调试会话正在继续，则返回 C_OK ；否则，如果客户端关闭连接或超时，返回 C_ERR */
 int ldbRepl(lua_State *lua) {
     sds *argv;
     int argc;
@@ -1503,6 +1710,8 @@ int ldbRepl(lua_State *lua) {
 
     /* We continue processing commands until a command that should return
      * to the Lua interpreter is found. */
+
+    /* 我们继续处理命令，直到找到应该返回到 Lua 解释器的命令 */
     while(1) {
         while((argv = ldbReplParseCommand(&argc, &err)) == NULL) {
             char buf[1024];
@@ -1627,19 +1836,26 @@ ldbLog(sdsnew("                     next line of code."));
 
 /* This is the core of our Lua debugger, called each time Lua is about
  * to start executing a new line. */
+
+/* 这是我们的 Lua 调试器的核心，每次 Lua 即将开始执行新行时都会调用它，主要通过 lua 的 hook 功能来调用 */
 void luaLdbLineHook(lua_State *lua, lua_Debug *ar) {
     scriptRunCtx* rctx = luaGetFromRegistry(lua, REGISTRY_RUN_CTX_NAME);
     lua_getstack(lua,0,ar);
     lua_getinfo(lua,"Sl",ar);
     ldb.currentline = ar->currentline;
 
+    /* 判断当前代码行是否为断点 */
     int bp = ldbIsBreakpoint(ldb.currentline) || ldb.luabp;
     int timeout = 0;
 
     /* Events outside our script are not interesting. */
+
+    /* 我们脚本之外的事件并不有趣, 参考 @user_script */
     if(strstr(ar->short_src,"user_script") == NULL) return;
 
     /* Check if a timeout occurred. */
+
+    /* 检测当前是否超过了 server 设定的最大耗时 */
     if (ar->event == LUA_HOOKCOUNT && ldb.step == 0 && bp == 0) {
         mstime_t elapsed = elapsedMs(rctx->start_time);
         mstime_t timelimit = server.busy_reply_threshold ?
@@ -1659,18 +1875,26 @@ void luaLdbLineHook(lua_State *lua, lua_Debug *ar) {
         else if (timeout) reason = "timeout reached, infinite loop?";
         ldb.step = 0;
         ldb.luabp = 0;
+
+        /* 输出 stop 日志和当前的代码行信息 */
         ldbLog(sdscatprintf(sdsempty(),
             "* Stopped at %d, stop reason = %s",
             ldb.currentline, reason));
         ldbLogSourceLine(ldb.currentline);
         ldbSendLogs();
+
+        /* 读取客户端的 debug 命令 */
         if (ldbRepl(lua) == C_ERR && timeout) {
             /* If the client closed the connection and we have a timeout
              * connection, let's kill the script otherwise the process
              * will remain blocked indefinitely. */
+
+            /* 如果客户端关闭了连接，我们有一个超时连接，让我们终止脚本，否则进程将无限期地被阻塞 */
             luaPushError(lua, "timeout during Lua debugging with client closing connection");
             luaError(lua);
         }
+
+        /* 重置当前的上下文时间 */
         rctx->start_time = getMonotonicUs();
         rctx->snapshot_time = mstime();
     }

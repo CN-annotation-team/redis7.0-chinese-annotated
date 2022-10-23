@@ -52,6 +52,10 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [evict.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/evict.c) | 四种 redis 内存淘汰算法  | 完成 |
 | [aof.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/aof.c) | redis AOF 功能  | 过半 |
 | [replication.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/replication.c) | Redis 主从复制 | 低于一半 |
+| [script.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/script.c) |  redis功能api的lua方法实现  | 过半 |
+| [script_lua.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/script_lua.c) | redis调用lua方法的通用api抽象  | 过半 |
+| [eval.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/eval.c) | lua执行实现  | 过半 |
+
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
 更新日期：2022/10/30
