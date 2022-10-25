@@ -48,6 +48,9 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [ae.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.h) | redis 事件循环器结构定义 | 完成 |
 | [ae.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.c) | redis 事件循环器功能 | 完成 |
 | [multi.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/multi.c) | redis 事务实现  | 完成 |
+| [redis-check-rdb.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/redis-check-rdb.c) | Redis RDB 检查工具 | 完成 |
+| [evict.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/evict.c) | 四种 redis 内存淘汰算法  | 完成 |
+| [aof.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/aof.c) | redis AOF 功能  | 过半 |
 | [redis-check-rdb.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/redis-check-rdb.c) | Redis RDB 检查工具 | 低于一半 |
 | [script.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/script.c) |  redis功能api的lua方法实现  | 完成 |
 | [script_lua.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/script_lua.c) | redis调用lua方法的通用api抽象  | 过半 |
@@ -55,7 +58,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/10/18
+更新日期：2022/10/23
 
 
 ## 关于提交 PR 的方法：
