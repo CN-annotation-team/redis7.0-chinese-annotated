@@ -34,17 +34,20 @@
 #include <regex.h>
 #include <libgen.h>
 
+/* AOF 的 4 个检查状态 */
 #define AOF_CHECK_OK 0
 #define AOF_CHECK_EMPTY 1
 #define AOF_CHECK_TRUNCATED 2
 #define AOF_CHECK_TIMESTAMP_TRUNCATED 3
 
+/* AOF 的三种类型，包括 RESP、混合持久化和增量 AOF */
 typedef enum {
     AOF_RESP,
     AOF_RDB_PREAMBLE,
     AOF_MULTI_PART,
 } input_file_type;
 
+/* 增量 AOF 用到的清单文件相关函数 */
 aofManifest *aofManifestCreate(void);
 void aofManifestFree(aofManifest *am);
 aofManifest *aofLoadManifestFromFile(sds am_filepath);
@@ -60,6 +63,7 @@ static off_t epos;
 static long long line = 1;
 static time_t to_timestamp = 0;
 
+/* 检查 AOF 下一行内容 */
 int consumeNewline(char *buf) {
     if (strncmp(buf,"\r\n",2) != 0) {
         ERROR("Expected \\r\\n, got: %02x%02x",buf[0],buf[1]);
@@ -69,6 +73,7 @@ int consumeNewline(char *buf) {
     return 1;
 }
 
+/* 检查是否包含特定的前缀，如 *、$ */
 int readLong(FILE *fp, char prefix, long *target) {
     char buf[128], *eptr;
     epos = ftello(fp);
@@ -83,6 +88,7 @@ int readLong(FILE *fp, char prefix, long *target) {
     return consumeNewline(eptr);
 }
 
+/* 检查是否能够读取到给定长度的对象 */
 int readBytes(FILE *fp, char *target, long length) {
     long real;
     epos = ftello(fp);
@@ -94,6 +100,7 @@ int readBytes(FILE *fp, char *target, long length) {
     return 1;
 }
 
+/* 检查字符串是否符合要求 */
 int readString(FILE *fp, char** target) {
     long len;
     *target = NULL;
@@ -123,6 +130,7 @@ int readString(FILE *fp, char** target) {
     return 1;
 }
 
+/* 检查是否包含特定的前缀，如 '*' */
 int readArgc(FILE *fp, long *target) {
     return readLong(fp,'*',target);
 }
@@ -134,6 +142,9 @@ int readArgc(FILE *fp, long *target) {
  * by one. The parameter out_multi will be used by the upper caller to determine 
  * whether the AOF file contains unclosed transactions.
  **/
+/* 解析 AOF 文件中的每条 RESP 记录，得到原始的 redis 命令
+ * 如果命令为 MULTI，则参数 out_multi 将加 1，如果命令为 EXEC，则参数 out_multi 将减 1
+ * 参数 out_multi 将被上层调用者用来判断 AOF 文件是否包含未关闭的事务 */
 int processRESP(FILE *fp, char *filename, int *out_multi) {
     long argc;
     char *str;
@@ -172,6 +183,9 @@ int processRESP(FILE *fp, char *filename, int *out_multi) {
  * Note that in Multi Part AOF, this truncation is only allowed when the last_file 
  * parameter is 1.
  **/
+/* 用于解析 AOF 文件中以'#'开头的注释，目前 AOF 只包含时间戳注释
+ * 时间注解的处理规则是一旦发现时间戳大于 to_timestamp，则截断注释后的 AOF
+ * 在增量 AOF 中，只有 last_file 参数为 1 时才允许这种截断 */
 int processAnnotations(FILE *fp, char *filename, int last_file) {
     char buf[AOF_ANNOTATION_LINE_MAX_LEN];
 
@@ -203,6 +217,7 @@ int processAnnotations(FILE *fp, char *filename, int last_file) {
             exit(1);
         }
         /* Truncate remaining AOF if exceeding 'to_timestamp' */
+        /* 时间戳截取操作 */
         if (ftruncate(fileno(fp), epos) == -1) {
             printf("Failed to truncate AOF %s to timestamp %ld\n",
                     filename, to_timestamp);
@@ -219,11 +234,14 @@ int processAnnotations(FILE *fp, char *filename, int last_file) {
  * 2. Old-style RDB-preamble AOF
  * 3. BASE or INCR in Multi Part AOF 
  * */
+/* AOF 文件的实际检查函数 */
 int checkSingleAof(char *aof_filename, char *aof_filepath, int last_file, int fix, int preamble) {
     off_t pos = 0, diff;
     int multi = 0;
     char buf[2];
 
+    /* 此处和其他几处不同，必须以可读写的方式打开 AOF 文件 
+     * 因为后面可能需要对其进行部分修复动作 */    
     FILE *fp = fopen(aof_filepath, "r+");
     if (fp == NULL) {
         printf("Cannot open file %s: %s, aborting...\n", aof_filepath, strerror(errno));
@@ -241,6 +259,7 @@ int checkSingleAof(char *aof_filename, char *aof_filepath, int last_file, int fi
         return AOF_CHECK_EMPTY;
     }
 
+    /* 如果是混合持久化模式，要先调用 redis-check-rdb 来检查 RDB 部分 */    
     if (preamble) {
         char *argv[2] = {NULL, aof_filename};
         if (redis_check_rdb_main(2, argv, fp) == C_ERR) {
@@ -251,6 +270,7 @@ int checkSingleAof(char *aof_filename, char *aof_filepath, int last_file, int fi
         }
     }
 
+    /* 循环检查整个文件内容，跳过 # 开头的注释，检查以 * 开头的内容 */    
     while(1) {
         if (!multi) pos = ftello(fp);
         if (fgets(buf, sizeof(buf), fp) == NULL) {
@@ -279,6 +299,7 @@ int checkSingleAof(char *aof_filename, char *aof_filepath, int last_file, int fi
         }
     }
 
+    /* 对事务命令进行完整性检查 */    
     if (feof(fp) && multi && strlen(error) == 0) {
         ERROR("Reached EOF before reading EXEC for MULTI");
     }
