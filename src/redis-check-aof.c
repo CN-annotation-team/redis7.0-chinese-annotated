@@ -369,7 +369,7 @@ int fileIsRDB(char *filepath) {
 
 /* Used to determine whether the file is a manifest file. */
 #define MANIFEST_MAX_LINE 1024
-/* 判断是否是增量 AOF 类型 */
+/* 判断文件是否是清单文件 */
 int fileIsManifest(char *filepath) {
     int is_manifest = 0;
     FILE *fp = fopen(filepath, "r");
