@@ -825,7 +825,7 @@ int replicationSetupSlaveForFullResync(client *slave, long long offset) {
     /* We are going to accumulate the incremental changes for this
      * slave as well. Set slaveseldb to -1 in order to force to re-emit
      * a SELECT statement in the replication stream. */
-    /* 这里将从节点的数据库编号设置为-1，后面会强制加一个 SELECT 来选择正确的数据库 */
+    /* 这里将从节点的数据库编号设置为 -1，后面会强制加一个 SELECT 来选择正确的数据库 */
     server.slaveseldb = -1;
 
     /* Don't send this reply to slaves that approached us with
