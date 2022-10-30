@@ -2453,6 +2453,16 @@ void readSyncBulkPayload(connection *conn) {
         /* 异步关闭旧 rdb 文件句柄 */
         if (old_rdb_fd != -1) bioCreateCloseJob(old_rdb_fd);
 
+        /* Sync the directory to ensure rename is persisted */
+        if (fsyncFileDir(server.rdb_filename) == -1) {
+            serverLog(LL_WARNING,
+                "Failed trying to sync DB directory %s in "
+                "MASTER <-> REPLICA synchronization: %s",
+                server.rdb_filename, strerror(errno));
+            cancelReplicationHandshake(1);
+            return;
+        }
+
         /* 加载 RDB 文件 */
         if (rdbLoad(server.rdb_filename,&rsi,RDBFLAGS_REPLICATION) != C_OK) {
             serverLog(LL_WARNING,
@@ -3765,7 +3775,7 @@ void replicationDiscardCachedMaster(void) {
  * passed as argument as the socket for the new master.
  *
  * This function is called when successfully setup a partial resynchronization
- * so the stream of data that we'll receive will start from were this
+ * so the stream of data that we'll receive will start from where this
  * master left. */
 /* 使用参数传递过来的文件描述符作为与新主节点的连接，并将 cached_master 转换为当前的主节点。
  * 
