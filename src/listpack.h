@@ -54,7 +54,7 @@ typedef struct {
     unsigned char *sval;
     uint32_t slen;
     /* When integer is used, 'sval' is NULL, and lval holds the value. */
-    /* 当 entry 是整数，'sval' 为空时，lval 即是 entry 的值。 */
+    /* 当 entry 是整数时，'sval' 为空，lval 即是 entry 的值。 */
     long long lval;
 } listpackEntry;
 
