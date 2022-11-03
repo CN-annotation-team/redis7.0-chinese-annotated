@@ -127,7 +127,7 @@
  * that this element is valid, so it can be freely used.
  * Generally functions such lpNext and lpDelete assume the input pointer is
  * already validated (since it's the return value of another function). */
-/* 检查 p 不是外部的 listpack。
+/* 检查 p 不在当前的 listpack(lp) 之外。
  * 所有返回指向 listpack 中元素的指针的函数都将断言这个元素有效，才能使用该元素。
  * 通常 lpNext 和 lpDelete 等函数都假定输入指针已经过验证（因为它是另一个函数的返回值）。*/
 #define ASSERT_INTEGRITY(lp, p) do { \
@@ -136,7 +136,7 @@
 
 /* Similar to the above, but validates the entire element length rather than just
  * it's pointer. */
-/* 与上面类似，但验证 entry 元素长度而不仅仅是指针。*/
+/* 与上面类似，但验证包含了 entry 元素长度而不仅仅是指针是否在当前 listpack 内。*/
 #define ASSERT_INTEGRITY_LEN(lp, p, len) do { \
     assert((p) >= (lp)+LP_HDR_SIZE && (p)+(len) < (lp)+lpGetTotalBytes((lp))); \
 } while (0)
@@ -180,14 +180,13 @@ int lpSafeToAdd(unsigned char* lp, size_t add) {
  */
 /* 将字符串转换为带符号的64位整数。
  * 如果字符串能够被转换成带符号的64位整数，返回1，否则返回0。
- * 当函数返回成功，'value' 将被设置位转换后的数值。
+ * 当函数返回成功，'value' 将被设置为转换后的数值。
  *
  * 注意函数要求字符串严格表示一个 int64 值：表示数字的字符串前后不接受空格或其他字符，
- * 如果不是表示零的字符串 "0"，则开头也不接受零。
+ * 如果不是表示零的字符串 "0"，则开头不允许接受零，否则返回 0。
  *
- * 由于其严格性，可以安全地使用函数检查
- * 如果可以将字符串转换为 long long，然后获取该字符串
- * 在字符串表示中没有任何损失。*/
+ * 由于其严格性，可以安全地使用函数检查字符串能否转换为 long long，
+ * 并且转化不会使原字符串有任何损失。*/
 int lpStringToInt64(const char *s, unsigned long slen, int64_t *value) {
     const char *p = s;
     unsigned long plen = 0;
@@ -470,7 +469,7 @@ static inline void lpEncodeString(unsigned char *buf, unsigned char *s, uint32_t
 /* 返回这个 'p' 所指向的 listapck 元素的编码长度。
  * 该编码长度是编码字节数、长度字节数和元素数据本身所占字节数的总和。
  * 如果该元素编码是错误的则返回0。
- * 注意这个方法可能允许额外的字节（在12和32位字符串的情况下），
+ * 注意这个方法可能访问额外的字节（在编码为12和32位字符串的情况下），
  * 所以我们应该在 'p' 通过 lpCurrentEncodedSizeBytes 或 ASSERT_INTEGRITY_LEN （可能 'p' 是验证其返回的另一个函数的返回值）验证后才调用。*/
 static inline uint32_t lpCurrentEncodedSizeUnsafe(unsigned char *p) {
     if (LP_ENCODING_IS_7BIT_UINT(p[0])) return 1;
@@ -543,10 +542,12 @@ unsigned char *lpNext(unsigned char *lp, unsigned char *p) {
 unsigned char *lpPrev(unsigned char *lp, unsigned char *p) {
     assert(p);
     if (p-lp == LP_HDR_SIZE) return NULL;
-    p--; /* Seek the first backlen byte of the last element. */ /* 找到最后一个元素的第一个 backlen 字节。*/
+         /* 找到最后一个元素的 backlen 的第一个字节。*/
+    p--; /* Seek the first backlen byte of the last element. */
     uint64_t prevlen = lpDecodeBacklen(p);
     prevlen += lpEncodeBacklen(NULL,prevlen);
-    p -= prevlen-1; /* Seek the first byte of the previous entry. */ /* 找到上一个 entry 的第一个字节。*/
+                    /* 找到上一个 entry 的第一个字节。*/
+    p -= prevlen-1; /* Seek the first byte of the previous entry. */
     lpAssertValidEntry(lp, lpBytes(lp), p);
     return p;
 }
@@ -555,6 +556,7 @@ unsigned char *lpPrev(unsigned char *lp, unsigned char *p) {
  * listpack has no elements. */
 /* 返回一个指向 listpack 第一个元素的指针，如果 listpack 没有元素则返回 NULL。*/
 unsigned char *lpFirst(unsigned char *lp) {
+                                         /* 跳过头部信息。 */
     unsigned char *p = lp + LP_HDR_SIZE; /* Skip the header. */
     if (p[0] == LP_EOF) return NULL;
     lpAssertValidEntry(lp, lpBytes(lp), p);
