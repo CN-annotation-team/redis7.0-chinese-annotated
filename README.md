@@ -56,7 +56,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [listpack.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/listpack.c) | listpack 紧凑列表实现  | 低于一半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2022/11/3
+更新日期：2022/11/4
 
 
 ## 关于提交 PR 的方法：
