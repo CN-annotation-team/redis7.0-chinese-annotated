@@ -41,16 +41,20 @@
 #define LP_INTBUF_SIZE 21 /* 20 digits of -2^63 + 1 null term = 21. */
 
 /* lpInsert() where argument possible values: */
+/* lpInsert() 参数可能的值 */
 #define LP_BEFORE 0
 #define LP_AFTER 1
 #define LP_REPLACE 2
 
 /* Each entry in the listpack is either a string or an integer. */
+/* 在 listpack 中的每个 entry 要么是字符串要么是整数。 */
 typedef struct {
     /* When string is used, it is provided with the length (slen). */
+    /* 当 entry 是字符串时，它的长度由 slen 表示。 */
     unsigned char *sval;
     uint32_t slen;
     /* When integer is used, 'sval' is NULL, and lval holds the value. */
+    /* 当 entry 是整数时，'sval' 为空，lval 即是 entry 的值。 */
     long long lval;
 } listpackEntry;
 
