@@ -3663,8 +3663,10 @@ static void zrangeResultFinalizeClient(zrange_result_handler *handler,
 /* 用于将 ZRANGESTORE 命令的结果开始存储到目的集合前，将目的集合创建 */
 static void zrangeResultBeginStore(zrange_result_handler *handler, long length)
 {
-    UNUSED(length);
-    handler->dstobj = createZsetListpackObject();
+    if (length > (long)server.zset_max_listpack_entries)
+        handler->dstobj = createZsetObject();
+    else
+        handler->dstobj = createZsetListpackObject();
 }
 
 /* 用于将 ZRANGESTORE 命令结果的字符串型的元素加入到目的集合中 */
