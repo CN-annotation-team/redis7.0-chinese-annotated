@@ -443,11 +443,11 @@ input_file_type getInputFileType(char *filepath) {
  * 
  * Note that in Multi Part AOF, we only allow truncation for the last AOF file.
  * */
-/* 增量 AOF 检查，检查成功后：
- * 1.清单文件格式有效
- * 2.BASE AOF 和 INCR AOFs 格式都有效
- * 3.没有 BASE 或 INCR AOFs 文件丢失
- * 4.在截取 AOF 文件时，此场景只允许截断最后一个 AOF 文件 */
+/* MP-AOF 检查，检查成功后：
+ * 1. 清单文件格式有效
+ * 2. BASE AOF 和 INCR AOFs 格式都有效
+ * 3. 没有 BASE 或 INCR AOFs 文件丢失
+ * 4. 在截取 AOF 文件时，此场景只允许截断最后一个 INCR AOF 文件 */
 void checkMultiPartAof(char *dirpath, char *manifest_filepath, int fix) {
     int total_num = 0, aof_num = 0, last_file;
     int ret;
