@@ -453,7 +453,7 @@ void checkMultiPartAof(char *dirpath, char *manifest_filepath, int fix) {
     int ret;
 
     printf("Start checking Multi Part AOF\n");
-    /* 从文件中加载 AOF */    
+    /* 加载 AOF 清单文件 */    
     aofManifest *am = aofLoadManifestFromFile(manifest_filepath);
 
     if (am->base_aof_info) total_num++;
