@@ -63,6 +63,13 @@ int RDBGeneratedByReplication = 0;
  * 7. RDB 文件加载完成后，从节点就可以从 redisServer.master 结构中继续接收来自主节点的后续数据
  */
 
+/* 主从复制，主节点方主要提供两个函数
+ * syncCommand: 该函数用来处理从节点发送来的 SYNC 和 PSYNC 命令，用于主从同步
+ * replconfCommand: 该函数用来修改主节点方持有的从节点配置信息
+ * 上面两个函数对应的命令都是 redis 内部的命令。
+ * 这两个函数可以看作是主节点的入口函数
+ */
+
 /* --------------------------- Utility functions ---------------------------- */
 
 /* Return the pointer to a string representing the slave ip:listening_port
@@ -120,6 +127,7 @@ int bg_unlink(const char *filename) {
 
 /* ---------------------------------- MASTER -------------------------------- */
 
+/* 创建复制积压缓冲区 */
 void createReplicationBacklog(void) {
     serverAssert(server.repl_backlog == NULL);
     server.repl_backlog = zmalloc(sizeof(replBacklog));
@@ -145,11 +153,13 @@ void resizeReplicationBacklog(void) {
         incrementalTrimReplicationBacklog(REPL_BACKLOG_TRIM_BLOCKS_PER_CALL);
 }
 
+/* 释放复制积压缓冲区空间 */
 void freeReplicationBacklog(void) {
     serverAssert(listLength(server.slaves) == 0);
     if (server.repl_backlog == NULL) return;
 
     /* Decrease the start buffer node reference count. */
+    /* 将缓冲区块头结点的引用计数置 0 */
     if (server.repl_backlog->ref_repl_buf_node) {
         replBufBlock *o = listNodeValue(
             server.repl_backlog->ref_repl_buf_node);
@@ -160,8 +170,10 @@ void freeReplicationBacklog(void) {
     /* Replication buffer blocks are completely released when we free the
      * backlog, since the backlog is released only when there are no replicas
      * and the backlog keeps the last reference of all blocks. */
+    /* 异步释放缓冲区块链表和缓冲区块索引 */
     freeReplicationBacklogRefMemAsync(server.repl_buffer_blocks,
                             server.repl_backlog->blocks_index);
+    /* 重置复制积压缓冲区 */
     resetReplicationBuffer();
     zfree(server.repl_backlog);
     server.repl_backlog = NULL;
@@ -170,11 +182,16 @@ void freeReplicationBacklog(void) {
 /* To make search offset from replication buffer blocks quickly
  * when replicas ask partial resynchronization, we create one index
  * block every REPL_BACKLOG_INDEX_PER_BLOCKS blocks. */
+/* 给新加入的复制积压缓冲区块节点添加索引 */
 void createReplicationBacklogIndex(listNode *ln) {
+    /* 未添加索引的节点计数器 +1 */
     server.repl_backlog->unindexed_count++;
+    /* 这里是创建的稀疏索引，每 64 个节点建立一个索引 */
     if (server.repl_backlog->unindexed_count >= REPL_BACKLOG_INDEX_PER_BLOCKS) {
         replBufBlock *o = listNodeValue(ln);
+        /* 获取当前节点的复制偏移量 */
         uint64_t encoded_offset = htonu64(o->repl_offset);
+        /* 添加一个索引 */
         raxInsert(server.repl_backlog->blocks_index,
                   (unsigned char*)&encoded_offset, sizeof(uint64_t),
                   ln, NULL);
@@ -199,6 +216,7 @@ void rebaseReplicationBuffer(long long base_repl_offset) {
     }
 }
 
+/* 重置复制积压缓冲区 */
 void resetReplicationBuffer(void) {
     server.repl_buffer_mem = 0;
     server.repl_buffer_blocks = listCreate();
@@ -207,9 +225,11 @@ void resetReplicationBuffer(void) {
 
 int canFeedReplicaReplBuffer(client *replica) {
     /* Don't feed replicas that only want the RDB. */
+    /* 如果副本客户端仅仅同步 RDB，表示不能发送复制积压缓冲区中的数据给它 */
     if (replica->flags & CLIENT_REPL_RDBONLY) return 0;
 
     /* Don't feed replicas that are still waiting for BGSAVE to start. */
+    /* 如果副本还在做 RDB 同步，不能发送复制积压缓冲区中的数据给它 */
     if (replica->replstate == SLAVE_STATE_WAIT_BGSAVE_START) return 0;
 
     return 1;
@@ -219,15 +239,19 @@ int canFeedReplicaReplBuffer(client *replica) {
  * before feeding replication stream into global replication buffer, since
  * clientHasPendingReplies in prepareClientToWrite will access the global
  * replication buffer to make judgements. */
+/* 将副本客户端加入待写处理队列中 */
 int prepareReplicasToWrite(void) {
     listIter li;
     listNode *ln;
     int prepared = 0;
 
+    /* 遍历当前主节点下的所有从节点客户端 */
     listRewind(server.slaves,&li);
     while((ln = listNext(&li))) {
         client *slave = ln->value;
+        /* 如果该从节点客户端不能接收复制积压缓冲区数据，跳过 */
         if (!canFeedReplicaReplBuffer(slave)) continue;
+        /* 这里其实就是将客户端放入待写处理客户端队列中 */
         if (prepareClientToWrite(slave) == C_ERR) continue;
         prepared++;
     }
@@ -237,11 +261,12 @@ int prepareReplicasToWrite(void) {
 
 /* Wrapper for feedReplicationBuffer() that takes Redis string objects
  * as input. */
+/* 向复制积压缓冲区中添加一个对象 */
 void feedReplicationBufferWithObject(robj *o) {
     char llstr[LONG_STR_SIZE];
     void *p;
     size_t len;
-
+    /* 根据不同的编码类型获取对象的实际值 */
     if (o->encoding == OBJ_ENCODING_INT) {
         len = ll2string(llstr,sizeof(llstr),(long)o->ptr);
         p = llstr;
@@ -249,6 +274,7 @@ void feedReplicationBufferWithObject(robj *o) {
         len = sdslen(o->ptr);
         p = o->ptr;
     }
+    /* 将实际值，以及值的长度放入复制积压缓冲区中 */
     feedReplicationBuffer(p,len);
 }
 
@@ -257,10 +283,12 @@ void feedReplicationBufferWithObject(robj *o) {
  * clients disconnect, we need to free many replication buffer blocks that are
  * referenced. It would cost much time if there are a lots blocks to free, that
  * will freeze server, so we trim replication backlog incrementally. */
+/* 从复制积压缓冲区链表头部删除一些数据缓冲区块节点 */
 void incrementalTrimReplicationBacklog(size_t max_blocks) {
     serverAssert(server.repl_backlog != NULL);
 
     size_t trimmed_blocks = 0;
+    /* 如果目前复制积压缓冲区要放入的数据超过了复制积压缓冲区的限制 */
     while (server.repl_backlog->histlen > server.repl_backlog_size &&
            trimmed_blocks < max_blocks)
     {
@@ -273,22 +301,28 @@ void incrementalTrimReplicationBacklog(size_t max_blocks) {
          * bigger than our setting, but makes the master accept partial resync as
          * much as possible. So that backlog must be the last reference of
          * replication buffer blocks. */
+        /* 获取第一个缓冲区块 */
         listNode *first = listFirst(server.repl_buffer_blocks);
         serverAssert(first == server.repl_backlog->ref_repl_buf_node);
         replBufBlock *fo = listNodeValue(first);
+        /* 如果引用计数不为 1，退出循环，不能释放当前换乘区块空间 */
         if (fo->refcount != 1) break;
 
         /* We don't try trim backlog if backlog valid size will be lessen than
          * setting backlog size once we release the first repl buffer block. */
+        /* 如果释放第一个缓冲区块节点后，空间没有超过 repl_backlog_size，退出循环，没必要释放该节点 */
         if (server.repl_backlog->histlen - (long long)fo->size <=
             server.repl_backlog_size) break;
 
         /* Decr refcount and release the first block later. */
+        /* 这里引用计数 --，上面已经确定 refcount 为 1，这里-1，就是 0 了，可以释放了 */
         fo->refcount--;
         trimmed_blocks++;
+        /* 调整复制积压缓冲区中数据的大小 */
         server.repl_backlog->histlen -= fo->size;
 
         /* Go to use next replication buffer block node. */
+        /* 将第二个节点设置为头结点 */
         listNode *next = listNextNode(first);
         server.repl_backlog->ref_repl_buf_node = next;
         serverAssert(server.repl_backlog->ref_repl_buf_node != NULL);
@@ -296,14 +330,17 @@ void incrementalTrimReplicationBacklog(size_t max_blocks) {
         ((replBufBlock *)listNodeValue(next))->refcount++;
 
         /* Remove the node in recorded blocks. */
+        /* 删除该节点的索引 */
         uint64_t encoded_offset = htonu64(fo->repl_offset);
         raxRemove(server.repl_backlog->blocks_index,
             (unsigned char*)&encoded_offset, sizeof(uint64_t), NULL);
 
         /* Delete the first node from global replication buffer. */
         serverAssert(fo->refcount == 0 && fo->used == fo->size);
+        /* 内存使用量调整 */
         server.repl_buffer_mem -= (fo->size +
             sizeof(listNode) + sizeof(replBufBlock));
+        /* 删除节点 */
         listDelNode(server.repl_buffer_blocks, first);
     }
 
@@ -330,11 +367,15 @@ void freeReplicaReferencedReplBuffer(client *replica) {
  * 'addReply*', 'feedReplicationBacklog' for replicas and replication backlog,
  * First we add buffer into global replication buffer block list, and then
  * update replica / replication-backlog referenced node and block position. */
+/* 将数据放入复制积压缓冲区块 */
 void feedReplicationBuffer(char *s, size_t len) {
     static long long repl_block_id = 0;
 
+    /* 复制积压缓冲区不存在，直接返回 */
     if (server.repl_backlog == NULL) return;
+    /* 复制偏移量增加 */
     server.master_repl_offset += len;
+    /* 存储的数据大小增加 */
     server.repl_backlog->histlen += len;
 
     size_t start_pos = 0; /* The position of referenced block to start sending. */
@@ -344,11 +385,15 @@ void feedReplicationBuffer(char *s, size_t len) {
     replBufBlock *tail = ln ? listNodeValue(ln) : NULL;
 
     /* Append to tail string when possible. */
+    /* 尾结点的缓冲区块还没有被使用完 */
     if (tail && tail->size > tail->used) {
+        /* 开始节点指向尾节点 */
         start_node = listLast(server.repl_buffer_blocks);
+        /* 开始位置指向尾缓冲区块空闲位置 */
         start_pos = tail->used;
         /* Copy the part we can fit into the tail, and leave the rest for a
          * new node */
+        /* 先尽量将命令放入尾节点缓冲区块，如果放不下会在后面进行处理 */
         size_t avail = tail->size - tail->used;
         size_t copy = (avail >= len) ? len : avail;
         memcpy(tail->buf + tail->used, s, copy);
@@ -356,23 +401,31 @@ void feedReplicationBuffer(char *s, size_t len) {
         s += copy;
         len -= copy;
     }
+    /* len > 0 表示尾结点存不下 */
     if (len) {
         /* Create a new node, make sure it is allocated to at
          * least PROTO_REPLY_CHUNK_BYTES */
         size_t usable_size;
+        /* 根据剩余的 len 来创建一个缓冲区块，该缓冲区块至少会分配 PROTO_REPLY_CHUNK_BYTES 空间 */
         size_t size = (len < PROTO_REPLY_CHUNK_BYTES) ? PROTO_REPLY_CHUNK_BYTES : len;
         tail = zmalloc_usable(size + sizeof(replBufBlock), &usable_size);
         /* Take over the allocation's internal fragmentation */
+        /* 设置给数据分配的空间大小 */
         tail->size = usable_size - sizeof(replBufBlock);
+        /* 设置新建的缓冲区块本次需要使用到的大小 */
         tail->used = len;
         tail->refcount = 0;
         tail->repl_offset = server.master_repl_offset - tail->used + 1;
         tail->id = repl_block_id++;
+        /* 将剩余的数据放入新建的缓冲区块中 */
         memcpy(tail->buf, s, len);
+        /* 放入链表尾部 */
         listAddNodeTail(server.repl_buffer_blocks, tail);
         /* We also count the list node memory into replication buffer memory. */
+        /* 复制积压缓冲区总共使用的内存需要加上链表节点的空间 */
         server.repl_buffer_mem += (usable_size + sizeof(listNode));
         add_new_block = 1;
+        /* 如果之前尾结点数据放满了，指定尾结点为当前新建节点，并且开始的偏移量为 0 */
         if (start_node == NULL) {
             start_node = listLast(server.repl_buffer_blocks);
             start_pos = 0;
@@ -381,12 +434,15 @@ void feedReplicationBuffer(char *s, size_t len) {
 
     /* For output buffer of replicas. */
     listIter li;
+    /* 遍历所有从节点 */
     listRewind(server.slaves,&li);
     while((ln = listNext(&li))) {
         client *slave = ln->value;
         if (!canFeedReplicaReplBuffer(slave)) continue;
+        /* 如果从节点可以接收复制积压缓冲区的数据 */
 
         /* Update shared replication buffer start position. */
+        /* 更新从节点的复制位置 */
         if (slave->ref_repl_buf_node == NULL) {
             slave->ref_repl_buf_node = start_node;
             slave->ref_block_pos = start_pos;
@@ -395,10 +451,12 @@ void feedReplicationBuffer(char *s, size_t len) {
         }
 
         /* Check output buffer limit only when add new block. */
+        /* 如果新建了复制积压缓冲区，需要判断客户端的输出缓冲区是否到了上限，如果到上限了需要关闭客户端 */
         if (add_new_block) closeClientOnOutputBufferLimitReached(slave, 1);
     }
 
     /* For replication backlog */
+    /* 设置当前正在处理的复制积压缓冲区块 */
     if (server.repl_backlog->ref_repl_buf_node == NULL) {
         server.repl_backlog->ref_repl_buf_node = start_node;
         /* Only increase the start block reference count. */
@@ -408,6 +466,7 @@ void feedReplicationBuffer(char *s, size_t len) {
          * into replication backlog. */
         serverAssert(add_new_block == 1 && start_pos == 0);
     }
+    /* 如果新建了复制积压缓冲区块，为新节点添加索引，这里是每 64 个节点添加一个索引 */
     if (add_new_block) {
         createReplicationBacklogIndex(listLast(server.repl_buffer_blocks));
     }
@@ -416,6 +475,7 @@ void feedReplicationBuffer(char *s, size_t len) {
      * try to trim at least one node since in the common case this is where one
      * new backlog node is added and one should be removed. See also comments
      * in freeMemoryGetNotCountedMemory for details. */
+    /* 增量的释放复制积压缓冲区中的复制积压缓冲区块 */
     incrementalTrimReplicationBacklog(REPL_BACKLOG_TRIM_BLOCKS_PER_CALL);
 }
 
@@ -425,6 +485,8 @@ void feedReplicationBuffer(char *s, size_t len) {
  * received by our clients in order to create the replication stream.
  * Instead if the instance is a replica and has sub-replicas attached, we use
  * replicationFeedStreamFromMasterStream() */
+/* replicationCron 会每隔 1s 调用一次该函数（或者当有故障转移时是 0.1s），发送复制积压缓冲区中的数据给副本节点
+ * dictid 表示当前主节点所处于的数据库编号 */
 void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
     int j, len;
     char llstr[LONG_STR_SIZE];
@@ -438,6 +500,7 @@ void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
      * propagate *identical* replication stream. In this way this slave can
      * advertise the same replication ID as the master (since it shares the
      * master replication history and has the same backlog and offsets). */
+    /* 如果当前节点不是主节点，直接返回 */
     if (server.masterhost != NULL) return;
 
     /* If there aren't slaves, and there is no backlog buffer to populate,
@@ -449,18 +512,28 @@ void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
 
     /* Must install write handler for all replicas first before feeding
      * replication stream. */
+    /* 将符合同步复制积压缓冲区数据的副本 TCP 客户端加入待写客户端队列 */
     prepareReplicasToWrite();
 
     /* Send SELECT command to every slave if needed. */
+    /* 副本选择的数据库和主节点选择的数据库不同的情况，需要发送 select 命令 */
     if (server.slaveseldb != dictid) {
         robj *selectcmd;
 
         /* For a few DBs we have pre-computed SELECT command. */
+        /* redis 已经定义好了前 10 个数据库的 select 命令的共享字符串，如果当前 dictid < 10
+         * 可以直接用共享字符串，不需要再拼接命令 */
         if (dictid >= 0 && dictid < PROTO_SHARED_SELECT_CMDS) {
             selectcmd = shared.select[dictid];
         } else {
             int dictid_len;
 
+            /* 拼接 select 命令，这里可以看出命令发送的格式
+             * 第一个字符 * ： 表示 multi bulk 类型的命令，一次执行多条命令
+             * 2 ： 表示当前命令有 2 个参数（注意命令名也认为是一个参数）
+             * $6 : 表示接下来的一个参数的字节数
+             * SELECT : 参数
+             */
             dictid_len = ll2string(llstr,sizeof(llstr),dictid);
             selectcmd = createObject(OBJ_STRING,
                 sdscatprintf(sdsempty(),
@@ -468,6 +541,7 @@ void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
                 dictid_len, llstr));
         }
 
+        /* 将 select 命令字符串加入复制积压缓冲区中 */
         feedReplicationBufferWithObject(selectcmd);
 
         if (dictid < 0 || dictid >= PROTO_SHARED_SELECT_CMDS)
@@ -480,24 +554,32 @@ void replicationFeedSlaves(list *slaves, int dictid, robj **argv, int argc) {
     char aux[LONG_STR_SIZE+3];
 
     /* Add the multi bulk reply length. */
+    /* 第一个字符是 * */
     aux[0] = '*';
+    /* 参数的数量 */
     len = ll2string(aux+1,sizeof(aux)-1,argc);
     aux[len+1] = '\r';
     aux[len+2] = '\n';
+    /* 将上面的 aux 的信息放入复制积压缓冲区块 */
     feedReplicationBuffer(aux,len+3);
 
+    /* 遍历所有参数 */
     for (j = 0; j < argc; j++) {
         long objlen = stringObjectLen(argv[j]);
 
         /* We need to feed the buffer with the object as a bulk reply
          * not just as a plain string, so create the $..CRLF payload len
          * and add the final CRLF */
+        /* 生成参数长度字符串 */
         aux[0] = '$';
         len = ll2string(aux+1,sizeof(aux)-1,objlen);
         aux[len+1] = '\r';
         aux[len+2] = '\n';
+        /* 将长度格式化后的字符串放入复制积压缓冲区 */
         feedReplicationBuffer(aux,len+3);
+        /* 将参数放入复制积压缓冲区块 */
         feedReplicationBufferWithObject(argv[j]);
+        /* 将 \r\n 两个字符放入复制积压缓冲区块 */
         feedReplicationBuffer(aux+len+1,2);
     }
 }
@@ -602,11 +684,15 @@ void replicationFeedMonitors(client *c, list *monitors, int dictid, robj **argv,
 
 /* Feed the slave 'c' with the replication backlog starting from the
  * specified 'offset' up to the end of the backlog. */
+/* 将复制积压缓冲区从 offset 开始的所有命令发送给副本
+ * 注：这里和 redis 6 版本的区别挺大，有兴趣的可以看看 redis 6 的实现，复制积压缓冲区是使用循环数组实现的，
+ * 没有使用 rax 数据结构来做快速索引 */
 long long addReplyReplicationBacklog(client *c, long long offset) {
     long long skip;
 
     serverLog(LL_DEBUG, "[PSYNC] Replica request offset: %lld", offset);
 
+    /* 如果副本缓冲区的大小为 0，直接返回 */
     if (server.repl_backlog->histlen == 0) {
         serverLog(LL_DEBUG, "[PSYNC] Backlog history len is zero");
         return 0;
@@ -620,22 +706,34 @@ long long addReplyReplicationBacklog(client *c, long long offset) {
              server.repl_backlog->histlen);
 
     /* Compute the amount of bytes we need to discard. */
+    /* 用 当前需要读取的起始偏移量 - 复制积压缓冲区第一个字节的偏移量 = 需要忽略的复制积压缓冲区的数据长度 */
     skip = offset - server.repl_backlog->offset;
     serverLog(LL_DEBUG, "[PSYNC] Skipping: %lld", skip);
 
     /* Iterate recorded blocks, quickly search the approximate node. */
+    /* 该属性最后会定位到需要发送给副本的第一个复制积压缓冲区块对应的节点，下面 if 判断和 while 循环就是定位逻辑 */
     listNode *node = NULL;
+    /* 判断复制积压缓冲区的快速索引大小是否大于 0 */
     if (raxSize(server.repl_backlog->blocks_index) > 0) {
+        /* long long 转 uint64 */
         uint64_t encoded_offset = htonu64(offset);
         raxIterator ri;
+        /* 根据 rax 数据结构生成一个 raxIterator 迭代器 */
         raxStart(&ri, server.repl_backlog->blocks_index);
+        /* 将迭代器迭代到刚好大于 offset 的位置 */
         raxSeek(&ri, ">", (unsigned char*)&encoded_offset, sizeof(uint64_t));
+        /* 如果迭代器直接结束了，表示索引目前的存储的最大偏移量是小于当前给定的偏移量 */
         if (raxEOF(&ri)) {
             /* No found, so search from the last recorded node. */
+            /* 将迭代器指向最后一个元素 */
             raxSeek(&ri, "$", NULL, 0);
+            /* 迭代器往前移动一个元素 */
             raxPrev(&ri);
+            /* 当前节点指向了尾部的前一个节点 */
             node = (listNode *)ri.data;
         } else {
+            /* 没结束的情况 */
+            /* 因为迭代器是迭代到了大于 offset 的位置，所以需要前移一个节点 */
             raxPrev(&ri); /* Skip the sought node. */
             /* We should search from the prev node since the offset of current
              * sought node exceeds searching offset. */
@@ -647,25 +745,36 @@ long long addReplyReplicationBacklog(client *c, long long offset) {
         raxStop(&ri);
     } else {
         /* No recorded blocks, just from the start node to search. */
+        /* 如果复制积压缓冲区没有快速索引的话，将节点指针指向复制积压缓冲区的第一个节点 */
         node = server.repl_backlog->ref_repl_buf_node;
     }
 
     /* Search the exact node. */
+    /* 从上面的判断中获取到节点之后，接着往后遍历节点 */
     while (node != NULL) {
         replBufBlock *o = listNodeValue(node);
+        /* 如果该节点的块的起始位置对应的复制积压缓冲区偏移量 + 块被使用的大小 >= offset 了，就表示找到了需要找的块节点 */
         if (o->repl_offset + (long long)o->used >= offset) break;
+        /* 没找到就接着往下找 */
         node = listNextNode(node);
     }
     serverAssert(node != NULL);
 
     /* Install a writer handler first.*/
+    /* 副本写数据的前置处理 */
     prepareClientToWrite(c);
     /* Setting output buffer of the replica. */
+    /* 从当前找到的节点中获取复制积压缓冲区块 */
     replBufBlock *o = listNodeValue(node);
+    /* 块的引用计数 +1 */
     o->refcount++;
+    /* 设置副本需要开始复制的节点 */
     c->ref_repl_buf_node = node;
+    /* 设置副本需要从该复制积压缓冲区块的什么位置开始复制
+     * 给定的需要开始复制的偏移量 - 块当前在复制积压缓冲区的复制偏移量 = 块内当前需要开始复制的偏移量*/
     c->ref_block_pos = offset - o->repl_offset;
-
+    /* 返回当前复制积压缓冲区中需要复制的数据，skip 就是给定的 offset 之前的数据，因为要从 offset 处开始复制
+     * histlen 表示复制积压缓冲区中实际有的数据的大小，减去需要跳过的数据大小，剩下的就是副本要复制的数据大小 */
     return server.repl_backlog->histlen - skip;
 }
 
@@ -693,19 +802,35 @@ long long getPsyncInitialOffset(void) {
  * Normally this function should be called immediately after a successful
  * BGSAVE for replication was started, or when there is one already in
  * progress that we attached our slave to. */
+
+/* 在完整重同步下发送一个 FULLRESYNC 回复用来设置从节点的状态，不同的回复有着不同的
+ * 作用：
+ * 1) 为了保证新的从节点在到达相同的后台 RDB 存储进程以后，我们也能在从节点中获取到
+ *    正确的偏移量，我们需要在 slave 客户端结构中保存我们已经发送的数据的复制偏移量
+ * 2) 设置从节点的复制状态为 WAIT_BGSAVE_END（RDB 文件准备完毕了，后面到的命令不
+ *    能再放到 RDB 文件中，而是放在复制积压缓冲区），然后开始累积当前主节点在当前时刻之
+ *    后接收到的写命令。
+ * 3) 强制复制流重新发出一个 SELECT 命令以保证主节点新增加的命令可以在从节点中正确
+ *    编号的数据库中执行
+ *
+ * 先进行 RDB 快照同步，与此同时记录复制积压缓冲区的偏移量，该偏移量之后到的命令需要在副
+ * 本接收完 rdb 后发送给副本 */
 int replicationSetupSlaveForFullResync(client *slave, long long offset) {
     char buf[128];
     int buflen;
-
+    /* 将副本的部分重同步的初始偏移量设置为提供的偏移量（在开始 rdb 同步的那一刻的复制偏移量） */
     slave->psync_initial_offset = offset;
+    /* 复制状态转换 */
     slave->replstate = SLAVE_STATE_WAIT_BGSAVE_END;
     /* We are going to accumulate the incremental changes for this
      * slave as well. Set slaveseldb to -1 in order to force to re-emit
      * a SELECT statement in the replication stream. */
+    /* 这里将从节点的数据库编号设置为 -1，后面会强制加一个 SELECT 来选择正确的数据库 */
     server.slaveseldb = -1;
 
     /* Don't send this reply to slaves that approached us with
      * the old SYNC command. */
+    /* 如果副本不可以识别 PSYNC 报错 */
     if (!(slave->flags & CLIENT_PRE_PSYNC)) {
         buflen = snprintf(buf,sizeof(buf),"+FULLRESYNC %s %lld\r\n",
                           server.replid,offset);
@@ -722,6 +847,7 @@ int replicationSetupSlaveForFullResync(client *slave, long long offset) {
  *
  * On success return C_OK, otherwise C_ERR is returned and we proceed
  * with the usual full resync. */
+/* 部分重同步 */
 int masterTryPartialResynchronization(client *c, long long psync_offset) {
     long long psync_len;
     char *master_replid = c->argv[1]->ptr;
@@ -734,6 +860,10 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
      *
      * Note that there are two potentially valid replication IDs: the ID1
      * and the ID2. The ID2 however is only valid up to a specific offset. */
+    /* 判断当前服务（主节点）持有的复制 id 是否和想要部分重同步的从节点匹配，如果不匹配
+     * 表示主节点的历史复制和该从节点不符合，将不再继续接下来的步骤。（主节点已经开始新
+     * 一轮的部分重同步了，但是从节点还是以前旧的部分重同步的过程，需要重新进行完整重同
+     * 步） */
     if (strcasecmp(master_replid, server.replid) &&
         (strcasecmp(master_replid, server.replid2) ||
          psync_offset > server.second_replid_offset))
@@ -756,10 +886,15 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
             serverLog(LL_NOTICE,"Full resync requested by replica %s",
                 replicationGetSlaveName(c));
         }
+        /* 这里如果进入了该 if 中标识需要完整重同步 */
         goto need_full_resync;
     }
 
     /* We still have the data our slave is asking for? */
+    /* 下面三种情况不能进行部分重同步
+     * 1.复制积压缓冲区不存在
+     * 2.需要部分重同步的偏移量小于当前复制积压缓冲区的偏移量
+     * 3.需要部分重同步的偏移量太大，超过了复制积压缓冲区的总数据量 */
     if (!server.repl_backlog ||
         psync_offset < server.repl_backlog->offset ||
         psync_offset > (server.repl_backlog->offset + server.repl_backlog->histlen))
@@ -770,6 +905,7 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
             serverLog(LL_WARNING,
                 "Warning: replica %s tried to PSYNC with an offset that is greater than the master replication offset.", replicationGetSlaveName(c));
         }
+        /* 需要完整重同步 */
         goto need_full_resync;
     }
 
@@ -777,14 +913,20 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
      * 1) Set client state to make it a slave.
      * 2) Inform the client we can continue with +CONTINUE
      * 3) Send the backlog data (from the offset to the end) to the slave. */
+    /* 如果运行到这里，说明是部分重同步 */
+    /* 将客户端的状态设置为副本 */
     c->flags |= CLIENT_SLAVE;
+    /* 复制状态设置为副本在线状态 */
     c->replstate = SLAVE_STATE_ONLINE;
+    /* 设置副本确认时间（会用来做超时判断） */
     c->repl_ack_time = server.unixtime;
     c->repl_start_cmd_stream_on_ack = 0;
+    /* 将副本添加到 server.slaves 尾部 */
     listAddNodeTail(server.slaves,c);
     /* We can't use the connection buffers since they are used to accumulate
      * new commands at this stage. But we are sure the socket send buffer is
      * empty so this write will never fail actually. */
+    /* 这里判断副本支持的主从复制版本， 支持 PSYNC2 协议 */
     if (c->slave_capa & SLAVE_CAPA_PSYNC2) {
         buflen = snprintf(buf,sizeof(buf),"+CONTINUE %s\r\n", server.replid);
     } else {
@@ -794,6 +936,7 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
         freeClientAsync(c);
         return C_OK;
     }
+    /* 重要方法，发送复制日志给副本 */
     psync_len = addReplyReplicationBacklog(c,psync_offset);
     serverLog(LL_NOTICE,
         "Partial resynchronization request from %s accepted. Sending %lld bytes of backlog starting from offset %lld.",
@@ -802,16 +945,18 @@ int masterTryPartialResynchronization(client *c, long long psync_offset) {
     /* Note that we don't need to set the selected DB at server.slaveseldb
      * to -1 to force the master to emit SELECT, since the slave already
      * has this state from the previous connection with the master. */
-
+    /* 一般是对于一轮部分重同步第一次复制的时候会设置 server.slaveseldb 为 -1，强制从节点选择正确的
+     * 数据库，这里会记录这些从节点，下一次在同一轮部分重同步的时候做复制，可以不用在加 SELECT */
     refreshGoodSlavesCount();
 
     /* Fire the replica change modules event. */
+    /* 触发副本改变事件 */
     moduleFireServerEvent(REDISMODULE_EVENT_REPLICA_CHANGE,
                           REDISMODULE_SUBEVENT_REPLICA_CHANGE_ONLINE,
                           NULL);
 
     return C_OK; /* The caller can return, no full resync needed. */
-
+/* 上面出现的一些不符合部分重同步要求的情况，返回 C_ERR 执行完成重同步 */
 need_full_resync:
     /* We need a full resync for some reason... Note that we can't
      * reply to PSYNC right now if a full SYNC is needed. The reply
@@ -847,6 +992,9 @@ int startBgsaveForReplication(int mincapa, int req) {
     /* We use a socket target if slave can handle the EOF marker and we're configured to do diskless syncs.
      * Note that in case we're creating a "filtered" RDB (functions-only, for example) we also force socket replication
      * to avoid overwriting the snapshot RDB file with filtered data. */
+    /* 判断是使用 socket 发送 RDB 还是保存成文件之后再发送
+     * 如果当前主节点设置了主从复制通过 socket 发送 RDB 或者从节点发送的请求指定了要过滤数据 或者 过滤函数的情况，
+     * 且从节点有处理 EOF 标识的情况，就使用 socket 发送 RDB */
     socket_target = (server.repl_diskless_sync || req & SLAVE_REQ_RDB_MASK) && (mincapa & SLAVE_CAPA_EOF);
     /* `SYNC` should have failed with error if we don't support socket and require a filter, assert this here */
     serverAssert(socket_target || !(req & SLAVE_REQ_RDB_MASK));
@@ -860,6 +1008,7 @@ int startBgsaveForReplication(int mincapa, int req) {
      * otherwise slave will miss repl-stream-db. */
     if (rsiptr) {
         if (socket_target)
+            /* 直接通过 socket 发送 RDB */
             retval = rdbSaveToSlavesSockets(req,rsiptr);
         else
             retval = rdbSaveBackground(req,server.rdb_filename,rsiptr);
@@ -946,6 +1095,7 @@ void syncCommand(client *c) {
     }
 
     /* Don't let replicas sync with us while we're failing over */
+    /* 正在进行故障转移，不能进行主从同步 */
     if (server.failover_state != NO_FAILOVER) {
         addReplyError(c,"-NOMASTERLINK Can't SYNC while failing over");
         return;
@@ -953,6 +1103,7 @@ void syncCommand(client *c) {
 
     /* Refuse SYNC requests if we are a slave but the link with our master
      * is not ok... */
+    /* 主从之间的连接还没有建立好，不能进行主从同步 */
     if (server.masterhost && server.repl_state != REPL_STATE_CONNECTED) {
         addReplyError(c,"-NOMASTERLINK Can't SYNC while not connected with my master");
         return;
@@ -987,6 +1138,7 @@ void syncCommand(client *c) {
      *
      * So the slave knows the new replid and offset to try a PSYNC later
      * if the connection with the master is lost. */
+    /* 如果接收的命令是 PSYNC ，会尝试进行部分重同步，如果部分重同步失败，就进行完整重同步 */
     if (!strcasecmp(c->argv[0]->ptr,"psync")) {
         long long psync_offset;
         if (getLongLongFromObjectOrReply(c, c->argv[2], &psync_offset, NULL) != C_OK) {
@@ -994,8 +1146,9 @@ void syncCommand(client *c) {
                       replicationGetSlaveName(c));
             return;
         }
-
+        /* 先尝试执行部分重同步 */
         if (masterTryPartialResynchronization(c, psync_offset) == C_OK) {
+            /* 部分重同步成功，直接返回 */
             server.stat_sync_partial_ok++;
             return; /* No full resync needed, return. */
         } else {
@@ -1015,6 +1168,7 @@ void syncCommand(client *c) {
     }
 
     /* Full resynchronization. */
+    /* 接下来开始进行完整重同步 */
     server.stat_sync_full++;
 
     /* Setup the slave as one waiting for BGSAVE to start. The following code
@@ -1027,12 +1181,15 @@ void syncCommand(client *c) {
     listAddNodeTail(server.slaves,c);
 
     /* Create the replication backlog if needed. */
+    /* 第一次做主从复制，需要创建复制备份日志 */
     if (listLength(server.slaves) == 1 && server.repl_backlog == NULL) {
         /* When we create the backlog from scratch, we always use a new
          * replication ID and clear the ID2, since there is no valid
          * past history. */
+        /* 修改 server.replid */
         changeReplicationId();
         clearReplicationId2();
+        /* 创建一个复制 backlog */
         createReplicationBacklog();
         serverLog(LL_NOTICE,"Replication backlog created, my new "
                             "replication IDs are '%s' and '%s'",
@@ -1082,6 +1239,7 @@ void syncCommand(client *c) {
     } else if (server.child_type == CHILD_TYPE_RDB &&
                server.rdb_child_type == RDB_CHILD_TYPE_SOCKET)
     {
+        /* 当前正在进行 bgsave，但是 bgsave 的输出目标是 socket，需要等待下一次 BGSAVE */
         /* There is an RDB child process but it is writing directly to
          * children sockets. We need to wait for the next BGSAVE
          * in order to synchronize. */
@@ -1089,6 +1247,15 @@ void syncCommand(client *c) {
 
     /* CASE 3: There is no BGSAVE is in progress. */
     } else {
+        /* 这里是没有 BGSAVE 在执行的情况 */
+
+        /* 如果配置了主从复制主节点直接通过 socket 发送 RDB，
+         * 且从节点可以节点 RDB EOF 格式流，
+         * 且服务端有设置延迟处理发送 RDB（为了等待更多的从节点连接）
+         * 符合上面三个条件，会通过 replicationCron 定时调度功能来做 BGSAVE 发送 RDB 文件
+         * replicationCron 会调用 startBgsaveForReplication 函数，这里可以直接去看该函数
+         * 中使用 socket 发送 RDB 的情况
+         */
         if (server.repl_diskless_sync && (c->slave_capa & SLAVE_CAPA_EOF) &&
             server.repl_diskless_sync_delay)
         {
@@ -1099,6 +1266,8 @@ void syncCommand(client *c) {
         } else {
             /* We don't have a BGSAVE in progress, let's start one. Diskless
              * or disk-based mode is determined by replica's capacity. */
+            /* 这里其实就是没设置延迟发送 RDB 的情况。
+             * 需要先判断是否有正在运行的子进程，如果没有，就直接调用 startBgsaveForReplication 函数*/
             if (!hasActiveChildProcess()) {
                 startBgsaveForReplication(c->slave_capa, c->slave_req);
             } else {
@@ -1412,12 +1581,14 @@ void sendBulkToSlave(connection *conn) {
 void rdbPipeWriteHandlerConnRemoved(struct connection *conn) {
     if (!connHasWriteHandler(conn))
         return;
+    /* 注销 RDB 管道数据发送给从节点的文件事件处理器 */
     connSetWriteHandler(conn, NULL);
     client *slave = connGetPrivateData(conn);
     slave->repl_last_partial_write = 0;
     server.rdb_pipe_numconns_writing--;
     /* if there are no more writes for now for this conn, or write error: */
     if (server.rdb_pipe_numconns_writing == 0) {
+        /* 本次从管道中读取的数据已经全部发送给从节点了，可以接着从管道读取数据了 */
         if (aeCreateFileEvent(server.el, server.rdb_pipe_read, AE_READABLE, rdbPipeReadHandler,NULL) == AE_ERR) {
             serverPanic("Unrecoverable error creating server.rdb_pipe_read file event.");
         }
@@ -1426,10 +1597,13 @@ void rdbPipeWriteHandlerConnRemoved(struct connection *conn) {
 
 /* Called in diskless master during transfer of data from the rdb pipe, when
  * the replica becomes writable again. */
+/* 从 RDB 管道中将数据发送给从节点处理器，该函数是作为文件事件注册给事件循环器的处理函数 */
 void rdbPipeWriteHandler(struct connection *conn) {
     serverAssert(server.rdb_pipe_bufflen>0);
     client *slave = connGetPrivateData(conn);
     ssize_t nwritten;
+    /* repldboff 在这里起作用了，
+     * 将管道缓冲区中的数据从 repldboff 位置开始之后的数据写到从节点 */
     if ((nwritten = connWrite(conn, server.rdb_pipe_buff + slave->repldboff,
                               server.rdb_pipe_bufflen - slave->repldboff)) == -1)
     {
@@ -1440,32 +1614,43 @@ void rdbPipeWriteHandler(struct connection *conn) {
         freeClient(slave);
         return;
     } else {
+        /* repldboff 加上本次发送出去的数据量 */
         slave->repldboff += nwritten;
         atomicIncr(server.stat_net_repl_output_bytes, nwritten);
+        /* 还是没有发送完，不用管了，因为已经将管道写事件注册到事件循环器中了，
+         * 本次没发送完，之后事件循环器会接着调用本函数 */
         if (slave->repldboff < server.rdb_pipe_bufflen) {
             slave->repl_last_partial_write = server.unixtime;
             return; /* more data to write.. */
         }
     }
+    /* 到这里，表示数据发送完了，会把管道写处理事件注销掉 */
     rdbPipeWriteHandlerConnRemoved(conn);
 }
 
 /* Called in diskless master, when there's data to read from the child's rdb pipe */
+/* startBgsaveForReplication 函数在使用 socket 发送 RDB 会调用 rdb.c 中的 rdbSaveToSlavesSockets 函数
+ * 该函数会使用子进程将 rdb 内容通过管道发送给父进程，父进程调用该方法接收管道中的数据 */
 void rdbPipeReadHandler(struct aeEventLoop *eventLoop, int fd, void *clientData, int mask) {
     UNUSED(mask);
     UNUSED(clientData);
     UNUSED(eventLoop);
     int i;
+    /* rdb 管道缓冲区没有初始化，在这里做初始化 */
     if (!server.rdb_pipe_buff)
         server.rdb_pipe_buff = zmalloc(PROTO_IOBUF_LEN);
     serverAssert(server.rdb_pipe_numconns_writing==0);
 
     while (1) {
+        /* 将管道中的数据读取到 rdb_pipe_buff 中 */
         server.rdb_pipe_bufflen = read(fd, server.rdb_pipe_buff, PROTO_IOBUF_LEN);
+        /* 读取管道数据读取出错了 */
         if (server.rdb_pipe_bufflen < 0) {
+            /* 直接返回的报错情况 */
             if (errno == EAGAIN || errno == EWOULDBLOCK)
                 return;
             serverLog(LL_WARNING,"Diskless rdb transfer, read error sending DB to replicas: %s", strerror(errno));
+            /* 遍历所有需要用 SOCKET 发送 RDB 的从节点连接，将这些连接的客户端关闭 */
             for (i=0; i < server.rdb_pipe_numconns; i++) {
                 connection *conn = server.rdb_pipe_conns[i];
                 if (!conn)
@@ -1474,13 +1659,16 @@ void rdbPipeReadHandler(struct aeEventLoop *eventLoop, int fd, void *clientData,
                 freeClient(slave);
                 server.rdb_pipe_conns[i] = NULL;
             }
+            /* 结束 RDB 子进程 */
             killRDBChild();
             return;
         }
 
+        /* 数据读取完了，这里已经读取不到任何数据了，可以关闭管道，和返回了 */
         if (server.rdb_pipe_bufflen == 0) {
             /* EOF - write end was closed. */
             int stillUp = 0;
+            /* 移除管道文件事件 */
             aeDeleteFileEvent(server.el, server.rdb_pipe_read, AE_READABLE);
             for (i=0; i < server.rdb_pipe_numconns; i++)
             {
@@ -1498,16 +1686,21 @@ void rdbPipeReadHandler(struct aeEventLoop *eventLoop, int fd, void *clientData,
             return;
         }
 
+        /* 到这里，表示现在能从管道中读到数据 */
+
         int stillAlive = 0;
         for (i=0; i < server.rdb_pipe_numconns; i++)
         {
             ssize_t nwritten;
             connection *conn = server.rdb_pipe_conns[i];
+            /* 如果连接不存在，处理下一个连接 */
             if (!conn)
                 continue;
 
             client *slave = connGetPrivateData(conn);
+            /* 将本次读取到的数据发送给从节点 */
             if ((nwritten = connWrite(conn, server.rdb_pipe_buff, server.rdb_pipe_bufflen)) == -1) {
+                /* 连接出错了的情况 */
                 if (connGetState(conn) != CONN_STATE_CONNECTED) {
                     serverLog(LL_WARNING,"Diskless rdb transfer, write error sending DB to replica: %s",
                         connGetLastError(conn));
@@ -1516,17 +1709,23 @@ void rdbPipeReadHandler(struct aeEventLoop *eventLoop, int fd, void *clientData,
                     continue;
                 }
                 /* An error and still in connected state, is equivalent to EAGAIN */
+                /* 从节点复制偏移量置 0 */
                 slave->repldboff = 0;
             } else {
                 /* Note: when use diskless replication, 'repldboff' is the offset
                  * of 'rdb_pipe_buff' sent rather than the offset of entire RDB. */
+                /* 这里会设置本次写给客户端数据的偏移量
+                 * 注：该属性的作用是如果一次写不完（nwritten < server.rdb_pipe_bufflen）的情况，
+                 * 该属性会作为一个游标，表示本次从管道中读取的数据写到哪个位置了 */
                 slave->repldboff = nwritten;
                 atomicIncr(server.stat_net_repl_output_bytes, nwritten);
             }
             /* If we were unable to write all the data to one of the replicas,
              * setup write handler (and disable pipe read handler, below) */
+            /* 如果不能一次把本次从管道中读到的数据发送给从节点，这里会添加一个文件事件分多次写数据 */
             if (nwritten != server.rdb_pipe_bufflen) {
                 slave->repl_last_partial_write = server.unixtime;
+                /* 标记当前正在写数据 */
                 server.rdb_pipe_numconns_writing++;
                 connSetWriteHandler(conn, rdbPipeWriteHandler);
             }
@@ -1634,6 +1833,7 @@ void updateSlavesWaitingBgsave(int bgsaveerr, int type) {
  * This will prevent successful PSYNCs between this master and other
  * slaves, so the command should be called when something happens that
  * alters the current story of the dataset. */
+/* 重新随机生成一个复制 ID，表示需要重新做主从复制 */
 void changeReplicationId(void) {
     getRandomHexChars(server.replid,CONFIG_RUN_ID_SIZE);
     server.replid[CONFIG_RUN_ID_SIZE] = '\0';
