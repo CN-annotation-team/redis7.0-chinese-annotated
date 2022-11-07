@@ -183,9 +183,9 @@ int processRESP(FILE *fp, char *filename, int *out_multi) {
  * Note that in Multi Part AOF, this truncation is only allowed when the last_file 
  * parameter is 1.
  **/
-/* 用于解析 AOF 文件中以'#'开头的注释，目前 AOF 只包含时间戳注释
+/* 用于解析 AOF 文件中以 '#' 开头的注释，目前 AOF 只包含时间戳注释
  * 时间注解的处理规则是一旦发现时间戳大于 to_timestamp，则截断注释后的 AOF
- * 在增量 AOF 中，只有 last_file 参数为 1 时才允许这种截断 */
+ * 在 MP-AOF 中，只有 last_file 参数为 1 时才允许这种截断（是否是最后一个 INCR 文件） */
 int processAnnotations(FILE *fp, char *filename, int last_file) {
     char buf[AOF_ANNOTATION_LINE_MAX_LEN];
 
