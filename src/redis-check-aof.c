@@ -40,7 +40,7 @@
 #define AOF_CHECK_TRUNCATED 2
 #define AOF_CHECK_TIMESTAMP_TRUNCATED 3
 
-/* AOF 的三种类型，包括 RESP、混合持久化和增量 AOF */
+/* AOF 的三种类型，包括 RESP、混合持久化和 MP-AOF */
 typedef enum {
     AOF_RESP,
     AOF_RDB_PREAMBLE,
