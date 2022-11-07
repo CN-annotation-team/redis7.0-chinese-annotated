@@ -333,7 +333,7 @@ int checkSingleAof(char *aof_filename, char *aof_filepath, int last_file, int fi
  * 1. The file is an old style RDB-preamble AOF
  * 2. The file is a BASE AOF in Multi Part AOF
  * */
-/* 判断是否是混合持久化 AOF 类型或者是增量 AOF 的 base 文件，根据前 5 个字符是否为 REDIS */
+/* 判断是否是混合持久化 AOF 类型或者是 MP-AOF 的 base 文件，根据前 5 个字符是否为 REDIS */
 int fileIsRDB(char *filepath) {
     FILE *fp = fopen(filepath, "r");
     if (fp == NULL) {
