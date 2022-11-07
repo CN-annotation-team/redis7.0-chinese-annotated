@@ -47,7 +47,7 @@ typedef enum {
     AOF_MULTI_PART,
 } input_file_type;
 
-/* 增量 AOF 用到的清单文件相关函数 */
+/* MP-AOF 用到的清单文件相关函数 */
 aofManifest *aofManifestCreate(void);
 void aofManifestFree(aofManifest *am);
 aofManifest *aofLoadManifestFromFile(sds am_filepath);
