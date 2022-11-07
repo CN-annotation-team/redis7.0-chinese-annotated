@@ -354,6 +354,7 @@ int checkSingleAof(char *aof_filename, char *aof_filepath, int last_file, int fi
  * 1. The file is an old style RDB-preamble AOF
  * 2. The file is a BASE AOF in Multi Part AOF
  * */
+/* 判断是否是混合持久化 AOF 类型或者是 MP-AOF 的 base 文件，根据前 5 个字符是否为 REDIS */
 int fileIsRDB(char *filepath) {
     FILE *fp = fopen(filepath, "r");
     if (fp == NULL) {
@@ -389,6 +390,7 @@ int fileIsRDB(char *filepath) {
 
 /* Used to determine whether the file is a manifest file. */
 #define MANIFEST_MAX_LINE 1024
+/* 判断文件是否是清单文件 */
 int fileIsManifest(char *filepath) {
     int is_manifest = 0;
     FILE *fp = fopen(filepath, "r");
@@ -440,6 +442,7 @@ int fileIsManifest(char *filepath) {
  * redis-check-aof tool will automatically perform different 
  * verification logic according to different file formats.
  * */
+/* 获取 AOF 文件的类型，在三种中选择一种返回 */ 
 input_file_type getInputFileType(char *filepath) {
     if (fileIsManifest(filepath)) {
         return AOF_MULTI_PART;
@@ -461,16 +464,23 @@ input_file_type getInputFileType(char *filepath) {
  * 
  * Note that in Multi Part AOF, we only allow truncation for the last AOF file.
  * */
+/* MP-AOF 检查，检查成功后：
+ * 1. 清单文件格式有效
+ * 2. BASE AOF 和 INCR AOFs 格式都有效
+ * 3. 没有 BASE 或 INCR AOFs 文件丢失
+ * 4. 在截取 AOF 文件时，此场景只允许截断最后一个 INCR AOF 文件 */
 void checkMultiPartAof(char *dirpath, char *manifest_filepath, int fix) {
     int total_num = 0, aof_num = 0, last_file;
     int ret;
 
     printf("Start checking Multi Part AOF\n");
+    /* 加载 AOF 清单文件 */    
     aofManifest *am = aofLoadManifestFromFile(manifest_filepath);
 
     if (am->base_aof_info) total_num++;
     if (am->incr_aof_list) total_num += listLength(am->incr_aof_list);
 
+    /* 检查 BASE AOF */    
     if (am->base_aof_info) {
         sds aof_filename = am->base_aof_info->file_name;
         sds aof_filepath = makePath(dirpath, aof_filename);
@@ -492,6 +502,7 @@ void checkMultiPartAof(char *dirpath, char *manifest_filepath, int fix) {
         sdsfree(aof_filepath);
     }
 
+    /* 检查 INCR AOFs */    
     if (listLength(am->incr_aof_list)) {
         listNode *ln;
         listIter li;
@@ -525,6 +536,7 @@ void checkMultiPartAof(char *dirpath, char *manifest_filepath, int fix) {
 /* Check if old style AOF is valid. Internally, it will identify whether 
  * the AOF is in RDB-preamble format, and will eventually call `checkSingleAof`
  * to do the check. */
+/* 在旧的 AOF 模式（RESP 和混合持久化）下调用此处理函数 */
 void checkOldStyleAof(char *filepath, int fix, int preamble) {
     printf("Start checking Old-Style AOF\n");
     int ret = checkSingleAof(filepath, filepath, 1, fix, preamble);
@@ -540,12 +552,17 @@ void checkOldStyleAof(char *filepath, int fix, int preamble) {
     }
 }
 
+/* redis-check-aof 工具的主入口函数，用来检查 AOF 文件的正确性，并能对错误文件进行一定程度的修复
+ * 此工具的使用场景：
+ * 1）独立的可执行文件来检查某个 AOF 文件 
+ * 2）被 server 调用去检查已经打开的文件 */
 int redis_check_aof_main(int argc, char **argv) {
     char *filepath;
     char temp_filepath[PATH_MAX + 1];
     char *dirpath;
     int fix = 0;
 
+    /* 根据入参数量，做相应分支处理 */
     if (argc < 2) {
         goto invalid_args;
     } else if (argc == 2) {
@@ -579,6 +596,8 @@ int redis_check_aof_main(int argc, char **argv) {
     dirpath = dirname(temp_filepath);
 
     /* Select the corresponding verification method according to the input file type. */
+    /* 获取 AOF 的类型，然后根据类型进入不同的分支处理函数
+     * 类型有 增量 AOF、RESP 和混合持久化 */    
     input_file_type type = getInputFileType(filepath);
     switch (type) {
     case AOF_MULTI_PART:
@@ -594,6 +613,7 @@ int redis_check_aof_main(int argc, char **argv) {
 
     exit(0);
 
+/* 在参数输入错误时，打印帮助信息 */
 invalid_args:
     printf("Usage: %s [--fix|--truncate-to-timestamp $timestamp] <file.manifest|file.aof>\n",
         argv[0]);
