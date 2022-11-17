@@ -8,6 +8,7 @@ set tcl_precision 17
 source tests/support/redis.tcl
 source tests/support/aofmanifest.tcl
 source tests/support/server.tcl
+source tests/support/cluster_helper.tcl
 source tests/support/tmpfile.tcl
 source tests/support/test.tcl
 source tests/support/util.tcl
@@ -95,6 +96,7 @@ set ::all_tests {
     unit/violations
     unit/replybufsize
     unit/cluster-scripting
+    unit/cluster/misc
 }
 # Index to the next test to run in the ::all_tests list.
 set ::next_test 0
@@ -197,6 +199,13 @@ proc r {args} {
     [srv $level "client"] {*}$args
 }
 
+# Provide easy access to a client for an inner server. Requires a positive
+# index, unlike r which uses an optional negative index.
+proc R {n args} {
+    set level [expr -1*$n]
+    [srv $level "client"] {*}$args
+}
+
 proc reconnect {args} {
     set level [lindex $args 0]
     if {[string length $level] == 0 || ![string is integer $level]} {
@@ -273,6 +282,11 @@ proc s {args} {
         set args [lrange $args 1 end]
     }
     status [srv $level "client"] [lindex $args 0]
+}
+
+# Get the specified field from the givens instances cluster info output.
+proc CI {index field} {
+    getInfoProperty [R $index cluster info] $field
 }
 
 # Provide easy access to CLUSTER INFO properties. Same semantic as "proc s".
