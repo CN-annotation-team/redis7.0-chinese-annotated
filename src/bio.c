@@ -91,15 +91,22 @@ static unsigned long long bio_pending[BIO_NUM_OPS];
 /* This structure represents a background Job. It is only used locally to this
  * file as the API does not expose the internals at all. */
 /* 后台 IO 结构体，仅仅在本地使用，相关的 API 不会被暴露出去 */
-struct bio_job {
+typedef union bio_job {
     /* Job specific arguments.*/
     /* 后台任务持有的文件描述符 */
-    int fd; /* Fd for file based background jobs */
-    /* 懒释放函数，释放在 free_args 中存储的对象 */
-    lazy_free_fn *free_fn; /* Function that will free the provided arguments */
-    /* 要被释放的对象参数 */
-    void *free_args[]; /* List of arguments to be passed to the free function */
-};
+    struct {
+        int fd; /* Fd for file based background jobs */
+        /* 懒释放函数，释放在 free_args 中存储的对象 */
+        unsigned need_fsync:1; /* A flag to indicate that a fsync is required before
+                                * the file is closed. */
+    } fd_args;
+
+    struct {
+        lazy_free_fn *free_fn; /* Function that will free the provided arguments */
+        /* 要被释放的对象参数 */
+        void *free_args[]; /* List of arguments to be passed to the free function */
+    } free_args;
+} bio_job;
 
 void *bioProcessBackgroundJobs(void *arg);
 
@@ -150,7 +157,7 @@ void bioInit(void) {
 }
 
 /* 提交任务，将任务放入对应类型操作线程的任务列表 */
-void bioSubmitJob(int type, struct bio_job *job) {
+void bioSubmitJob(int type, bio_job *job) {
     pthread_mutex_lock(&bio_mutex[type]);
     listAddNodeTail(bio_jobs[type],job);
     bio_pending[type]++;
@@ -170,36 +177,37 @@ void bioCreateLazyFreeJob(lazy_free_fn free_fn, int arg_count, ...) {
     va_list valist;
     /* Allocate memory for the job structure and all required
      * arguments */
-    struct bio_job *job = zmalloc(sizeof(*job) + sizeof(void *) * (arg_count));
-    job->free_fn = free_fn;
+    bio_job *job = zmalloc(sizeof(*job) + sizeof(void *) * (arg_count));
+    job->free_args.free_fn = free_fn;
 
     va_start(valist, arg_count);
     for (int i = 0; i < arg_count; i++) {
-        job->free_args[i] = va_arg(valist, void *);
+        job->free_args.free_args[i] = va_arg(valist, void *);
     }
     va_end(valist);
     bioSubmitJob(BIO_LAZY_FREE, job);
 }
 
 /* 创建 close file 任务，填充 fd 属性，提交任务 */
-void bioCreateCloseJob(int fd) {
-    struct bio_job *job = zmalloc(sizeof(*job));
-    job->fd = fd;
+void bioCreateCloseJob(int fd, int need_fsync) {
+    bio_job *job = zmalloc(sizeof(*job));
+    job->fd_args.fd = fd;
+    job->fd_args.need_fsync = need_fsync;
 
     bioSubmitJob(BIO_CLOSE_FILE, job);
 }
 
 /* 创建 AOF file fsync 任务，填充 fd 属性，提交任务 */
 void bioCreateFsyncJob(int fd) {
-    struct bio_job *job = zmalloc(sizeof(*job));
-    job->fd = fd;
+    bio_job *job = zmalloc(sizeof(*job));
+    job->fd_args.fd = fd;
 
     bioSubmitJob(BIO_AOF_FSYNC, job);
 }
 
 /* 后台 IO 线程执行任务函数 */
 void *bioProcessBackgroundJobs(void *arg) {
-    struct bio_job *job;
+    bio_job *job;
     unsigned long type = (unsigned long) arg;
     sigset_t sigset;
 
@@ -260,14 +268,17 @@ void *bioProcessBackgroundJobs(void *arg) {
         /* Process the job accordingly to its type. */
         /* 不同的操作类型执行具体的操作 */
         if (type == BIO_CLOSE_FILE) {
+            if (job->fd_args.need_fsync) {
+                redis_fsync(job->fd_args.fd);
+            }
             /* 关闭文件 */
-            close(job->fd);
+            close(job->fd_args.fd);
         } else if (type == BIO_AOF_FSYNC) {
             /* The fd may be closed by main thread and reused for another
              * socket, pipe, or file. We just ignore these errno because
              * aof fsync did not really fail. */
             /* 做 fsync，会忽略错误，原子的设置 AOF 的 FSYNC 状态信息 */
-            if (redis_fsync(job->fd) == -1 &&
+            if (redis_fsync(job->fd_args.fd) == -1 &&
                 errno != EBADF && errno != EINVAL)
             {
                 int last_status;
@@ -283,7 +294,7 @@ void *bioProcessBackgroundJobs(void *arg) {
             }
         } else if (type == BIO_LAZY_FREE) {
             /* 调用惰性释放函数释放对象 */
-            job->free_fn(job->free_args);
+            job->free_args.free_fn(job->free_args.free_args);
         } else {
             serverPanic("Wrong job type in bioProcessBackgroundJobs().");
         }
