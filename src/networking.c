@@ -2670,15 +2670,18 @@ int processInputBuffer(client *c) {
 
         /* 这里就是根据不同的请求类型解析 querybuf 中的数据成命令
          * 注：两种请求类型的区别
-         * 1) PROTO_REQ_MULTIBULK: Redis 序列化协议规定的二进制安全的字符串数组.
+         * 1) PROTO_REQ_MULTIBULK：Redis 序列化协议 RESP 规定的二进制安全的字符串数组
          *    通常情况下，Redis 客户端使用 MULTIBULK 向服务器发送命令
-         *    RESP Bulk String 是二进制安全的字符串，可以包含任意字符. Multi Bulk 即是多条 Bulk String 组成的字符串数组.
-         *    一个 Redis 命令，如 "SET a 1" 会被作为一个字符串数组发送： ["SET", "a", "1"]
-         *    说明文档 https://redis.io/docs/reference/protocol-spec/#resp-arrays
-         * 2) PROTO_REQ_INLINE: inline command 将 Redis 命令以原文发送，使用'\r\n'作为结尾, 如 "SET a 1\r\n".
+         *    RESP Bulk String 是二进制安全的字符串，可以包含任意字符
+         *    Multi Bulk 即是多条 Bulk String 组成的字符串数组
+         *    一个 Redis 命令，例如 "set mykey myvalue" 会被作为一个字符串数组发送： ["set", "mykey ", "myvalue"]
+         *    对应的请求报文为：*3\r\n$3set\r\n$5\r\nmykey\r\n$7\r\nmyvalue\r\n
+         *    说明文档：https://redis.io/docs/reference/protocol-spec/#resp-arrays
+         *    RESP 文档仓库：https://github.com/redis/redis-specifications
+         * 2) PROTO_REQ_INLINE：inline command 将 Redis 命令以原文发送，使用 \r\n 作为结尾, 如 "SET a 1\r\n".
          *    inline command 用于在没有 redis-cli 时使用 telnet 等工具也可以访问 redis-server
-         *    因为使用了空格和\r\n作为分隔符，inline command 的正文中不能包含这些字符，是非二进制安全的
-         *    说明文档 https://redis.io/docs/reference/protocol-spec/#inline-commands
+         *    因为使用了空格和 \r\n 作为分隔符，inline command 的正文中不能包含这些字符，是非二进制安全的
+         *    说明文档：https://redis.io/docs/reference/protocol-spec/#inline-commands
          */
         if (c->reqtype == PROTO_REQ_INLINE) {
             if (processInlineBuffer(c) != C_OK) break;
