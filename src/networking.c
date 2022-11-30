@@ -2670,10 +2670,10 @@ int processInputBuffer(client *c) {
 
         /* 这里就是根据不同的请求类型解析 querybuf 中的数据成命令
          * 注：两种请求类型的区别
-         * 1) PROTO_REQ_INLINE: 这种是 redis 自带的 redis-cli 使用的，主要是每次只有一条命令
-         *    就是 redis-cli -h xxx -pxxx 这种，在黑窗口中我们输入一条命令，redis 执行一条。
-         * 2) PROTO_REQ_MULTIBULK: 这个可以认为是批处理，一次发送很多命令，redis 统一处理，
-         *     这个就是平时我们写业务代码的时候，一次发送多条命令给 redis 一起处理，减少多次发送命令
+         * 1) PROTO_REQ_INLINE: 将 Redis 命令以原始文本的方式发送，用于在没有 redis-cli 时用 telnet 也可以访问 redis-server
+         *    说明文档 https://redis.io/docs/reference/protocol-spec/#inline-commands
+         * 2) PROTO_REQ_MULTIBULK: Redis 序列化协议规定的二进制安全的字符串数组，通常情况下 Redis 客户端使用此方式
+         *    说明文档 https://redis.io/docs/reference/protocol-spec/#resp-arrays
          */
         if (c->reqtype == PROTO_REQ_INLINE) {
             if (processInlineBuffer(c) != C_OK) break;
