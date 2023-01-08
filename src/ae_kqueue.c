@@ -189,7 +189,7 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
         struct timespec timeout;
         timeout.tv_sec = tvp->tv_sec;
         timeout.tv_nsec = tvp->tv_usec * 1000;
-        /* 至多获取 setsize 个就绪事件, 将就绪事件放在 kqueue 私有的数组 events 中, 返回获取的就绪事件数量; 若无就绪事件, 超时返回 0 */
+        /* 至多获取 setsize 个就绪事件，将就绪事件放在 kqueue 私有的数组 events 中，返回获取的就绪事件数量；若无就绪事件，超时返回 0 */
         retval = kevent(state->kqfd, NULL, 0, state->events, eventLoop->setsize,
                         &timeout);
     } else {
