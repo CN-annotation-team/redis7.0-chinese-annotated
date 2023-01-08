@@ -230,9 +230,9 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
             /* 获取可读/可写状态掩码 */
             int mask = getEventMask(state->eventsMask, fd);
 
-            /* 1. 若为可读/可写, 将 kqueue 私有数据转化为 eventLoop 数据,
+            /* 1. 若为可读/可写，将 kqueue 私有数据转化为 eventLoop 数据
              * 2. 复位私有的掩码值:
-             *      若 fd 有多个就绪事件, 后续事件的 mask == 0, 将不会走下面逻辑, 保证了 numevents 对同 fd 的多个事件, 只会计数一次. */
+             *      若一个 fd 有多个就绪事件，后续事件在遍历的时候，mask == 0，将不会走下面逻辑，保证了 numevents 对同 fd 的多个事件，只会计数一次. */
             if (mask) {
                 eventLoop->fired[numevents].fd = fd;
                 eventLoop->fired[numevents].mask = mask;
