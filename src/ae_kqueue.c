@@ -94,8 +94,8 @@ static inline void resetEventMask(char *eventsMask, int fd) {
 }
 
 /* 创建 kqueue 多路复用库的私有数据
- *     1. 创建 kqueue event 数组 (state->events), 掩码数组 (state->eventsMask)
- *     2. 创建 kqueue 队列, 得到文件描述符 kqfd
+ *     1. 创建 kqueue event 数组 (state->events)，掩码数组 (state->eventsMask)
+ *     2. 创建 kqueue 队列，得到文件描述符 kqfd
  * 最后将 kqueue 的 aeApiState 私有数据保存在全局变量 aeEventLoop.apidata 中
  */
 static int aeApiCreate(aeEventLoop *eventLoop) {
