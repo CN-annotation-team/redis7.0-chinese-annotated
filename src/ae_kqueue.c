@@ -207,7 +207,8 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
          * events, which would make it impossible to control the order of
          * reads and writes. So we store the event's mask we've got and merge
          * the same fd events later. */
-        /* 第一次遍历就绪事件, 目的: kqueue 同 fd 的可读事件和可写事件, 需要用两个就绪事件来表示, 这里的目的是将事件的状态合并 */
+        /* 第一次遍历就绪事件，目的：kqueue 同一个 fd 的可读事件和可写事件，kqueue 中会用两个就绪事件来表示，这里的目的是将事件的状态合并
+        * 例如将 kqueue 返回的 fd 可读和 fd 可写事件，合并表示成一个 fd 可读可写，不然的话无法控制 kqueue 中事件读写的顺序 */
         for (j = 0; j < retval; j++) {
             struct kevent *e = state->events+j;
             int fd = e->ident;
