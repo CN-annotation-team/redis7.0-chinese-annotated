@@ -53,12 +53,12 @@
 #include <sys/time.h>
 
 /* kqueue 的私有数据
- *     kqfd: 系统调用 kqueue() 分配的 kqueue 队列文件描述符, 后续都基于这个 kqfd 来 注册/注销 事件监听
- *     events: kevent() 系统调用返回的已触发事件, 这里是数组首元素的指针, 数组会初始化 setsize 个位置
- *     eventsMasks: char 数组, 其 size 和 数组 events 的长度相关.
- *                  数组 events 中的每个 event, 都有可读/可写两个独立状态, 一个掩码需要 2bits 来存储.
- *                  因此一个 8bits 的 char 字符可以存储 4 个 event 的掩码.
- *                  两个数组的长度关系为 len(eventsMasks) = (len(events) + 3)/ 4, 见宏定义: EVENT_MASK_MALLOC_SIZE.
+ *     kqfd: 系统调用 kqueue() 分配的 kqueue 队列文件描述符，后续都基于这个 kqfd 来 注册/注销 事件监听
+ *     events: kevent() 系统调用返回的已触发事件，这里是数组首元素的指针，数组会初始化 setsize 个位置
+ *     eventsMasks: char 数组，其 size 和 数组 events 的长度相关
+ *         数组 events 中的每个 event，都有可读/可写两个独立状态，一个掩码需要 2bits 来存储
+ *         因此一个 8bits 的 char 字符可以存储 4 个 event 的掩码
+ *         两个数组的长度关系为 len(eventsMasks) = (len(events) + 3) / 4，见宏定义: EVENT_MASK_MALLOC_SIZE
  */
 typedef struct aeApiState {
     int kqfd;
