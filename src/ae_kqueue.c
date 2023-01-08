@@ -162,7 +162,7 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
     return 0;
 }
 
-/* 删除事件, 将宏定义 EV_SET 的 EV_ADD 参数替换为 EV_DELETE, 其他同 aeApiAddEvent 函数 */
+/* 删除事件，将宏定义 EV_SET 的 EV_ADD 参数替换为 EV_DELETE，其他同 aeApiAddEvent 函数 */
 static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int mask) {
     aeApiState *state = eventLoop->apidata;
     struct kevent ke;
