@@ -221,7 +221,7 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
 
         /* Re-traversal to merge read and write events, and set the fd's mask to
          * 0 so that events are not added again when the fd is encountered again. */
-        /* fd 掩码合并后的第二次遍历, numevents 表示存在就绪事件的 fd 的数量, 不是就绪事件的数量 */
+        /* fd 掩码合并后的第二次遍历，numevents 表示存在就绪事件的 fd 的数量，而不是就绪事件的数量 */
         numevents = 0;
         for (j = 0; j < retval; j++) {
             struct kevent *e = state->events+j;
