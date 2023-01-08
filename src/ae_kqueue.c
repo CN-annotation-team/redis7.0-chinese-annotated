@@ -28,20 +28,22 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* kqueue 是一个可扩展的事件通知接口, 在 OS X, FreeBSD 中均有其实现, 在这里作为 redis polling api 的实现方式之一
- * 同 evport 和 epoll, 事件(描述符)提取的算法复杂度为 O(1), 支持超过 1024 个文件描述符
+/* kqueue 是一个可扩展的事件通知接口，在 OS X、FreeBSD 中均有其实现，在这里作为 redis polling api 的实现方式之一
+ * 同 evport 和 epoll，事件(描述符)提取的算法复杂度为 O(1)，支持超过 1024 个文件描述符
  *
  * kqueue api 在 redis 下的使用场景:
  *
  * int kqueue(void);
- *   1. 创建一个新的内核事件队列, 返回一个描述符 (kqfd)
- * int kevent(int kq, const struct kevent *changelist, int nchanges, struct	kevent *eventlist, int nevents, const struct timespec *timeout);
- *   1. 注册/删除新的可读/可写事件
- *   2. 获取已触发事件, 需要注意的是, 对同 fd 的不同事件 (比如读和写), kqueue 实现会分多个不同的就绪事件给到
- * EV_SET(_kev, ident, filter, flags, fflags, data, udata);
- *   在注册/删除事件时, 用于参数设置的宏定义
+ *   创建一个新的内核事件队列，返回一个描述符 (kqfd)
  *
- * 以上仅是 redis 使用到的功能, 相关 api 的详细介绍见:
+ * int kevent(int kq, const struct kevent *changelist, int nchanges, struct kevent *eventlist, int nevents, const struct timespec *timeout);
+ *   1. 注册/删除新的可读/可写事件
+ *   2. 获取已触发事件，需要注意的是，对同一个 fd 的不同事件 (比如读和写)，kqueue 实现会分多个不同的就绪事件给到
+ *
+ * EV_SET(_kev, ident, filter, flags, fflags, data, udata);
+ *   初始化 struct kevent 对象的宏
+ *
+ * 以上仅是 redis 使用到的功能，相关 api 的详细介绍见:
  * https://www.freebsd.org/cgi/man.cgi?query=kevent&apropos=0&sektion=0&manpath=FreeBSD+6.1-RELEASE&format=html
  */
 
