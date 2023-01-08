@@ -146,7 +146,7 @@ static void aeApiFree(aeEventLoop *eventLoop) {
  * 参数用途介绍:
  *   eventLoop: 主要用于获取系统调用 kqueue() 创建的 kqfd (eventLoop->apidata->kqfd)
  *   fd: 客户端连接生成的 socket_fd 或者 其他途径生成的 pipe_fd
- *   mask: 标记监听事件类型, 读事件(AE_READABLE) or 写事件(AE_WRITABLE) */
+ *   mask: 标记监听事件类型，读事件(AE_READABLE) or 写事件(AE_WRITABLE) */
 static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask) {
     aeApiState *state = eventLoop->apidata;
     struct kevent ke;
