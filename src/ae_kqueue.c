@@ -122,8 +122,7 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
     return 0;
 }
 
-/* 按照给定的 setsieze, 重新分配 kqueue event 数组和相对应掩码数组的大小
- * Question: 为什么需要将数组 state->eventsMask 重新设置为 0 */
+/* 按照给定的 setsieze，重新分配 kqueue event 数组和相对应掩码数组的大小 */
 static int aeApiResize(aeEventLoop *eventLoop, int setsize) {
     aeApiState *state = eventLoop->apidata;
 
