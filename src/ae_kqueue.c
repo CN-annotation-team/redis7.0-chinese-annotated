@@ -184,7 +184,7 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
     int retval, numevents = 0;
 
     if (tvp != NULL) {
-        /* 设置阻塞(超时)时间, 若该值为 NULL, 则无限期阻塞, 直到有事件触发 */
+        /* 设置阻塞(超时)时间，若该值为 NULL，则无限期阻塞，直到有事件触发 */
         struct timespec timeout;
         timeout.tv_sec = tvp->tv_sec;
         timeout.tv_nsec = tvp->tv_usec * 1000;
