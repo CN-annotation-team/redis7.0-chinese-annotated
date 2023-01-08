@@ -78,7 +78,7 @@ typedef struct aeApiState {
 #define EVENT_MASK_ENCODE(fd, mask) (((mask) & 0x3) << EVENT_MASK_OFFSET(fd))
 
 /* 从 aeApiState.eventsMask 中获取 指定 fd 的 2 bits 掩码
- * 计算过程: 先获取掩码所在的 char 字符, 然后将其移位到最后两位 */
+ * 计算过程：先获取掩码所在的 char 字符，然后将其移位到最后两位 */
 static inline int getEventMask(const char *eventsMask, int fd) {
     return (eventsMask[fd/4] >> EVENT_MASK_OFFSET(fd)) & 0x3;
 }
