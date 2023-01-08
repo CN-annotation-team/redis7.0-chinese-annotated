@@ -177,7 +177,7 @@ static void aeApiDelEvent(aeEventLoop *eventLoop, int fd, int mask) {
     }
 }
 
-/* 获取就绪事件, 并将 kqueue 事件数据转化为 redis 事件数据
+/* 获取就绪事件，并将 kqueue 事件数据转化为 redis 事件数据
  * return: 就绪事件涉及到的 fd 数量 */
 static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
     aeApiState *state = eventLoop->apidata;
