@@ -244,7 +244,7 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp) {
     return numevents;
 }
 
-/* 返回改 polling api 实现的名字 */
+/* 返回该 polling api 实现的名字 */
 static char *aeApiName(void) {
     return "kqueue";
 }
