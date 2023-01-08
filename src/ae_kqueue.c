@@ -113,7 +113,7 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
         zfree(state);
         return -1;
     }
-    /* 避免 fd 泄漏, 设置 kqueue fd 运行时可关闭 */
+    /* 避免 fd 泄漏，设置 kqueue fd 运行时可关闭 */
     anetCloexec(state->kqfd);
     state->eventsMask = zmalloc(EVENT_MASK_MALLOC_SIZE(eventLoop->setsize));
     /* 掩码数组的比特位都初始化为 0 */
