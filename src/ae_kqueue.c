@@ -88,7 +88,7 @@ static inline void addEventMask(char *eventsMask, int fd, int mask) {
     eventsMask[fd/4] |= EVENT_MASK_ENCODE(fd, mask);
 }
 
-/* 复位 fd 对应的掩码, 将掩码的 2 bits 设置为 0 */
+/* 复位 fd 对应的掩码，将掩码的 2 bits 设置为 0 */
 static inline void resetEventMask(char *eventsMask, int fd) {
     eventsMask[fd/4] &= ~EVENT_MASK_ENCODE(fd, 0x3);
 }
