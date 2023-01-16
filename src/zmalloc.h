@@ -31,7 +31,14 @@
 #ifndef __ZMALLOC_H
 #define __ZMALLOC_H
 
-/* Double expansion needed for stringification of macro values. */
+/* 当宏作为参数时, #默认不展开
+ * 假设有以下宏定义:
+ * #define foo 1
+ * #define __str(s) #s
+ * 
+ * 则调用 __str(foo)的结果为 foo
+ * 因此需要在外面多加一层宏来将宏参数扩展为实际值
+ */
 #define __xstr(s) __str(s)
 #define __str(s) #s
 
