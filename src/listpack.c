@@ -644,7 +644,7 @@ unsigned long lpLength(unsigned char *lp) {
  * 根据 'intbuf' 的值不同函数会有不同的行为。
  * 特殊的是如果 'intbuf' 为 NULL:
  *
- * 如果元素内部编码为整数，则函数返回NULL，并将整数值填充到 'count' 中。
+ * 如果元素内部编码为整数，则函数返回 NULL，并将整数值填充到 'count' 中。
  * 否则，如果元素编码是字符串，则返回指向字符串的指针（指向 listpack 本身内部），并将 'count' 设置为字符串的长度。
  *
  * 相反，如果 'intbuf' 指向一个调用者传递的缓冲区，缓冲区必须至少要有 LP_INTBUF_SIZE 字节，
@@ -657,11 +657,11 @@ unsigned long lpLength(unsigned char *lp) {
  * 如果' entry_size' 不为 NULL ，则 *entry_size 设置为 'p' 指向的 listpack 元素的 entry 长度。
  * 这包括编码字节、长度字节、元素数据本身和 backlen 字节。
  *
- * 如果函数是针对编码错误的 ziplist 调用的，因此没有有效的方法来解析它，
- * 那么函数返回的结果就像是有一个用值 12345678900000000+ ＜未识别字节＞编码的整数一样，这可能是一个提示，可以理解出了问题。
+ * 如果函数是针对编码错误的 ziplist 调用的，那么没有有效的方法来解析它，
+ * 这种情况下函数返回的结果就是一个值为 12345678900000000 + ＜未识别字节＞ 编码的整数，这可以理解成是一个出现错误的提示。
  * 在这种情况下崩溃是不明智的，因为使用该库的应用程序的要求不同。
  *
- * 同样，由于通常可以假设 listpack 是有效的，因此不会返回任何错误，因此这将是一个非常高的 API 成本。*/
+ * 同样，由于通常情况下 listpack 都是有效的，并不会返回任何错误，因此调用该函数可以被认为有一个非常高的 API 成本。*/
 static inline unsigned char *lpGetWithSize(unsigned char *p, int64_t *count, unsigned char *intbuf, uint64_t *entry_size) {
     int64_t val;
     uint64_t uval, negstart, negmax;
@@ -732,7 +732,7 @@ static inline unsigned char *lpGetWithSize(unsigned char *p, int64_t *count, uns
      * Convert the unsigned value to the signed one using two's complement
      * rule. */
     /* 只有整型编码才会运行这里的代码
-     * 使用二的补码规则将无符号值转换为有符号值。*/
+     * 使用二进制的补码规则将无符号值转换为有符号值。*/
     if (uval >= negstart) {
         /* This three steps conversion should avoid undefined behaviors
          * in the unsigned -> signed conversion. */
@@ -766,7 +766,7 @@ unsigned char *lpGet(unsigned char *p, int64_t *count, unsigned char *intbuf) {
  * string. */
 /* 这是一个对 lpGet() 的装饰器，可以直接获取 entry 的值。
  * 当函数返回 NULL ，它将向 'lval' 填充整型值。
- * 否则，如果元素被编码为字符串，则返回指向字符串的指针（指向 listpack 本身内部），并将 'slen' 设置为字符串的长度。*/
+ * 否则，如果元素被编码为字符串，则返回指向字符串的指针 'vstr'（指向 listpack 本身内部），并将 'slen' 设置为字符串的长度。*/
 unsigned char *lpGetValue(unsigned char *p, unsigned int *slen, long long *lval) {
     unsigned char *vstr;
     int64_t ele_len;
@@ -782,7 +782,7 @@ unsigned char *lpGetValue(unsigned char *p, unsigned int *slen, long long *lval)
 
 /* Find pointer to the entry equal to the specified entry. Skip 'skip' entries
  * between every comparison. Returns NULL when the field could not be found. */
-/* 查找与指定 entry 相等的 entry 的指针。在每次比较之间跳过 'skip' entry 。
+/* 查找与指定 entry('*s') 相等的 entry，并返回该 entry 的指针。在每次比较是否相等之间跳过 'skip' 个 entry 。
  * 找不到字段时返回 NULL 。*/
 unsigned char *lpFind(unsigned char *lp, unsigned char *p, unsigned char *s,
                       uint32_t slen, unsigned int skip) {
@@ -808,7 +808,7 @@ unsigned char *lpFind(unsigned char *lp, unsigned char *p, unsigned char *s,
                 /* Find out if the searched field can be encoded. Note that
                  * we do it only the first time, once done vencoding is set
                  * to non-zero and vll is set to the integer value. */
-                /* 查找搜索的字段是否可以编码。
+                /* 查找指定的字段是否可以使用整型编码。
                  * 要注意的是只在第一次执行，一旦完成，vencoding 设置为非零，vll 设置为整数。*/
                 if (vencoding == 0) {
                     /* If the entry can be encoded as integer we set it to
@@ -824,8 +824,8 @@ unsigned char *lpFind(unsigned char *lp, unsigned char *p, unsigned char *s,
                 /* Compare current entry with specified entry, do it only
                  * if vencoding != UCHAR_MAX because if there is no encoding
                  * possible for the field it can't be a valid integer. */
-                /* 如果 vencoding 不等于 UCHAR_MAX ，并且比较当前 entry 和指定的 entry
-                 * 因为如果字段不可能编码，则它不能是有效整数。*/
+                /* 如果 vencoding 不等于 UCHAR_MAX ，则使用 'll' 和 'vll' 来比较当前的和指定的 entry 是否相等
+                 * 因为此时指定 entry 能使用整型编码且当前 entry 也为整型编码，所以可以直接用整型值来比较。 */
                 if (vencoding != UCHAR_MAX && ll == vll) {
                     return p;
                 }
