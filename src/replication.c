@@ -120,7 +120,7 @@ int bg_unlink(const char *filename) {
             errno = old_errno;
             return -1;
         }
-        bioCreateCloseJob(fd);
+        bioCreateCloseJob(fd, 0);
         return 0; /* Success. */
     }
 }
@@ -2451,7 +2451,7 @@ void readSyncBulkPayload(connection *conn) {
         }
         /* Close old rdb asynchronously. */
         /* 异步关闭旧 rdb 文件句柄 */
-        if (old_rdb_fd != -1) bioCreateCloseJob(old_rdb_fd);
+        if (old_rdb_fd != -1) bioCreateCloseJob(old_rdb_fd, 0);
 
         /* Sync the directory to ensure rename is persisted */
         if (fsyncFileDir(server.rdb_filename) == -1) {

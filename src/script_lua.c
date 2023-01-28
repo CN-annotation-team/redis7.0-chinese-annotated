@@ -665,7 +665,7 @@ static void luaReplyToRedisReply(client *c, client* script_client, lua_State *lu
         /* 处理错误回复*/
         /* 我们在函数启动时处理了堆栈大小 */
         lua_pushstring(lua,"err");
-        lua_gettable(lua,-2);
+        lua_rawget(lua,-2);
         t = lua_type(lua,-1);
         if (t == LUA_TSTRING) {
             lua_pop(lua, 1); /* pop the error message, we will use luaExtractErrorInformation to get error information */
@@ -683,7 +683,7 @@ static void luaReplyToRedisReply(client *c, client* script_client, lua_State *lu
 
         /* Handle status reply. */
         lua_pushstring(lua,"ok");
-        lua_gettable(lua,-2);
+        lua_rawget(lua,-2);
         t = lua_type(lua,-1);
         if (t == LUA_TSTRING) {
             sds ok = sdsnew(lua_tostring(lua,-1));
@@ -697,7 +697,7 @@ static void luaReplyToRedisReply(client *c, client* script_client, lua_State *lu
 
         /* Handle double reply. */
         lua_pushstring(lua,"double");
-        lua_gettable(lua,-2);
+        lua_rawget(lua,-2);
         t = lua_type(lua,-1);
         if (t == LUA_TNUMBER) {
             addReplyDouble(c,lua_tonumber(lua,-1));
@@ -708,7 +708,7 @@ static void luaReplyToRedisReply(client *c, client* script_client, lua_State *lu
 
         /* Handle big number reply. */
         lua_pushstring(lua,"big_number");
-        lua_gettable(lua,-2);
+        lua_rawget(lua,-2);
         t = lua_type(lua,-1);
         if (t == LUA_TSTRING) {
             sds big_num = sdsnewlen(lua_tostring(lua,-1), lua_strlen(lua,-1));
@@ -722,16 +722,16 @@ static void luaReplyToRedisReply(client *c, client* script_client, lua_State *lu
 
         /* Handle verbatim reply. */
         lua_pushstring(lua,"verbatim_string");
-        lua_gettable(lua,-2);
+        lua_rawget(lua,-2);
         t = lua_type(lua,-1);
         if (t == LUA_TTABLE) {
             lua_pushstring(lua,"format");
-            lua_gettable(lua,-2);
+            lua_rawget(lua,-2);
             t = lua_type(lua,-1);
             if (t == LUA_TSTRING){
                 char* format = (char*)lua_tostring(lua,-1);
                 lua_pushstring(lua,"string");
-                lua_gettable(lua,-3);
+                lua_rawget(lua,-3);
                 t = lua_type(lua,-1);
                 if (t == LUA_TSTRING){
                     size_t len;
@@ -749,7 +749,7 @@ static void luaReplyToRedisReply(client *c, client* script_client, lua_State *lu
         /* Handle map reply. */
         /* 如果存在的是一个map字段 */
         lua_pushstring(lua,"map");
-        lua_gettable(lua,-2);
+        lua_rawget(lua,-2);
         t = lua_type(lua,-1);
         if (t == LUA_TTABLE) {
             int maplen = 0;
@@ -775,7 +775,7 @@ static void luaReplyToRedisReply(client *c, client* script_client, lua_State *lu
         /* Handle set reply. */
         /* 如果存在的是一个set字段 */
         lua_pushstring(lua,"set");
-        lua_gettable(lua,-2);
+        lua_rawget(lua,-2);
         t = lua_type(lua,-1);
         if (t == LUA_TTABLE) {
             int setlen = 0;
@@ -805,7 +805,7 @@ static void luaReplyToRedisReply(client *c, client* script_client, lua_State *lu
         while(1) {
             /* we took care of the stack size on function start */
             lua_pushnumber(lua,j++);
-            lua_gettable(lua,-2);
+            lua_rawget(lua,-2);
             t = lua_type(lua,-1);
             /* 未知类型 */
             if (t == LUA_TNIL) {
