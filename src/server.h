@@ -413,9 +413,13 @@ typedef enum {
 } repl_state;
 
 /* The state of an in progress coordinated failover */
+/* 正在进行的协调故障转移的状态 */
 typedef enum {
+    /* 未进行故障切换 */
     NO_FAILOVER = 0,        /* No failover in progress */
+    /* 等待目标复制副本赶上 */
     FAILOVER_WAIT_FOR_SYNC, /* Waiting for target replica to catch up */
+    /* 正在等待目标副本接受PSYNC FAILOVER请求 */
     FAILOVER_IN_PROGRESS    /* Waiting for target replica to accept
                              * PSYNC FAILOVER request. */
 } failover_state;
@@ -436,7 +440,9 @@ typedef enum {
 
 /* Slave requirements */
 #define SLAVE_REQ_NONE 0
+/* 不包括 rdb 的数据 */
 #define SLAVE_REQ_RDB_EXCLUDE_DATA (1 << 0)      /* Exclude data from RDB */
+/* 不包括 rdb 的方法 */
 #define SLAVE_REQ_RDB_EXCLUDE_FUNCTIONS (1 << 1) /* Exclude functions from RDB */
 /* Mask of all bits in the slave requirements bitfield that represent non-standard (filtered) RDB requirements */
 #define SLAVE_REQ_RDB_MASK (SLAVE_REQ_RDB_EXCLUDE_DATA | SLAVE_REQ_RDB_EXCLUDE_FUNCTIONS)
@@ -571,9 +577,13 @@ typedef enum {
 } pause_type;
 
 /* Client pause purposes. Each purpose has its own end time and pause type. */
+/* 客户端暂停目的。每个目的都有自己的结束时间和暂停类型 */
 typedef enum {
+    /* 命令方式暂停 */
     PAUSE_BY_CLIENT_COMMAND = 0,
+    /* 停止服务中间的暂停 */
     PAUSE_DURING_SHUTDOWN,
+    /* Failover的暂停 */
     PAUSE_DURING_FAILOVER,
     NUM_PAUSE_PURPOSES /* This value is the number of purposes above. */
 } pause_purpose;
@@ -1128,11 +1138,17 @@ typedef struct client {
     off_t repldboff;        /* Replication DB file offset. */
     off_t repldbsize;       /* Replication DB file size. */
     sds replpreamble;       /* Replication DB preamble. */
+    /* master-client 的读取的偏移量 */
     long long read_reploff; /* Read replication offset if this is a master. */
+    /* 已经执行的数据偏移量 */
     long long reploff;      /* Applied replication offset if this is a master. */
+    /* 已经发送出去的数据偏移量 */
     long long repl_applied; /* Applied replication data count in querybuf, if this is a replica. */
+    /* client 接受到的偏移量 */
     long long repl_ack_off; /* Replication ack offset, if this is a slave. */
+    /* client 接受到的时间 */
     long long repl_ack_time;/* Replication ack time, if this is a slave. */
+    /* 服务器上次从 RDB 子管道向此副本执行部分写入的时间 */
     long long repl_last_partial_write; /* The last time the server did a partial write from the RDB child pipe to this replica  */
     long long psync_initial_offset; /* FULLRESYNC reply offset other slaves
                                        copying this slave output buffer
@@ -1145,6 +1161,7 @@ typedef struct client {
     multiState mstate;      /* MULTI/EXEC state */
     int btype;              /* Type of blocking op if CLIENT_BLOCKED. */
     blockingState bpop;     /* blocking state */
+    /* 上次写入全局复制偏移量 */
     long long woff;         /* Last write global replication offset. */
     list *watched_keys;     /* Keys WATCHED for MULTI/EXEC CAS */
     dict *pubsub_channels;  /* channels a client is interested in (SUBSCRIBE) */
@@ -1352,6 +1369,8 @@ typedef enum {
  * replication in order to make sure that chained slaves (slaves of slaves)
  * select the correct DB and are able to accept the stream coming from the
  * top-level master. */
+/* 此结构可以可选地传递给 RDB 保存/加载函数，以便通过将元数据存储和加载到 RDB 文件来实现其他功能
+ * 例如，在加载时使用 select 一个 DB，这在复制中非常有用，以确保链接的从机（从机的从机）选择正确的 DB，并且能够接受来自顶部的 master 的数据 */
 typedef struct rdbSaveInfo {
     /* Used saving and loading. */
     int repl_stream_db;  /* DB to select in server.master client. */
@@ -1754,6 +1773,7 @@ struct redisServer {
      * 若新 master 收到的 psync 命令中的 replid 与自己的 replid2 相同且同时复制偏移仍然在复制积压缓冲区内，那么仍然可以进行部分同步
      */
     char replid2[CONFIG_RUN_ID_SIZE+1]; /* replid inherited from master*/
+    /* 当前的复制偏移量 */
     long long master_repl_offset;   /* My current replication offset */
     long long second_replid_offset; /* Accept offsets up to this for replid2. */
     int slaveseldb;                 /* Last SELECTed DB in replication output */
@@ -1813,6 +1833,7 @@ struct redisServer {
      * while the PSYNC is in progress. At the end we'll copy the fields into
      * the server->master client structure. */
     char master_replid[CONFIG_RUN_ID_SIZE+1];  /* Master PSYNC runid. */
+    /* 初始化的偏移量 */
     long long master_initial_offset;           /* Master PSYNC offset. */
     int repl_slave_lazy_flush;          /* Lazy FLUSHALL before loading DB? */
     /* Synchronous replication. */
@@ -1942,9 +1963,12 @@ struct redisServer {
     mstime_t failover_end_time; /* Deadline for failover command. */
     int force_failover; /* If true then failover will be forced at the
                          * deadline, otherwise failover is aborted. */
+    /* failover 的目标 host */
     char *target_replica_host; /* Failover target host. If null during a
                                 * failover then any replica can be used. */
+    /* failover 的目标 port */
     int target_replica_port; /* Failover target port */
+    /* failover 的状态信息: 无 failover，待切换、待确认 */
     int failover_state; /* Failover state */
     int cluster_allow_pubsubshard_when_down; /* Is pubsubshard allowed when the cluster
                                                 is down, doesn't affect pubsub global. */
