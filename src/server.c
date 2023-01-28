@@ -1390,6 +1390,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
      * command execution, but we want to be sure that if the last command
      * executed changes the value via CONFIG SET, the server will perform
      * the operation even if completely idle. */
+    /* 如果需要，调整跟踪键表的大小。这也会在每次执行命令时完成，但我们希望确保，如果最后执行的命令通过 CONFIG SET 更改了值，即使完全空闲，服务器也会执行该操作 */
     if (server.tracking_clients) trackingLimitUsedSlots();
 
     /* Start a scheduled BGSAVE if the corresponding flag is set. This is
@@ -1611,6 +1612,7 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
 
     /* Send the invalidation messages to clients participating to the
      * client side caching protocol in broadcasting (BCAST) mode. */
+    /* 以广播 （BCAST） 模式向参与客户端缓存协议的客户端发送无效消息 */
     trackingBroadcastInvalidationMessages();
 
     /* Try to process blocked clients every once in while.
@@ -3449,11 +3451,14 @@ void call(client *c, int flags) {
      * make sure to remember the keys it fetched via this command. Scripting
      * works a bit differently, where if the scripts executes any read command, it
      * remembers all of the declared keys from the script. */
+    /* 如果客户端为客户端缓存启用了 key 跟踪，请确保记住它通过此命令获取的 key 。
+     * 脚本的工作方式有点不同，如果脚本执行任何读取命令，它会记住脚本中声明的所有 key  */
     if ((c->cmd->flags & CMD_READONLY) && (c->cmd->proc != evalRoCommand)
         && (c->cmd->proc != evalShaRoCommand) && (c->cmd->proc != fcallroCommand))
     {
         client *caller = (c->flags & CLIENT_SCRIPT && server.script_caller) ?
                             server.script_caller : c;
+        /* 如果当前不为 bcast 模式，则尝试追踪当前的 key */
         if (caller->flags & CLIENT_TRACKING &&
             !(caller->flags & CLIENT_TRACKING_BCAST))
         {
@@ -3532,6 +3537,7 @@ void afterCommand(client *c) {
             propagatePendingCommands();
         /* Flush pending invalidation messages only when we are not in nested call.
          * So the messages are not interleaved with transaction response. */
+        /* 仅当我们不在嵌套调用中时刷新挂起的无效消息。因此，消息不会与事务响应交错 */
         trackingHandlePendingKeyInvalidations();
     }
 }
@@ -3809,6 +3815,7 @@ int processCommand(client *c) {
 
     /* Make sure to use a reasonable amount of memory for client side
      * caching metadata. */
+    /* 确保为客户端缓存元数据使用合理的内存量 */
     if (server.tracking_clients) trackingLimitUsedSlots();
 
     /* Don't accept write commands if there are problems persisting on disk

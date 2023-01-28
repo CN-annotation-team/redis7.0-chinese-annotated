@@ -1860,6 +1860,8 @@ int freeClientsInAsyncFreeQueue(void) {
 /* Return a client by ID, or NULL if the client ID is not in the set
  * of registered clients. Note that "fake clients", created with -1 as FD,
  * are not registered clients. */
+/* 按 ID 返回客户端，如果客户端 ID 不在注册的客户端集中，则返回 ULL。
+ * 请注意，使用 -1 作为 FD 创建的 “伪客户端” 不是注册的客户端 */
 client *lookupClientByID(uint64_t id) {
     id = htonu64(id);
     client *c = raxFind(server.clients_index,(unsigned char*)&id,sizeof(id));
@@ -3392,6 +3394,7 @@ NULL
         size_t numprefix = 0;
 
         /* Parse the options. */
+        /** 格式化参数，包括：redirect、bcast、optin、optout、noloop、prefix  */
         for (int j = 3; j < c->argc; j++) {
             int moreargs = (c->argc-1) - j;
 
@@ -3404,6 +3407,7 @@ NULL
                     return;
                 }
 
+                /* 读取到重定向的 client id */
                 if (getLongLongFromObjectOrReply(c,c->argv[j],&redir,NULL) !=
                     C_OK)
                 {
@@ -3413,6 +3417,7 @@ NULL
                 /* We will require the client with the specified ID to exist
                  * right now, even if it is possible that it gets disconnected
                  * later. Still a valid sanity check. */
+                /* 我们将要求具有指定 ID 的客户端立即存在，即使它稍后可能会断开连接。仍然是有效的健康检查 */
                 if (lookupClientByID(redir) == NULL) {
                     addReplyError(c,"The client ID you want redirect to "
                                     "does not exist");
@@ -3439,9 +3444,12 @@ NULL
         }
 
         /* Options are ok: enable or disable the tracking for this client. */
+        /* 选项正常：启用或禁用此客户端的跟踪 */
         if (!strcasecmp(c->argv[2]->ptr,"on")) {
             /* Before enabling tracking, make sure options are compatible
              * among each other and with the current state of the client. */
+            /* 在启用跟踪之前，请确保选项彼此兼容，并且与客户端的当前状态兼容 
+             * 如果不是 bcast 且 存在 prefix， 则认为是不兼容的 */
             if (!(options & CLIENT_TRACKING_BCAST) && numprefix) {
                 addReplyError(c,
                     "PREFIX option requires BCAST mode to be enabled");
@@ -3449,6 +3457,7 @@ NULL
                 return;
             }
 
+            /* 当前 clinet 正在被跟踪，如果当前是 bcast 模式，则不允许切换状态 */
             if (c->flags & CLIENT_TRACKING) {
                 int oldbcast = !!(c->flags & CLIENT_TRACKING_BCAST);
                 int newbcast = !!(options & CLIENT_TRACKING_BCAST);
@@ -3462,6 +3471,7 @@ NULL
                 }
             }
 
+            /* bcast 模式 和 optin / optout 模式不兼容 */
             if (options & CLIENT_TRACKING_BCAST &&
                 options & (CLIENT_TRACKING_OPTIN|CLIENT_TRACKING_OPTOUT))
             {
@@ -3471,6 +3481,7 @@ NULL
                 return;
             }
 
+            /* optin 和 optout 模式不兼容 */
             if (options & CLIENT_TRACKING_OPTIN && options & CLIENT_TRACKING_OPTOUT)
             {
                 addReplyError(c,
@@ -3479,6 +3490,7 @@ NULL
                 return;
             }
 
+            /* 如果当前是 optin / optout 模式，则不允许切换状态 */
             if ((options & CLIENT_TRACKING_OPTIN && c->flags & CLIENT_TRACKING_OPTOUT) ||
                 (options & CLIENT_TRACKING_OPTOUT && c->flags & CLIENT_TRACKING_OPTIN))
             {
@@ -3489,16 +3501,18 @@ NULL
                 zfree(prefix);
                 return;
             }
-
+            
+            /* 如果当前是 bcast 模式，则需要检查 prefix 是否冲突，不允许 prefix 被删除 */
             if (options & CLIENT_TRACKING_BCAST) {
                 if (!checkPrefixCollisionsOrReply(c,prefix,numprefix)) {
                     zfree(prefix);
                     return;
                 }
             }
-
+            /* 启用跟踪模式 */
             enableTracking(c,redir,options,prefix,numprefix);
         } else if (!strcasecmp(c->argv[2]->ptr,"off")) {
+            /* 关闭跟踪模式 */
             disableTracking(c);
         } else {
             zfree(prefix);
@@ -3514,7 +3528,7 @@ NULL
                             "OPTOUT mode enabled");
             return;
         }
-
+        /* 是否打开 caching， 缓存状态 */
         char *opt = c->argv[2]->ptr;
         if (!strcasecmp(opt,"yes")) {
             if (c->flags & CLIENT_TRACKING_OPTIN) {

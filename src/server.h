@@ -345,6 +345,7 @@ extern int configOOMScoreAdjValuesDefaults[CONFIG_OOM_COUNT];
                                         * parsed command ready for execution. */
 #define CLIENT_TRACKING (1ULL<<31) /* Client enabled keys tracking in order to
                                    perform client side caching. */
+                                   /* 客户端启用的密钥跟踪，以便执行客户端缓存。 */
 #define CLIENT_TRACKING_BROKEN_REDIR (1ULL<<32) /* Target client is invalid. */
 #define CLIENT_TRACKING_BCAST (1ULL<<33) /* Tracking in BCAST mode. */
 #define CLIENT_TRACKING_OPTIN (1ULL<<34)  /* Tracking in opt-in mode. */
@@ -1168,7 +1169,9 @@ typedef struct client {
     /* If this client is in tracking mode and this field is non zero,
      * invalidation messages for keys fetched by this client will be send to
      * the specified client ID. */
+    /* 如果此客户端处于跟踪模式并且此字段为非零，则此客户端获取的 key 的无效消息将发送到指定的客户端 ID */
     uint64_t client_tracking_redirection;
+    /* 在客户端缓存的上下文中，我们已经在 BCAST 模式下订阅了前缀字典 */
     rax *client_tracking_prefixes; /* A dictionary of prefixes we are already
                                       subscribed to in BCAST mode, in the
                                       context of client side caching. */
