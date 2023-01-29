@@ -527,7 +527,7 @@ static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected";
 /* Our hash function is MurmurHash2, 64 bit version.
  * It was modified for Redis in order to provide the same result in
  * big and little endian archs (endian neutral). */
-/* 64位的MurmurHash2函数，针对 redis 做了修改，以便在大端和小端字节序的情况下得到相同的结果 */
+/* 64 位的 MurmurHash2 函数，针对 redis 做了修改，以便在大端和小端字节序的情况下得到相同的结果 */
 REDIS_NO_SANITIZE("alignment")
 uint64_t MurmurHash64A (const void * key, int len, unsigned int seed) {
     const uint64_t m = 0xc6a4a7935bd1e995;
@@ -730,7 +730,7 @@ void hllDenseRegHisto(uint8_t *registers, int* reghisto) {
             reghisto[r13]++;
             reghisto[r14]++;
             reghisto[r15]++;
-            /* 没次循环处理 12 个字节，也就是 16 个桶 */
+            /* 每次循环处理 12 个字节，也就是 16 个桶 */
             r += 12;
         }
     } else {
@@ -1009,7 +1009,7 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
             /* 如果 index 不是当前操作码的第一个桶位置 */
             /* 获取 index 指向的桶在当前操作码中的偏移量 */
             len = index-first;
-            /* 判断上面得到的偏移量是否小于 zero 能表示的最大长度，如果大于就用zero来存储该偏移量之前的桶
+            /* 判断上面得到的偏移量是否小于 zero 能表示的最大长度，如果大于就用 zero 来存储该偏移量之前的桶
              * 否则用 xzero 来存储该偏移量之前的桶*/
             if (len > HLL_SPARSE_ZERO_MAX_LEN) {
                 /* 新建一个 xzero 操作码，存储的桶数量是偏移量 len */
