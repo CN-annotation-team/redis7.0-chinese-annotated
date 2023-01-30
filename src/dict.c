@@ -57,8 +57,8 @@
  * Note that even when dict_can_resize is set to 0, not all resizes are
  * prevented: a hash table is still allowed to grow if the ratio between
  * the number of elements and the buckets > dict_force_resize_ratio.
- * 需要注意的是，即使 dict_can_resize 置为0时，也不意味着所有 resize 行为都被禁止了
- * 当哈希表元素与桶大小比值大于阈值 (dict_force_resize_ratio = 5), redis还是会对哈希表进行 resize
+ * 需要注意的是，即使 dict_can_resize 置为 0 时，也不意味着所有 resize 行为都被禁止了
+ * 当哈希表元素与桶大小比值大于阈值 (dict_force_resize_ratio = 5), redis 还是会对哈希表进行 resize
  */
 static int dict_can_resize = 1;
 static unsigned int dict_force_resize_ratio = 5;
@@ -129,7 +129,7 @@ int _dictInit(dict *d, dictType *type)
 /* Resize the table to the minimal size that contains all the elements,
  * but with the invariant of a USED/BUCKETS ratio near to <= 1 */
 /* 将哈希表大小重分配为最小所需大小
- * 但 已使用大小与桶大小比值 尽量接近或小于1 */
+ * 但 已使用大小（元素数量）与桶大小（桶数量）比值 尽量接近或小于1 */
 int dictResize(dict *d)
 {
     unsigned long minimal;
@@ -191,10 +191,10 @@ int _dictExpand(dict *d, unsigned long size, int* malloc_failed)
     }
 
     /* Prepare a second hash table for incremental rehashing */
-    /* 由 dict.h 源码可以看出，ht_xxx一般为大小为2的数组
-     * 下标为1的元素用于在重哈希时临时存储新的哈希表
-     * 因此这里将exp，已使用大小以及*新哈希表赋值给下标为1的元素
-     * 并且将 rehashidx 置为0(为-1时表示不处于重哈希过程中)，即可以让redis对哈希表进行再哈希 */
+    /* 由 dict.h 源码可以看出，ht_xxx一般为大小为 2 的数组
+     * 下标为 1 的元素用于在重哈希时临时存储新的哈希表
+     * 因此这里将新哈希表的空间扩展指数，新哈希表已使用大小以及新哈希表指针赋值给下标为 1 的元素
+     * 并且将 rehashidx 置为 0(为 -1 时表示不处于重哈希过程中)，即可以让 redis 对哈希表进行再哈希 */
     d->ht_size_exp[1] = new_ht_size_exp;
     d->ht_used[1] = new_ht_used;
     d->ht_table[1] = new_ht_table;
@@ -203,14 +203,14 @@ int _dictExpand(dict *d, unsigned long size, int* malloc_failed)
 }
 
 /* return DICT_ERR if expand was not performed */
-/* 不设置malloc_failed变量的 resize 方法
+/* 不设置 malloc_failed 变量的 resize 方法
  * 当无法 resize 时会中断程序 */
 int dictExpand(dict *d, unsigned long size) {
     return _dictExpand(d, size, NULL);
 }
 
 /* return DICT_ERR if expand failed due to memory allocation failure */
-/* 设置malloc_failed变量的 resize 方法
+/* 设置 malloc_failed 变量的 resize 方法
  * 当无法 resize 时会返回错误标识 */
 int dictTryExpand(dict *d, unsigned long size) {
     int malloc_failed;
@@ -228,8 +228,8 @@ int dictTryExpand(dict *d, unsigned long size) {
  * will visit at max N*10 empty buckets in total, otherwise the amount of
  * work it does would be unbound and the function may block for a long time. */
 
-/* 重哈希方法，如果返回0表示重哈希完成，返回1表示还有剩余未重哈希的元素
- * redis采用渐进式重哈希，empty_visits 用于记录本次哈希允许遍历到为空值的元素
+/* 重哈希方法，如果返回 0 表示重哈希完成，返回 1 表示还有剩余未重哈希的元素
+ * redis 采用渐进式重哈希，empty_visits 用于记录本次哈希允许遍历到为空值的元素
  * 当 empty_visits = 0 时，本次哈希结束，剩余元素的重哈希会在之后继续进行
  * rehashidx 记录上一次重哈希结束时遍历到哈希表元素的下标
  * */
@@ -267,9 +267,9 @@ int dictRehash(dict *d, int n) {
     }
 
     /* Check if we already rehashed the whole table... */
-    /* 当当前哈希表已使用大小为0
+    /* 当当前哈希表已使用大小为 0
      * 证明重哈希完成
-     * 将下标为1的哈希表复制到当前哈希表
+     * 将下标为 1 的哈希表复制到当前哈希表
      * 完成重哈希过程 */
     if (d->ht_used[0] == 0) {
         zfree(d->ht_table[0]);
@@ -322,7 +322,7 @@ int dictRehashMilliseconds(dict *d, int ms) {
  * while it is actively used. */
 /* 此方法表示在对哈希表进行查找或者更新的时候
  * 动态地对哈希表进行重哈希
- * 这样做可以避免大规模对整个哈希表进行重哈希，导致阻塞redis进程 */
+ * 这样做可以避免大规模对整个哈希表进行重哈希，导致阻塞 redis 进程 */
 static void _dictRehashStep(dict *d) {
     if (d->pauserehash == 0) dictRehash(d,1);
 }

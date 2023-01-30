@@ -72,8 +72,8 @@ void zlibc_free(void *ptr) {
 /* When using the libc allocator, use a minimum allocation size to match the
  * jemalloc behavior that doesn't return NULL in this case.
  *
- * 在使用libc动态分配内存时，使用一个最小可分配大小去适配jemalloc模型
- * 当传入x小于等于0时，jemalloc不会返回空值
+ * 在使用 libc 动态分配内存时，使用一个最小可分配大小去适配 jemalloc 模型
+ * 当传入 x 小于等于 0 时，jemalloc 不会返回空值
  */
 #define MALLOC_MIN_SIZE(x) ((x) > 0 ? (x) : sizeof(long))
 
@@ -481,7 +481,7 @@ int get_proc_stat_ll(int i, long long *res) {
 }
 
 #if defined(HAVE_PROC_STAT)
-/* /proc/self/stats 文件第24行存放了rss大小，用rss大小乘页数就是实际使用物理内存大小 */
+/* /proc/self/stats 文件第 24 行存放了 rss 大小，用 rss 大小乘页数就是实际使用物理内存大小 */
 size_t zmalloc_get_rss(void) {
     int page = sysconf(_SC_PAGESIZE);
     long long rss;
