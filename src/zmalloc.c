@@ -481,7 +481,7 @@ int get_proc_stat_ll(int i, long long *res) {
 }
 
 #if defined(HAVE_PROC_STAT)
-/* /proc/self/stats 文件第 24 行存放了 rss 大小，用 rss 大小乘页数就是实际使用物理内存大小 */
+/* /proc/self/stat 文件第 24 个字段存放了 rss 大小，用 rss 大小乘页数就是实际使用物理内存大小 */
 size_t zmalloc_get_rss(void) {
     int page = sysconf(_SC_PAGESIZE);
     long long rss;
@@ -771,7 +771,6 @@ size_t zmalloc_get_private_dirty(long pid) {
 /* 以字节的单位返回物理内存大小
  * 看起来比较丑，但是这是能获取到跨平台结果并且最整洁的结果
  * 具体可看以下网站:
- *
  * http://nadeausoftware.com/articles/2012/09/c_c_tip_how_get_physical_memory_size_system
  */
 size_t zmalloc_get_memory_size(void) {

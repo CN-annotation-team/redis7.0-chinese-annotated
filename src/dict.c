@@ -52,12 +52,13 @@
  * for Redis, as we use copy-on-write and don't want to move too much memory
  * around when there is a child performing saving operations.
  * 使用 dictEnableResize() / dictDisableResize() 方法可以让我们很容易去控制哈希表是否进行大小再分配
- * 因为 redis 使用的是写时复制，在做一些内存安全的操作的时候对内存做过多的操作(如新建或复制)是很消耗性能的
+ * 使用了写时复制，当有子进程在进行 BGSAVE 或者 AOFRW 的时候，父进程对内存进行写操作（rehash）是很消耗性能的
  *
  * Note that even when dict_can_resize is set to 0, not all resizes are
  * prevented: a hash table is still allowed to grow if the ratio between
  * the number of elements and the buckets > dict_force_resize_ratio.
- * 需要注意的是，即使 dict_can_resize 置为 0 时，也不意味着所有 resize 行为都被禁止了
+ */
+/* 需要注意的是，即使 dict_can_resize 置为 0 时，也不意味着所有 resize 行为都被禁止了
  * 当哈希表元素与桶大小比值大于阈值 (dict_force_resize_ratio = 5), redis 还是会对哈希表进行 resize
  */
 static int dict_can_resize = 1;
@@ -152,7 +153,7 @@ int _dictExpand(dict *d, unsigned long size, int* malloc_failed)
 
     /* the size is invalid if it is smaller than the number of
      * elements already inside the hash table */
-    /* 假如目前已使用大小大于目标大小，或正处于重哈希过程中，则跳过 */
+    /* 假如正处于重哈希过程中，或目前已使用大小大于目标大小，则跳过 */
     if (dictIsRehashing(d) || d->ht_used[0] > size)
         return DICT_ERR;
 
@@ -162,7 +163,7 @@ int _dictExpand(dict *d, unsigned long size, int* malloc_failed)
     signed char new_ht_size_exp = _dictNextExp(size);
 
     /* Detect overflows */
-    /* 如果目标大小小于原大小（一般为负）， 则可能是长度溢出了 */
+    /* 如果目标大小小于原大小（一般为负），则可能是长度溢出了 */
     size_t newsize = 1ul<<new_ht_size_exp;
     if (newsize < size || newsize * sizeof(dictEntry*) < newsize)
         return DICT_ERR;
@@ -191,10 +192,10 @@ int _dictExpand(dict *d, unsigned long size, int* malloc_failed)
     }
 
     /* Prepare a second hash table for incremental rehashing */
-    /* 由 dict.h 源码可以看出，ht_xxx一般为大小为 2 的数组
+    /* 从 dict.h 源码可以看出，ht_xxx 一般为大小为 2 的数组
      * 下标为 1 的元素用于在重哈希时临时存储新的哈希表
      * 因此这里将新哈希表的空间扩展指数，新哈希表已使用大小以及新哈希表指针赋值给下标为 1 的元素
-     * 并且将 rehashidx 置为 0(为 -1 时表示不处于重哈希过程中)，即可以让 redis 对哈希表进行再哈希 */
+     * 并且将 rehashidx 置为 0 (为 -1 时表示不处于重哈希过程中)，即可以让 redis 对哈希表进行再哈希 */
     d->ht_size_exp[1] = new_ht_size_exp;
     d->ht_used[1] = new_ht_used;
     d->ht_table[1] = new_ht_table;
@@ -269,7 +270,7 @@ int dictRehash(dict *d, int n) {
     /* Check if we already rehashed the whole table... */
     /* 当当前哈希表已使用大小为 0
      * 证明重哈希完成
-     * 将下标为 1 的哈希表复制到当前哈希表
+     * 将下标为 1 的哈希表赋值到当前哈希表
      * 完成重哈希过程 */
     if (d->ht_used[0] == 0) {
         zfree(d->ht_table[0]);
@@ -296,9 +297,9 @@ long long timeInMilliseconds(void) {
 /* Rehash in ms+"delta" milliseconds. The value of "delta" is larger 
  * than 0, and is smaller than 1 in most cases. The exact upper bound 
  * depends on the running time of dictRehash(d,100).*/
-/* 此方法等于是用参数 ms 来控制 rehash 的数量
+/* 此方法等于是用参数 ms 来控制 rehash 的时间
  * 目前观察来看 ms 一般设置为 1ms
- * 当重哈希时常超过 1ms 时， 结束本次重哈希，并返回本次重哈希元素的数量 */
+ * 当重哈希时长超过 1ms 时， 结束本次重哈希，并返回本次重哈希元素的数量 */
 int dictRehashMilliseconds(dict *d, int ms) {
     if (d->pauserehash > 0) return 0;
 
