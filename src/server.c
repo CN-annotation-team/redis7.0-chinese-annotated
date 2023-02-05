@@ -2644,7 +2644,7 @@ void initServer(void) {
      * no explicit limit in the user provided configuration we set a limit
      * at 3 GB using maxmemory with 'noeviction' policy'. This avoids
      * useless crashes of the Redis instance for out of memory. */
-    /* 系统架构为32位且未设置最大内存时，redis 将最大内存设置为 3G，且数据逐出策略为 noeviction
+    /* 系统架构为 32 位且未设置最大内存时，redis 将最大内存设置为 3G，且数据逐出策略为 noeviction
      * 当 redis 使用内存达到最大时，将不再处理客户端任何增加数据的请求，避免 oom */
     if (server.arch_bits == 32 && server.maxmemory == 0) {
         serverLog(LL_WARNING,"Warning: 32 bit instance detected but no memory limit set. Setting 3 GB maxmemory limit with 'noeviction' policy now.");
