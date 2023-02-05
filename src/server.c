@@ -2634,9 +2634,9 @@ void initServer(void) {
 
     /* Register before and after sleep handlers (note this needs to be done
      * before loading persistence since it is used by processEventsWhileBlocked. */
-    /* 在事件处理函数 aeProcessEvents 中，需要调用 polling api 获取就绪事件。该操作是阻塞式的，
-     * 在没有就绪事件可获取时，会 sleep 一定时间。
-     * 所以 beforeSleep 为获取就绪事件的前置处理，afterSleep 为后置处理 */
+    /* 在事件处理函数 aeProcessEvents 中，需要调用 polling api 获取就绪事件。该操作可能是阻塞式的，
+     * 在没有就绪事件可获取时，可能会 sleep 一定时间。
+     * 所以 beforeSleep 为获取就绪事件的前置处理，afterSleep 为获取就绪事件后的后置处理，再接着才是事件的处理 */
     aeSetBeforeSleepProc(server.el,beforeSleep);
     aeSetAfterSleepProc(server.el,afterSleep);
 
