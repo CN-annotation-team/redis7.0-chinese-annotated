@@ -2465,8 +2465,8 @@ void initServer(void) {
      *  buckets[17]      (2G, 4G)
      *  buckets[18]      (4G, ~)
      *
-     * client 所属哪个 bucket 通过方法 server.c#updateClientMemUsage(client *c) 计算。
-     * 驱逐 client 通过 networking#evictClients(void) 完成，从最大的 bucket 开始驱逐，直到连接占用总内存小于阈值。
+     * client 所属哪个 bucket 通过方法 server.c 里的 updateClientMemUsage(client *c) 计算。
+     * 驱逐 client 通过 networking 里的 evictClients(void) 完成，从最大的 bucket 开始驱逐，直到连接占用总内存小于阈值。
      */
     for (j = 0; j < CLIENT_MEM_USAGE_BUCKETS; j++) {
         server.client_mem_usage_buckets[j].mem_usage_sum = 0;
