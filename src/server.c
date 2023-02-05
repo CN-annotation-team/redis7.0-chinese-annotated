@@ -2540,7 +2540,7 @@ void initServer(void) {
         server.db[j].slots_to_keys = NULL; /* Set by clusterInit later on if necessary. */
         listSetFreeMethod(server.db[j].defrag_later,(void (*)(void*))sdsfree);
     }
-    /* 创建一个淘汰池，淘汰池保存在 evict.c#EvictionPoolLRU */
+    /* 创建一个淘汰池，淘汰池保存在 evict.c 里的 EvictionPoolLRU */
     evictionPoolAlloc(); /* Initialize the LRU keys pool. */
     /* 初始化 pubsub 相关数据 */
     server.pubsub_channels = dictCreate(&keylistDictType);
