@@ -34,6 +34,7 @@
 
 #include "geohash.h"
 
+/* 将 GeoHashBits 实例的属性置 0 */
 #define GZERO(s) s.bits = s.step = 0;
 #define GISZERO(s) (!s.bits && !s.step)
 #define GISNOTZERO(s) (s.bits || s.step)
@@ -42,8 +43,11 @@ typedef uint64_t GeoHashFix52Bits;
 typedef uint64_t GeoHashVarBits;
 
 typedef struct {
+    /* 中心区域的 geohash 编码信息 */
     GeoHashBits hash;
+    /* 中心区域的坐标信息 */
     GeoHashArea area;
+    /* 中心区域的附近 8 个区域的 geohash 编码信息 */
     GeoHashNeighbors neighbors;
 } GeoHashRadius;
 
