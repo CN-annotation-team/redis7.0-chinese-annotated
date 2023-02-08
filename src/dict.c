@@ -778,7 +778,7 @@ dictEntry *dictGetRandomKey(dict *d)
 /* 此方法用于随机在字典中取出 N 个元素
  * 此方法接收的参数 count 指明了 des 数组所需要最少空间，但是此方法执行完成后 des 中实体的数量并不一定等于 count
  *
- * 这个方法并不适合需要在字典中得到比较均匀分布的实体的场景，它更适合用于获取N个连续的实体用于某些算法或统计 */
+ * 这个方法并不适合需要在字典中得到比较均匀分布的实体的场景，它更适合用于获取 N 个连续的实体用于某些算法或统计 */
 unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count) {
     unsigned long j; /* internal hash table id, 0 or 1. */
     unsigned long tables; /* 1 or 2 tables? */
