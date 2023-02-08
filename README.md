@@ -56,6 +56,10 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [listpack.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/listpack.h) | listpack 紧凑列表定义  | 完成 |
 | [listpack.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/listpack.c) | listpack 紧凑列表实现  | 低于一半 |
 | [networking.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/networking.c) | Redis 客户端、主、副本 I/O 相关 | 低于一半 |
+| [script.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/script.c) |  redis功能api的lua方法实现  | 过半 |
+| [script_lua.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/script_lua.c) | redis调用lua方法的通用api抽象  | 过半 |
+| [eval.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/eval.c) | lua执行实现  | 过半 |
+
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
 更新日期：2023/02/05

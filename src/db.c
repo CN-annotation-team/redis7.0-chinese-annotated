@@ -1625,6 +1625,10 @@ int keyIsExpired(redisDb *db, robj *key) {
      * only the first time it is accessed and not in the middle of the
      * script execution, making propagation to slaves / AOF consistent.
      * See issue #1525 on Github for more information. */
+
+    /* 如果我们在 Lua 脚本的上下文中，我们需要认为当前时间是 Lua 脚本开始的时间。 
+     * 这样一来，key 只能在第一次访问时过期，而不是在脚本执行过程中过期，从而使到从属/ AOF 的传播保持一致。 
+     * 有关更多信息，请参阅 Github 上的第1525期的 issue */
     if (server.script_caller) {
         now = scriptTimeSnapshot();
     }
