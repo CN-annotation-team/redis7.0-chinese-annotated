@@ -210,7 +210,7 @@ int redis_check_rdb(char *rdbfilename, FILE *fp) {
     int selected_dbid = -1;
     int type, rdbver;
     char buf[1024];
-     /* now 毫秒时间戳 */
+    /* now 毫秒时间戳 */
     long long expiretime, now = mstime();
     static rio rdb; /* Pointed by global struct riostate. */
     struct stat sb;
@@ -230,9 +230,9 @@ int redis_check_rdb(char *rdbfilename, FILE *fp) {
     rdbstate.rio = &rdb;
     rdb.update_cksum = rdbLoadProgressCallback;
     
-	/* 对 RDB 文件前 9 个字符做判断：
-	 * 1）前 5 个字符必须为 REDIS
-	 * 2）第 6-9 个字符为版本号，版本号必须大于等于 1，并且小于 RDB_VERSION */    
+    /* 对 RDB 文件前 9 个字符做判断：
+     * 1）前 5 个字符必须为 REDIS
+     * 2）第 6-9 个字符为版本号，版本号必须大于等于 1，并且小于 RDB_VERSION */    
     if (rioRead(&rdb,buf,9) == 0) goto eoferr;
     buf[9] = '\0';
     if (memcmp(buf,"REDIS",5) != 0) {
@@ -452,7 +452,7 @@ static sds checkRdbVersion(void) {
 int redis_check_rdb_main(int argc, char **argv, FILE *fp) {
     struct timeval tv;
     
-    /* 判断入参数量是否等于2，并且 fp 指针不为空，否则打印使用帮助并退出程序 */
+    /* 判断入参数量是否等于 2，并且 fp 指针不为空，否则打印使用帮助并退出程序 */
     if (argc != 2 && fp == NULL) {
         fprintf(stderr, "Usage: %s <rdb-file-name>\n", argv[0]);
         exit(1);
