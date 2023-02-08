@@ -861,6 +861,15 @@ unsigned int dictGetSomeKeys(dict *d, dictEntry **des, unsigned int count) {
  * that may be constituted of N buckets with chains of different lengths
  * appearing one after the other. Then we report a random element in the range.
  * In this way we smooth away the problem of different chain lengths. */
+/* 此方法和 dictGetRandomKey() 相似
+ * 不同之处在于此方法能产生更离散的随机结果
+ *
+ * 在 dictGetRandomKey() 方法中，随机选取元素的粒度精确到桶
+ * 由于 redis dict 采用链地址法，每个桶所含有的实体数量不一致，这样会导致在随机选取元素时并不能得到非常离散的结果
+ *
+ * 因此在此方法中，先采用随机粒度为实体的 dictGetSomeKeys() 方法获取实体列表
+ * 通过再次在此列表中再次随机选取一个元素，达到更好的随机效果
+ * */
 #define GETFAIR_NUM_ENTRIES 15
 dictEntry *dictGetFairRandomKey(dict *d) {
     dictEntry *entries[GETFAIR_NUM_ENTRIES];
