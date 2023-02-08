@@ -33,10 +33,11 @@
 #include "debugmacro.h"
 #include "pqsort.h"
 
-/* 在阅读 GEO 功能前请先看 geohash.c 头部的中文注释，里面对 geohash 算法进行了说明。
- * 该文件阅读顺序建议：
+/* 该文件阅读顺序建议：
  * 先看 geoaddCommand,geoposCommand 这两个函数，了解地点的经纬度怎么存储和怎么取出来
- * */
+ * 然后看 geodistCommand 函数，计算两个坐标之间的距离
+ * 最后看 georadiusGeneric 范围搜索方法
+ */
 
 /* Things exported from t_zset.c only for geo.c, since it is the only other
  * part of Redis that requires close zset introspection. */
