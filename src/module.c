@@ -592,6 +592,7 @@ void moduleReleaseTempClient(client *c) {
     c->bufpos = 0;
     c->flags = CLIENT_MODULE;
     c->user = NULL; /* Root user */
+    c->cmd = c->lastcmd = c->realcmd = NULL;
     moduleTempClients[moduleTempClientCount++] = c;
 }
 
@@ -2297,7 +2298,7 @@ RedisModuleString *RM_CreateStringPrintf(RedisModuleCtx *ctx, const char *fmt, .
 }
 
 
-/* Like RedisModule_CreatString(), but creates a string starting from a `long long`
+/* Like RedisModule_CreateString(), but creates a string starting from a `long long`
  * integer instead of taking a buffer and its length.
  *
  * The returned string must be released with RedisModule_FreeString() or by
@@ -2311,7 +2312,21 @@ RedisModuleString *RM_CreateStringFromLongLong(RedisModuleCtx *ctx, long long ll
     return RM_CreateString(ctx,buf,len);
 }
 
-/* Like RedisModule_CreatString(), but creates a string starting from a double
+/* Like RedisModule_CreateString(), but creates a string starting from a `unsigned long long`
+ * integer instead of taking a buffer and its length.
+ *
+ * The returned string must be released with RedisModule_FreeString() or by
+ * enabling automatic memory management.
+ *
+ * The passed context 'ctx' may be NULL if necessary, see the
+ * RedisModule_CreateString() documentation for more info. */
+RedisModuleString *RM_CreateStringFromULongLong(RedisModuleCtx *ctx, unsigned long long ull) {
+    char buf[LONG_STR_SIZE];
+    size_t len = ull2string(buf,sizeof(buf),ull);
+    return RM_CreateString(ctx,buf,len);
+}
+
+/* Like RedisModule_CreateString(), but creates a string starting from a double
  * instead of taking a buffer and its length.
  *
  * The returned string must be released with RedisModule_FreeString() or by
@@ -2322,7 +2337,7 @@ RedisModuleString *RM_CreateStringFromDouble(RedisModuleCtx *ctx, double d) {
     return RM_CreateString(ctx,buf,len);
 }
 
-/* Like RedisModule_CreatString(), but creates a string starting from a long
+/* Like RedisModule_CreateString(), but creates a string starting from a long
  * double.
  *
  * The returned string must be released with RedisModule_FreeString() or by
@@ -2337,7 +2352,7 @@ RedisModuleString *RM_CreateStringFromLongDouble(RedisModuleCtx *ctx, long doubl
     return RM_CreateString(ctx,buf,len);
 }
 
-/* Like RedisModule_CreatString(), but creates a string starting from another
+/* Like RedisModule_CreateString(), but creates a string starting from another
  * RedisModuleString.
  *
  * The returned string must be released with RedisModule_FreeString() or by
@@ -2517,6 +2532,14 @@ const char *RM_StringPtrLen(const RedisModuleString *str, size_t *len) {
 int RM_StringToLongLong(const RedisModuleString *str, long long *ll) {
     return string2ll(str->ptr,sdslen(str->ptr),ll) ? REDISMODULE_OK :
                                                      REDISMODULE_ERR;
+}
+
+/* Convert the string into a `unsigned long long` integer, storing it at `*ull`.
+ * Returns REDISMODULE_OK on success. If the string can't be parsed
+ * as a valid, strict `unsigned long long` (no spaces before/after), REDISMODULE_ERR
+ * is returned. */
+int RM_StringToULongLong(const RedisModuleString *str, unsigned long long *ull) {
+    return string2ull(str->ptr,ull) ? REDISMODULE_OK : REDISMODULE_ERR;
 }
 
 /* Convert the string into a double, storing it at `*d`.
@@ -3327,8 +3350,8 @@ int modulePopulateReplicationInfoStructure(void *ri, int structver) {
  * is returned.
  *
  * When the client exist and the `ci` pointer is not NULL, but points to
- * a structure of type RedisModuleClientInfo, previously initialized with
- * the correct REDISMODULE_CLIENTINFO_INITIALIZER, the structure is populated
+ * a structure of type RedisModuleClientInfoV1, previously initialized with
+ * the correct REDISMODULE_CLIENTINFO_INITIALIZER_V1, the structure is populated
  * with the following fields:
  *
  *      uint64_t flags;         // REDISMODULE_CLIENTINFO_FLAG_*
@@ -3371,6 +3394,40 @@ int RM_GetClientInfoById(void *ci, uint64_t id) {
     /* Fill the info structure if passed. */
     uint64_t structver = ((uint64_t*)ci)[0];
     return modulePopulateClientInfoStructure(ci,client,structver);
+}
+
+/* Returns the name of the client connection with the given ID.
+ *
+ * If the client ID does not exist or if the client has no name associated with
+ * it, NULL is returned. */
+RedisModuleString *RM_GetClientNameById(RedisModuleCtx *ctx, uint64_t id) {
+    client *client = lookupClientByID(id);
+    if (client == NULL || client->name == NULL) return NULL;
+    robj *name = client->name;
+    incrRefCount(name);
+    autoMemoryAdd(ctx, REDISMODULE_AM_STRING, name);
+    return name;
+}
+
+/* Sets the name of the client with the given ID. This is equivalent to the client calling
+ * `CLIENT SETNAME name`.
+ *
+ * Returns REDISMODULE_OK on success. On failure, REDISMODULE_ERR is returned
+ * and errno is set as follows:
+ *
+ * - ENOENT if the client does not exist
+ * - EINVAL if the name contains invalid characters */
+int RM_SetClientNameById(uint64_t id, RedisModuleString *name) {
+    client *client = lookupClientByID(id);
+    if (client == NULL) {
+        errno = ENOENT;
+        return REDISMODULE_ERR;
+    }
+    if (clientSetName(client, name) == C_ERR) {
+        errno = EINVAL;
+        return REDISMODULE_ERR;
+    }
+    return REDISMODULE_OK;
 }
 
 /* Publish a message to subscribers (see PUBLISH command). */
@@ -5703,7 +5760,6 @@ fmterr:
  * This API is documented here: https://redis.io/topics/modules-intro
  */
 RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const char *fmt, ...) {
-    struct redisCommand *cmd;
     client *c = NULL;
     robj **argv = NULL;
     int argc = 0, argv_len = 0, flags = 0;
@@ -5711,6 +5767,7 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
     RedisModuleCallReply *reply = NULL;
     int replicate = 0; /* Replicate this command? */
     int error_as_call_replies = 0; /* return errors as RedisModuleCallReply object */
+    uint64_t cmd_flags;
 
     /* Handle arguments. */
     va_start(ap, fmt);
@@ -5753,7 +5810,7 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
     /* Lookup command now, after filters had a chance to make modifications
      * if necessary.
      */
-    cmd = c->cmd = c->lastcmd = c->realcmd = lookupCommand(c->argv,c->argc);
+    c->cmd = c->lastcmd = c->realcmd = lookupCommand(c->argv,c->argc);
     sds err;
     if (!commandCheckExistence(c, error_as_call_replies? &err : NULL)) {
         errno = ENOENT;
@@ -5768,10 +5825,12 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
         goto cleanup;
     }
 
+    cmd_flags = getCommandFlags(c);
+
     if (flags & REDISMODULE_ARGV_SCRIPT_MODE) {
         /* Basically on script mode we want to only allow commands that can
          * be executed on scripts (CMD_NOSCRIPT is not set on the command flags) */
-        if (cmd->flags & CMD_NOSCRIPT) {
+        if (cmd_flags & CMD_NOSCRIPT) {
             errno = ESPIPE;
             if (error_as_call_replies) {
                 sds msg = sdscatfmt(sdsempty(), "command '%S' is not allowed on script mode", c->cmd->fullname);
@@ -5782,8 +5841,17 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
     }
 
     if (flags & REDISMODULE_ARGV_RESPECT_DENY_OOM) {
-        if (cmd->flags & CMD_DENYOOM) {
-            if (server.pre_command_oom_state) {
+        if (cmd_flags & CMD_DENYOOM) {
+            int oom_state;
+            if (ctx->flags & REDISMODULE_CTX_THREAD_SAFE) {
+                /* On background thread we can not count on server.pre_command_oom_state.
+                 * Because it is only set on the main thread, in such case we will check
+                 * the actual memory usage. */
+                oom_state = (getMaxmemoryState(NULL,NULL,NULL,NULL) == C_ERR);
+            } else {
+                oom_state = server.pre_command_oom_state;
+            }
+            if (oom_state) {
                 errno = ENOSPC;
                 if (error_as_call_replies) {
                     sds msg = sdsdup(shared.oomerr->ptr);
@@ -5795,7 +5863,7 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
     }
 
     if (flags & REDISMODULE_ARGV_NO_WRITES) {
-        if (cmd->flags & CMD_WRITE) {
+        if (cmd_flags & CMD_WRITE) {
             errno = ENOSPC;
             if (error_as_call_replies) {
                 sds msg = sdscatfmt(sdsempty(), "Write command '%S' was "
@@ -5808,7 +5876,7 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
 
     /* Script mode tests */
     if (flags & REDISMODULE_ARGV_SCRIPT_MODE) {
-        if (cmd->flags & CMD_WRITE) {
+        if (cmd_flags & CMD_WRITE) {
             /* on script mode, if a command is a write command,
              * We will not run it if we encounter disk error
              * or we do not have enough replicas */
@@ -5823,7 +5891,7 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
             }
 
             int deny_write_type = writeCommandsDeniedByDiskError();
-            int obey_client = mustObeyClient(server.current_client);
+            int obey_client = (server.current_client && mustObeyClient(server.current_client));
 
             if (deny_write_type != DISK_ERROR_TYPE_NONE && !obey_client) {
                 errno = ESPIPE;
@@ -5845,7 +5913,7 @@ RedisModuleCallReply *RM_Call(RedisModuleCtx *ctx, const char *cmdname, const ch
         }
 
         if (server.masterhost && server.repl_state != REPL_STATE_CONNECTED &&
-            server.repl_serve_stale_data == 0 && !(cmd->flags & CMD_STALE)) {
+            server.repl_serve_stale_data == 0 && !(cmd_flags & CMD_STALE)) {
             errno = ESPIPE;
             if (error_as_call_replies) {
                 sds msg = sdsdup(shared.masterdownerr->ptr);
@@ -10962,6 +11030,21 @@ void moduleFreeModuleStructure(struct RedisModule *module) {
     zfree(module);
 }
 
+void moduleFreeArgs(struct redisCommandArg *args, int num_args) {
+    for (int j = 0; j < num_args; j++) {
+        zfree((char *)args[j].name);
+        zfree((char *)args[j].token);
+        zfree((char *)args[j].summary);
+        zfree((char *)args[j].since);
+        zfree((char *)args[j].deprecated_since);
+
+        if (args[j].subargs) {
+            moduleFreeArgs(args[j].subargs, args[j].num_args);
+        }
+    }
+    zfree(args);
+}
+
 /* Free the command registered with the specified module.
  * On success C_OK is returned, otherwise C_ERR is returned.
  *
@@ -10987,10 +11070,12 @@ int moduleFreeCommand(struct RedisModule *module, struct redisCommand *cmd) {
         zfree(cmd->key_specs);
     for (int j = 0; cmd->tips && cmd->tips[j]; j++)
         zfree((char *)cmd->tips[j]);
+    zfree(cmd->tips);
     for (int j = 0; cmd->history && cmd->history[j].since; j++) {
         zfree((char *)cmd->history[j].since);
         zfree((char *)cmd->history[j].changes);
     }
+    zfree(cmd->history);
     zfree((char *)cmd->summary);
     zfree((char *)cmd->since);
     zfree((char *)cmd->deprecated_since);
@@ -10999,7 +11084,7 @@ int moduleFreeCommand(struct RedisModule *module, struct redisCommand *cmd) {
         hdr_close(cmd->latency_histogram);
         cmd->latency_histogram = NULL;
     }
-    zfree(cmd->args);
+    moduleFreeArgs(cmd->args, cmd->num_args);
     zfree(cp);
 
     if (cmd->subcommands_dict) {
@@ -12378,6 +12463,7 @@ void moduleRegisterCoreAPI(void) {
     REGISTER_API(ListInsert);
     REGISTER_API(ListDelete);
     REGISTER_API(StringToLongLong);
+    REGISTER_API(StringToULongLong);
     REGISTER_API(StringToDouble);
     REGISTER_API(StringToLongDouble);
     REGISTER_API(StringToStreamID);
@@ -12400,6 +12486,7 @@ void moduleRegisterCoreAPI(void) {
     REGISTER_API(CreateStringFromCallReply);
     REGISTER_API(CreateString);
     REGISTER_API(CreateStringFromLongLong);
+    REGISTER_API(CreateStringFromULongLong);
     REGISTER_API(CreateStringFromDouble);
     REGISTER_API(CreateStringFromLongDouble);
     REGISTER_API(CreateStringFromString);
@@ -12417,6 +12504,8 @@ void moduleRegisterCoreAPI(void) {
     REGISTER_API(StringTruncate);
     REGISTER_API(SetExpire);
     REGISTER_API(GetExpire);
+    REGISTER_API(SetAbsExpire);
+    REGISTER_API(GetAbsExpire);
     REGISTER_API(ResetDataset);
     REGISTER_API(DbSize);
     REGISTER_API(RandomKey);
@@ -12592,6 +12681,8 @@ void moduleRegisterCoreAPI(void) {
     REGISTER_API(ServerInfoGetFieldUnsigned);
     REGISTER_API(ServerInfoGetFieldDouble);
     REGISTER_API(GetClientInfoById);
+    REGISTER_API(GetClientNameById);
+    REGISTER_API(SetClientNameById);
     REGISTER_API(PublishMessage);
     REGISTER_API(PublishMessageShard);
     REGISTER_API(SubscribeToServerEvent);

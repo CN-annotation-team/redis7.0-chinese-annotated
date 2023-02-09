@@ -37,14 +37,19 @@ void bioInit(void);
 unsigned long long bioPendingJobsOfType(int type);
 unsigned long long bioWaitStepOfType(int type);
 void bioKillThreads(void);
-void bioCreateCloseJob(int fd);
+void bioCreateCloseJob(int fd, int need_fsync);
 void bioCreateFsyncJob(int fd);
 void bioCreateLazyFreeJob(lazy_free_fn free_fn, int arg_count, ...);
 
 /* Background job opcodes */
+/* 后台任务类型 */
+/* 关闭文件 */
 #define BIO_CLOSE_FILE    0 /* Deferred close(2) syscall. */
+/* AOF fsync 文件缓冲区刷盘 */
 #define BIO_AOF_FSYNC     1 /* Deferred AOF fsync. */
+/* 懒释放数据结构的空间 */
 #define BIO_LAZY_FREE     2 /* Deferred objects freeing. */
+/* 后台线程数 */
 #define BIO_NUM_OPS       3
 
 #endif

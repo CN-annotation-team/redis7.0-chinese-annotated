@@ -77,6 +77,8 @@ int quicklistisSetPackedThreshold(size_t sz) {
      * sz > 4293918720 (4294967296 - 1048576) */
     if (sz > (1ull<<32) - (1<<20)) {
         return 0;
+    } else if (sz == 0) { /* 0 means restore threshold */
+        sz = (1 << 30);
     }
     packed_threshold = sz;
     return 1;
@@ -102,7 +104,7 @@ int quicklistisSetPackedThreshold(size_t sz) {
 
 /* listapck entry 占用的 header 和 backlen 的估算最大值。
  * 因为 qucklistNode 的最大长度实际上为 64k, 所以我们只要算出在插入64k的 listpack entry 的情况下,
- * 它的 header 和 backlen 总共占多大（header:5, baklen:3, 所以是8）。（感谢 pr #26 中 @sundb 的解释）
+ * 它的 header 和 backlen 总共占多大（header:5, backlen:3, 所以是8）。（感谢 pr #26 中 @sundb 的解释）
  * 尽管在最坏的情况下（sz < 64），我们将在一个快速列表节点中浪费6个字节，
  * 但当 listpack 超过大小限制的几个字节时（例如：16388）可以避免由于内部碎片造成的内存浪费 */
 #define SIZE_ESTIMATE_OVERHEAD 8
@@ -230,6 +232,7 @@ REDIS_STATIC quicklistNode *quicklistCreateNode(void) {
     node->encoding = QUICKLIST_NODE_ENCODING_RAW;
     node->container = QUICKLIST_NODE_CONTAINER_PACKED;
     node->recompress = 0;
+    node->dont_compress = 0;
     return node;
 }
 
@@ -274,6 +277,7 @@ REDIS_STATIC int __quicklistCompressNode(quicklistNode *node) {
 #ifdef REDIS_TEST
     node->attempted_compress = 1;
 #endif
+    if (node->dont_compress) return 0;
 
     /* validate that the node is neither
      * tail nor head (it has prev and next)*/
@@ -518,6 +522,10 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist,
  * Insert 'new_node' before 'old_node' if 'after' is 0.
  * Note: 'new_node' is *always* uncompressed, so if we assign it to
  *       head or tail, we do not need to uncompress it. */
+/* 若 'after' 的值为1，在 'old_node' 之后插入 'new_node'。
+ * 若 'after' 的值为0，在 'old_node' 之前插入 'new_node'。
+ * 注意： 'new_node' 始终是未压缩的，因此我们将其分配给
+ * 头或者尾节点，我们不需要去解压它。 */
 REDIS_STATIC void __quicklistInsertNode(quicklist *quicklist,
                                         quicklistNode *old_node,
                                         quicklistNode *new_node, int after) {
@@ -543,11 +551,13 @@ REDIS_STATIC void __quicklistInsertNode(quicklist *quicklist,
             quicklist->head = new_node;
     }
     /* If this insert creates the only element so far, initialize head/tail. */
+    /* 如果此次插入创建了唯一的元素，则初始化头/尾。 */
     if (quicklist->len == 0) {
         quicklist->head = quicklist->tail = new_node;
     }
 
     /* Update len first, so in __quicklistCompress we know exactly len */
+    /* 首先更新快速列表长度，以便在 __quicklistCompress 中我们能准确的知道长度 */
     quicklist->len++;
 
     if (old_node)
@@ -557,6 +567,7 @@ REDIS_STATIC void __quicklistInsertNode(quicklist *quicklist,
 }
 
 /* Wrappers for node inserting around existing node. */
+/* 在现有节点周围插入节点的多个包装函数。 */
 REDIS_STATIC void _quicklistInsertNodeBefore(quicklist *quicklist,
                                              quicklistNode *old_node,
                                              quicklistNode *new_node) {
@@ -602,11 +613,18 @@ REDIS_STATIC int _quicklistNodeAllowInsert(const quicklistNode *node,
      * below the lowest limit of 4k (see optimization_level).
      * Note: No need to check for overflow below since both `node->sz` and
      * `sz` are to be less than 1GB after the plain/large element check above. */
+    /* 用这个入口估计有多少字节会被添加到 listpack 中。
+     * 我们更加倾向于去高估，虽然糟糕的情况下会造成有几个字节
+     * 会低于4k（optimization_level）的最低限制。
+     * 注意：我们无需检查下面的溢出，因为 `node->sz` 和 `sz` 
+     * 在 plain/large 元素检查之后都会小于 1GB。 */
     size_t new_sz = node->sz + sz + SIZE_ESTIMATE_OVERHEAD;
     if (likely(_quicklistNodeSizeMeetsOptimizationRequirement(new_sz, fill)))
         return 1;
     /* when we return 1 above we know that the limit is a size limit (which is
      * safe, see comments next to optimization_level and SIZE_SAFETY_LIMIT) */
+    /* 当返回值为1时，我们知道这个限制是一个大小限制（这是安全的限制，
+     * 参考 optimization_level 和 SIZE_SAFETY_LIMIT 旁的注释）*/
     else if (!sizeMeetsSafetyLimit(new_sz))
         return 0;
     else if ((int)node->count < fill)
@@ -664,6 +682,11 @@ static void __quicklistInsertPlainNode(quicklist *quicklist, quicklistNode *old_
  *
  * Returns 0 if used existing head.
  * Returns 1 if new head created. */
+/* 往 quicklist 头部插入一个新 entry
+ * 即将一个新的 entry 添加到 quicklist 的 head 节点
+ *
+ * 如果是在现有的 head 节点插入 entry，返回 0。
+ * 如果创建了一个新的 head 节点插入 entry，返回 1。 */
 int quicklistPushHead(quicklist *quicklist, void *value, size_t sz) {
     quicklistNode *orig_head = quicklist->head;
 
@@ -692,6 +715,11 @@ int quicklistPushHead(quicklist *quicklist, void *value, size_t sz) {
  *
  * Returns 0 if used existing tail.
  * Returns 1 if new tail created. */
+/* 往 quicklist 尾部插入一个新 entry
+ * 即将一个新的 entry 添加到 quicklist 的 tail 节点。
+ *
+ * 如果是在现有的 tail 节点插入 entry，返回 0。
+ * 如果创建了一个新的 tail 节点插入 entry，返回 1。 */
 int quicklistPushTail(quicklist *quicklist, void *value, size_t sz) {
     quicklistNode *orig_tail = quicklist->tail;
     if (unlikely(isLargeElement(sz))) {
@@ -718,6 +746,8 @@ int quicklistPushTail(quicklist *quicklist, void *value, size_t sz) {
 /* Create new node consisting of a pre-formed listpack.
  * Used for loading RDBs where entire listpacks have been stored
  * to be retrieved later. */
+/* 使用一个已经预先形成的 listpack 创建新的快速列表节点。 
+ * 用于从存储了整个 listpack 的 RDB 文件中进行快速列表节点的恢复。 */
 void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
     quicklistNode *node = quicklistCreateNode();
 
@@ -733,6 +763,10 @@ void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
  * Used for loading RDBs where entire plain node has been stored
  * to be retrieved later.
  * data - the data to add (pointer becomes the responsibility of quicklist) */
+/* 使用一个已经预先形成的 plain 节点来创建快速列表的新节点。
+ * 用于从存储了整个 plain 节点的 RDB 文件中进行快速列表节点的恢复。
+ * data - 要添加的新节点数据（新节点的 entry 即为 data）
+ */
 void quicklistAppendPlainNode(quicklist *quicklist, unsigned char *data, size_t sz) {
     quicklistNode *node = quicklistCreateNode();
 
@@ -756,10 +790,12 @@ void quicklistAppendPlainNode(quicklist *quicklist, unsigned char *data, size_t 
 REDIS_STATIC void __quicklistDelNode(quicklist *quicklist,
                                      quicklistNode *node) {
     /* Update the bookmark if any */
+    /* 更新书签（如果有） */
     quicklistBookmark *bm = _quicklistBookmarkFindByNode(quicklist, node);
     if (bm) {
         bm->node = node->next;
         /* if the bookmark was to the last node, delete it. */
+        /* 如果书签指向快速列表的最后一个节点，将书签删除。 */
         if (!bm->node)
             _quicklistBookmarkDelete(quicklist, bm);
     }
@@ -778,11 +814,13 @@ REDIS_STATIC void __quicklistDelNode(quicklist *quicklist,
     }
 
     /* Update len first, so in __quicklistCompress we know exactly len */
+    /* 首先更新快速列表长度，以便在 __quicklistCompress 中我们能准确地知道长度 */
     quicklist->len--;
     quicklist->count -= node->count;
 
     /* If we deleted a node within our compress depth, we
      * now have compressed nodes needing to be decompressed. */
+    /* 如果在压缩深度内删除了节点，现在需要将转移到压缩深度外的压缩节点进行解压。 */
     __quicklistCompress(quicklist, NULL);
 
     zfree(node->entry);
@@ -874,12 +912,15 @@ void quicklistReplaceEntry(quicklistIter *iter, quicklistEntry *entry,
             __quicklistDelNode(quicklist, entry->node);
         }
     } else {
+        entry->node->dont_compress = 1; /* Prevent compression in quicklistInsertAfter() */
         quicklistInsertAfter(iter, entry, data, sz);
         if (entry->node->count == 1) {
             __quicklistDelNode(quicklist, entry->node);
         } else {
             unsigned char *p = lpSeek(entry->node->entry, -1);
             quicklistDelIndex(quicklist, entry->node, &p);
+            entry->node->dont_compress = 0; /* Re-enable compression */
+            quicklistCompress(quicklist, entry->node);
             quicklistCompress(quicklist, entry->node->next);
         }
     }
@@ -1030,6 +1071,9 @@ REDIS_STATIC quicklistNode *_quicklistSplitNode(quicklistNode *node, int offset,
 
     /* Copy original listpack so we can split it */
     memcpy(new_node->entry, node->entry, zl_sz);
+
+    /* Need positive offset for calculating extent below. */
+    if (offset < 0) offset = node->count + offset;
 
     /* Ranges to be trimmed: -1 here means "continue deleting until the list ends" */
     int orig_start = after ? offset + 1 : 0;
@@ -1734,10 +1778,11 @@ void quicklistRepr(unsigned char *ql, int full) {
 
     while(node != NULL) {
         printf("{quicklist node(%d)\n", i++);
-        printf("{container : %s, encoding: %s, size: %zu, recompress: %d, attempted_compress: %d}\n",
+        printf("{container : %s, encoding: %s, size: %zu, count: %d, recompress: %d, attempted_compress: %d}\n",
                QL_NODE_IS_PLAIN(node) ? "PLAIN": "PACKED",
                (node->encoding == QUICKLIST_NODE_ENCODING_RAW) ? "RAW": "LZF",
                node->sz,
+               node->count,
                node->recompress,
                node->attempted_compress);
 

@@ -71,6 +71,9 @@ void zlibc_free(void *ptr) {
 
 /* When using the libc allocator, use a minimum allocation size to match the
  * jemalloc behavior that doesn't return NULL in this case.
+ *
+ * 在使用 libc 动态分配内存时，使用一个最小可分配大小去适配 jemalloc 模型
+ * 当传入 x 小于等于 0 时，jemalloc 不会返回空值
  */
 #define MALLOC_MIN_SIZE(x) ((x) > 0 ? (x) : sizeof(long))
 
@@ -92,6 +95,7 @@ void zlibc_free(void *ptr) {
 #define update_zmalloc_stat_alloc(__n) atomicIncr(used_memory,(__n))
 #define update_zmalloc_stat_free(__n) atomicDecr(used_memory,(__n))
 
+/* 全局原子操作更新, 记录已使用的内存大小 */
 static redisAtomic size_t used_memory = 0;
 
 static void zmalloc_default_oom(size_t size) {
@@ -217,6 +221,7 @@ void *ztrycalloc_usable(size_t size, size_t *usable) {
 void *zcalloc_num(size_t num, size_t size) {
     /* Ensure that the arguments to calloc(), when multiplied, do not wrap.
      * Division operations are susceptible to divide-by-zero errors so we also check it. */
+    /* 此处防止可分配内存不足 */
     if ((size == 0) || (num > SIZE_MAX/size)) {
         zmalloc_oom_handler(SIZE_MAX);
         return NULL;
@@ -425,7 +430,7 @@ void zmadvise_dontneed(void *ptr) {
  * For this kind of "fast RSS reporting" usages use instead the
  * function RedisEstimateRSS() that is a much faster (and less precise)
  * version of the function. */
-
+/* 此方法主要用于获取已使用物理内存大小 */
 #if defined(HAVE_PROC_STAT)
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -476,6 +481,7 @@ int get_proc_stat_ll(int i, long long *res) {
 }
 
 #if defined(HAVE_PROC_STAT)
+/* /proc/self/stat 文件第 24 个字段存放了 rss 大小，用 rss 大小乘页数就是实际使用物理内存大小 */
 size_t zmalloc_get_rss(void) {
     int page = sysconf(_SC_PAGESIZE);
     long long rss;
@@ -761,6 +767,11 @@ size_t zmalloc_get_private_dirty(long pid) {
  * 2) Was originally implemented by David Robert Nadeau.
  * 3) Was modified for Redis by Matt Stancliff.
  * 4) This note exists in order to comply with the original license.
+ */
+/* 以字节的单位返回物理内存大小
+ * 看起来比较丑，但是这是能获取到跨平台结果并且最整洁的结果
+ * 具体可看以下网站:
+ * http://nadeausoftware.com/articles/2012/09/c_c_tip_how_get_physical_memory_size_system
  */
 size_t zmalloc_get_memory_size(void) {
 #if defined(__unix__) || defined(__unix) || defined(unix) || \

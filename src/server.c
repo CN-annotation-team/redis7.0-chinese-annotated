@@ -48,6 +48,7 @@
 #include <arpa/inet.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/file.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/uio.h>
@@ -634,7 +635,7 @@ void resetChildState() {
                           NULL);
 }
 
-/* Return if child type is mutual exclusive with other fork children */
+/* Return if child type is mutually exclusive with other fork children */
 int isMutuallyExclusiveChildType(int type) {
     return type == CHILD_TYPE_RDB || type == CHILD_TYPE_AOF || type == CHILD_TYPE_MODULE;
 }
@@ -2390,17 +2391,21 @@ void makeThreadKillable(void) {
 void initServer(void) {
     int j;
 
+    /* 使用 linux 系统调用 signal 注册信号处理函数，SIG_IGN 表示忽略信号，不做处理 */
     signal(SIGHUP, SIG_IGN);
     signal(SIGPIPE, SIG_IGN);
+    /* 继续注册信号处理函数，不过这里使用的是更高级的 API sigaction */
     setupSignalHandlers();
     makeThreadKillable();
 
+    /* 是否开启系统日志 */
     if (server.syslog_enabled) {
         openlog(server.syslog_ident, LOG_PID | LOG_NDELAY | LOG_NOWAIT,
             server.syslog_facility);
     }
 
     /* Initialization after setting defaults from the config system. */
+    /* 根据配置初始化一部分数据 */
     server.aof_state = server.aof_enabled ? AOF_ON : AOF_OFF;
     server.hz = server.config_hz;
     server.pid = getpid();
@@ -2438,23 +2443,42 @@ void initServer(void) {
     server.cluster_drop_packet_filter = -1;
     server.reply_buffer_peak_reset_time = REPLY_BUFFER_DEFAULT_PEAK_RESET_TIME;
     server.reply_buffer_resizing_enabled = 1;
+    /* 初始化复制积压缓冲区 */
     resetReplicationBuffer();
 
+    /* 若在服务器端口、复制、集群通信中任意一个中配置了 tls，则进行 tls 配置处理 */
     if ((server.tls_port || server.tls_replication || server.tls_cluster)
                 && tlsConfigure(&server.tls_ctx_config) == C_ERR) {
         serverLog(LL_WARNING, "Failed to configure TLS. Check logs for more info.");
         exit(1);
     }
 
+    /* 初始化 bucket 数组，用于 redis 客户端连接内存管理。
+     * 当所有连接占用总内存超过 maxmemory-clients 阈值时，需要高效的关闭一部分内存占用较高的连接来快速释放内存。
+     * 官方称之为 client eviction 机制，自 redis 7.0 引入。
+     *
+     * 数组下标 0-18 共计 19 个 bucket，组成一个客户端连接驱逐池。每个 bucket 是一个链表，每个链表保存内存占用在一定范围内的客户端连接
+     * 每个 bucket 内连接的占用范围都是其前一个 bucket 范围的两倍，因此每个 bucket 内连接占用的内存范围如下：
+     *  buckets[0]       (0, 32K)
+     *  buckets[2]       (32K, 64K)
+     *  .....
+     *  buckets[17]      (2G, 4G)
+     *  buckets[18]      (4G, ~)
+     *
+     * client 所属哪个 bucket 通过方法 server.c 里的 updateClientMemUsage(client *c) 计算。
+     * 驱逐 client 通过 networking 里的 evictClients(void) 完成，从最大的 bucket 开始驱逐，直到连接占用总内存小于阈值。
+     */
     for (j = 0; j < CLIENT_MEM_USAGE_BUCKETS; j++) {
         server.client_mem_usage_buckets[j].mem_usage_sum = 0;
         server.client_mem_usage_buckets[j].clients = listCreate();
     }
 
+    /* 创建共享对象，主要保存指令响应、报错、指令名等文本数据 */
     createSharedObjects();
     adjustOpenFilesLimit();
     const char *clk_msg = monotonicInit();
     serverLog(LL_NOTICE, "monotonic clock: %s", clk_msg);
+    /* 创建 eventLoop 数据结构 */
     server.el = aeCreateEventLoop(server.maxclients+CONFIG_FDSET_INCR);
     if (server.el == NULL) {
         serverLog(LL_WARNING,
@@ -2462,15 +2486,18 @@ void initServer(void) {
             strerror(errno));
         exit(1);
     }
+    /* 申请 db 数据内存空间 */
     server.db = zmalloc(sizeof(redisDb)*server.dbnum);
 
     /* Open the TCP listening socket for the user commands. */
+    /* 监听服务器端口（默认为 6379），等待客户端连接。针对 server.port 创建的所有 socket 文件描述符都保存在 server.ipfd 的 fd 数组中 */
     if (server.port != 0 &&
         listenToPort(server.port,&server.ipfd) == C_ERR) {
         /* Note: the following log text is matched by the test suite. */
         serverLog(LL_WARNING, "Failed listening on port %u (TCP), aborting.", server.port);
         exit(1);
     }
+    /* tls 加密通信端口，同 server.port */
     if (server.tls_port != 0 &&
         listenToPort(server.tls_port,&server.tlsfd) == C_ERR) {
         /* Note: the following log text is matched by the test suite. */
@@ -2479,6 +2506,7 @@ void initServer(void) {
     }
 
     /* Open the listening Unix domain socket. */
+    /* 打开 unix 本地端口 */
     if (server.unixsocket != NULL) {
         unlink(server.unixsocket); /* don't care if this fails */
         server.sofd = anetUnixServer(server.neterr,server.unixsocket,
@@ -2498,6 +2526,7 @@ void initServer(void) {
     }
 
     /* Create the Redis databases, and initialize other internal state. */
+    /* 创建 Redis 数据库，完成每个库的数据初始化 */
     for (j = 0; j < server.dbnum; j++) {
         server.db[j].dict = dictCreate(&dbDictType);
         server.db[j].expires = dictCreate(&dbExpiresDictType);
@@ -2511,7 +2540,9 @@ void initServer(void) {
         server.db[j].slots_to_keys = NULL; /* Set by clusterInit later on if necessary. */
         listSetFreeMethod(server.db[j].defrag_later,(void (*)(void*))sdsfree);
     }
+    /* 创建一个淘汰池，淘汰池保存在 evict.c 里的 EvictionPoolLRU */
     evictionPoolAlloc(); /* Initialize the LRU keys pool. */
+    /* 初始化 pubsub 相关数据 */
     server.pubsub_channels = dictCreate(&keylistDictType);
     server.pubsub_patterns = dictCreate(&keylistDictType);
     server.pubsubshard_channels = dictCreate(&keylistDictType);
@@ -2573,11 +2604,13 @@ void initServer(void) {
     /* Create the timer callback, this is our way to process many background
      * operations incrementally, like clients timeout, eviction of unaccessed
      * expired keys and so forth. */
+    /* 创建时间事件，关联回调函数 serverCron，该函数主要用于 驱逐过期 key、客户端超时等后台操作 */
     if (aeCreateTimeEvent(server.el, 1, serverCron, NULL, NULL) == AE_ERR) {
         serverPanic("Can't create event loop timers.");
         exit(1);
     }
 
+    /* 针对前面创建的 TCP，Unix 套接字创建监听事件，并关联相对应的连接应答处理器(handler)，来 accept 客户端的 connect 请求 */
     /* Create an event handler for accepting new connections in TCP and Unix
      * domain sockets. */
     if (createSocketAcceptHandler(&server.ipfd, acceptTcpHandler) != C_OK) {
@@ -2592,6 +2625,7 @@ void initServer(void) {
 
     /* Register a readable event for the pipe used to awake the event loop
      * from module threads. */
+    /* 为 moudule_pipe 管道创建一个只读的 io 事件，该管道用于从 moudle threads 唤醒 eventLoop */
     if (aeCreateFileEvent(server.el, server.module_pipe[0], AE_READABLE,
         modulePipeReadable,NULL) == AE_ERR) {
             serverPanic(
@@ -2600,6 +2634,9 @@ void initServer(void) {
 
     /* Register before and after sleep handlers (note this needs to be done
      * before loading persistence since it is used by processEventsWhileBlocked. */
+    /* 在事件处理函数 aeProcessEvents 中，需要调用 polling api 获取就绪事件。该操作可能是阻塞式的，
+     * 在没有就绪事件可获取时，可能会 sleep 一定时间。
+     * 所以 beforeSleep 为获取就绪事件的前置处理，afterSleep 为获取就绪事件后的后置处理，再接着才是事件的处理 */
     aeSetBeforeSleepProc(server.el,beforeSleep);
     aeSetAfterSleepProc(server.el,afterSleep);
 
@@ -2607,21 +2644,29 @@ void initServer(void) {
      * no explicit limit in the user provided configuration we set a limit
      * at 3 GB using maxmemory with 'noeviction' policy'. This avoids
      * useless crashes of the Redis instance for out of memory. */
+    /* 系统架构为 32 位且未设置最大内存时，redis 将最大内存设置为 3G，且数据逐出策略为 noeviction
+     * 当 redis 使用内存达到最大时，将不再处理客户端任何增加数据的请求，避免 oom */
     if (server.arch_bits == 32 && server.maxmemory == 0) {
         serverLog(LL_WARNING,"Warning: 32 bit instance detected but no memory limit set. Setting 3 GB maxmemory limit with 'noeviction' policy now.");
         server.maxmemory = 3072LL*(1024*1024); /* 3 GB */
         server.maxmemory_policy = MAXMEMORY_NO_EVICTION;
     }
 
+    /* 如果 redis server 以 cluster 模式启动，则初始化 cluster */
     if (server.cluster_enabled) clusterInit();
+    /* 初始化 lua 脚本环境 */
     scriptingInit(1);
     functionsInit();
+    /* 初始化慢查询日志 */
     slowlogInit();
+    /* 初始化延迟监控 */
     latencyMonitorInit();
 
     /* Initialize ACL default password if it exists */
+    /* 服务器密码 */
     ACLUpdateDefaultUserPassword(server.requirepass);
 
+    /* 配置看门狗 (Redis Software Watchdog)，通过定时发送信号的方式检测耗时过长的命令并记录堆栈信息，用于调试，诊断延时问题 */
     applyWatchdogPeriod();
 }
 
@@ -2793,8 +2838,23 @@ int populateArgsStructure(struct redisCommandArg *args) {
     return count;
 }
 
-/* Recursively populate the command structure. */
-void populateCommandStructure(struct redisCommand *c) {
+/* Recursively populate the command structure.
+ *
+ * On success, the function return C_OK. Otherwise C_ERR is returned and we won't
+ * add this command in the commands dict. */
+int populateCommandStructure(struct redisCommand *c) {
+    /* If the command marks with CMD_SENTINEL, it exists in sentinel. */
+    if (!(c->flags & CMD_SENTINEL) && server.sentinel_mode)
+        return C_ERR;
+
+    /* If the command marks with CMD_ONLY_SENTINEL, it only exists in sentinel. */
+    if (c->flags & CMD_ONLY_SENTINEL && !server.sentinel_mode)
+        return C_ERR;
+
+    /* Translate the command string flags description into an actual
+     * set of flags. */
+    setImplicitACLCategories(c);
+
     /* Redis commands don't need more args than STATIC_KEY_SPECS_NUM (Number of keys
      * specs can be greater than STATIC_KEY_SPECS_NUM only for module commands) */
     c->key_specs = c->key_specs_static;
@@ -2828,14 +2888,15 @@ void populateCommandStructure(struct redisCommand *c) {
         for (int j = 0; c->subcommands[j].declared_name; j++) {
             struct redisCommand *sub = c->subcommands+j;
 
-            /* Translate the command string flags description into an actual
-             * set of flags. */
-            setImplicitACLCategories(sub);
             sub->fullname = catSubCommandFullname(c->declared_name, sub->declared_name);
-            populateCommandStructure(sub);
+            if (populateCommandStructure(sub) == C_ERR)
+                continue;
+
             commandAddSubcommand(c, sub, sub->declared_name);
         }
     }
+
+    return C_OK;
 }
 
 extern struct redisCommand redisCommandTable[];
@@ -2853,16 +2914,9 @@ void populateCommandTable(void) {
 
         int retval1, retval2;
 
-        setImplicitACLCategories(c);
-
-        if (!(c->flags & CMD_SENTINEL) && server.sentinel_mode)
-            continue;
-
-        if (c->flags & CMD_ONLY_SENTINEL && !server.sentinel_mode)
-            continue;
-
         c->fullname = sdsnew(c->declared_name);
-        populateCommandStructure(c);
+        if (populateCommandStructure(c) == C_ERR)
+            continue;
 
         retval1 = dictAdd(server.commands, sdsdup(c->fullname), c);
         /* Populate an additional dictionary that will be unaffected
@@ -3574,6 +3628,23 @@ int commandCheckArity(client *c, sds *err) {
     return 1;
 }
 
+/* If we're executing a script, try to extract a set of command flags from
+ * it, in case it declared them. Note this is just an attempt, we don't yet
+ * know the script command is well formed.*/
+uint64_t getCommandFlags(client *c) {
+    uint64_t cmd_flags = c->cmd->flags;
+
+    if (c->cmd->proc == fcallCommand || c->cmd->proc == fcallroCommand) {
+        cmd_flags = fcallGetCommandFlags(c, cmd_flags);
+    } else if (c->cmd->proc == evalCommand || c->cmd->proc == evalRoCommand ||
+               c->cmd->proc == evalShaCommand || c->cmd->proc == evalShaRoCommand)
+    {
+        cmd_flags = evalGetCommandFlags(c, cmd_flags);
+    }
+
+    return cmd_flags;
+}
+
 /* If this function gets called we already read a whole
  * command, arguments are in the client argv/argc fields.
  * processCommand() execute the command or prepare the
@@ -3584,8 +3655,8 @@ int commandCheckArity(client *c, sds *err) {
  * if C_ERR is returned the client was destroyed (i.e. after QUIT). */
 int processCommand(client *c) {
     if (!scriptIsTimedout()) {
-        /* Both EXEC and EVAL call call() directly so there should be
-         * no way in_exec or in_eval is 1.
+        /* Both EXEC and scripts call call() directly so there should be
+         * no way in_exec or scriptIsRunning() is 1.
          * That is unless lua_timedout, in which case client may run
          * some commands. */
         serverAssert(!server.in_exec);
@@ -3638,19 +3709,7 @@ int processCommand(client *c) {
         }
     }
 
-    /* If we're executing a script, try to extract a set of command flags from
-     * it, in case it declared them. Note this is just an attempt, we don't yet
-     * know the script command is well formed.*/
-    uint64_t cmd_flags = c->cmd->flags;
-    if (c->cmd->proc == evalCommand || c->cmd->proc == evalShaCommand ||
-        c->cmd->proc == evalRoCommand || c->cmd->proc == evalShaRoCommand ||
-        c->cmd->proc == fcallCommand || c->cmd->proc == fcallroCommand)
-    {
-        if (c->cmd->proc == fcallCommand || c->cmd->proc == fcallroCommand)
-            cmd_flags = fcallGetCommandFlags(c, cmd_flags);
-        else
-            cmd_flags = evalGetCommandFlags(c, cmd_flags);
-    }
+    uint64_t cmd_flags = getCommandFlags(c);
 
     int is_read_command = (cmd_flags & CMD_READONLY) ||
                            (c->cmd->proc == execCommand && (c->mstate.cmd_flags & CMD_READONLY));
@@ -4207,6 +4266,12 @@ int finishShutdown(void) {
 
     /* Close the listening sockets. Apparently this allows faster restarts. */
     closeListeningSockets(1);
+
+    /* Unlock the cluster config file before shutdown */
+    if (server.cluster_enabled && server.cluster_config_file_lock_fd != -1) {
+        flock(server.cluster_config_file_lock_fd, LOCK_UN|LOCK_NB);
+    }
+
     serverLog(LL_WARNING,"%s is now ready to exit, bye bye...",
         server.sentinel_mode ? "Sentinel" : "Redis");
     return C_OK;
@@ -5645,6 +5710,7 @@ sds genRedisInfoString(dict *section_dict, int all_sections, int everything) {
             "keyspace_misses:%lld\r\n"
             "pubsub_channels:%ld\r\n"
             "pubsub_patterns:%lu\r\n"
+            "pubsubshard_channels:%lu\r\n"
             "latest_fork_usec:%lld\r\n"
             "total_forks:%lld\r\n"
             "migrate_cached_sockets:%ld\r\n"
@@ -5694,6 +5760,7 @@ sds genRedisInfoString(dict *section_dict, int all_sections, int everything) {
             server.stat_keyspace_misses,
             dictSize(server.pubsub_channels),
             dictSize(server.pubsub_patterns),
+            dictSize(server.pubsubshard_channels),
             server.stat_fork_time,
             server.stat_total_forks,
             dictSize(server.migrate_cached_sockets),
@@ -5951,9 +6018,13 @@ sds genRedisInfoString(dict *section_dict, int all_sections, int everything) {
     }
 
     /* Get info from modules.
-     * if user asked for "everything" or "modules", or a specific section
-     * that's not found yet. */
-    if (everything || dictFind(section_dict, "modules") != NULL || sections < (int)dictSize(section_dict)) {
+     * Returned when the user asked for "everything", "modules", or a specific module section.
+     * We're not aware of the module section names here, and we rather avoid the search when we can.
+     * so we proceed if there's a requested section name that's not found yet, or when the user asked
+     * for "all" with any additional section names. */
+    if (everything || dictFind(section_dict, "modules") != NULL || sections < (int)dictSize(section_dict) ||
+        (all_sections && dictSize(section_dict)))
+    {
 
         info = modulesCollectInfo(info,
                                   everything || dictFind(section_dict, "modules") != NULL ? NULL: section_dict,
@@ -6094,9 +6165,12 @@ void usage(void) {
     fprintf(stderr,"       ./redis-server - (read config from stdin)\n");
     fprintf(stderr,"       ./redis-server -v or --version\n");
     fprintf(stderr,"       ./redis-server -h or --help\n");
-    fprintf(stderr,"       ./redis-server --test-memory <megabytes>\n\n");
+    fprintf(stderr,"       ./redis-server --test-memory <megabytes>\n");
+    fprintf(stderr,"       ./redis-server --check-system\n");
+    fprintf(stderr,"\n");
     fprintf(stderr,"Examples:\n");
     fprintf(stderr,"       ./redis-server (run the server with default conf)\n");
+    fprintf(stderr,"       echo 'maxmemory 128mb' | ./redis-server -\n");
     fprintf(stderr,"       ./redis-server /etc/redis/6379.conf\n");
     fprintf(stderr,"       ./redis-server --port 7777\n");
     fprintf(stderr,"       ./redis-server --port 7777 --replicaof 127.0.0.1 8888\n");
@@ -6221,6 +6295,7 @@ static void sigShutdownHandler(int sig) {
      * If we receive the signal the second time, we interpret this as
      * the user really wanting to quit ASAP without waiting to persist
      * on disk and without waiting for lagging replicas. */
+    /* 连续两次 Ctrl+C 直接退出，退出码为 1(错误码) */
     if (server.shutdown_asap && sig == SIGINT) {
         serverLogFromHandler(LL_WARNING, "You insist... exiting now.");
         rdbRemoveTempFile(getpid(), 1);
@@ -6234,20 +6309,25 @@ static void sigShutdownHandler(int sig) {
     server.last_sig_received = sig;
 }
 
+/* 注册信号处理函数，将关闭和崩溃的处理函数关联到指定信号 */
 void setupSignalHandlers(void) {
     struct sigaction act;
 
     /* When the SA_SIGINFO flag is set in sa_flags then sa_sigaction is used.
      * Otherwise, sa_handler is used. */
     sigemptyset(&act.sa_mask);
+    /* 使用 sa_handler 设置回调函数 */
     act.sa_flags = 0;
     act.sa_handler = sigShutdownHandler;
     sigaction(SIGTERM, &act, NULL);
     sigaction(SIGINT, &act, NULL);
 
     sigemptyset(&act.sa_mask);
+    /* SA_SIGINFO flag 表示使用 sa_sigaction */
     act.sa_flags = SA_NODEFER | SA_RESETHAND | SA_SIGINFO;
     act.sa_sigaction = sigsegvHandler;
+    /* 如果 crash 日志开启，使用 sa_sigaction 设置错误处理回调函数。
+     * sa_sigaction 可以携带比 sa_handler 更多的信息，可以更好的推断崩溃原因 */
     if(server.crashlog_enabled) {
         sigaction(SIGSEGV, &act, NULL);
         sigaction(SIGBUS, &act, NULL);
@@ -6347,7 +6427,7 @@ int redisFork(int purpose) {
         server.stat_fork_rate = (double) zmalloc_used_memory() * 1000000 / server.stat_fork_time / (1024*1024*1024); /* GB per second. */
         latencyAddSampleIfNeeded("fork",server.stat_fork_time/1000);
 
-        /* The child_pid and child_type are only for mutual exclusive children.
+        /* The child_pid and child_type are only for mutually exclusive children.
          * other child types should handle and store their pid's in dedicated variables.
          *
          * Today, we allows CHILD_TYPE_LDB to run in parallel with the other fork types:
@@ -6433,7 +6513,7 @@ void dismissClientMemory(client *c) {
 
 /* In the child process, we don't need some buffers anymore, and these are
  * likely to change in the parent when there's heavy write traffic.
- * We dismis them right away, to avoid CoW.
+ * We dismiss them right away, to avoid CoW.
  * see dismissMemeory(). */
 void dismissMemoryInChild(void) {
     /* madvise(MADV_DONTNEED) may not work if Transparent Huge Pages is enabled. */
@@ -6880,6 +6960,8 @@ int main(int argc, char **argv) {
             server.exec_argv[1] = zstrdup(server.configfile);
             j = 2; // Skip this arg when parsing options
         }
+        sds *argv_tmp;
+        int argc_tmp;
         int handled_last_config_arg = 1;
         while(j < argc) {
             /* Either first or last argument - Should we read config from stdin? */
@@ -6897,7 +6979,37 @@ int main(int argc, char **argv) {
                 /* argv[j]+2 for removing the preceding `--` */
                 options = sdscat(options,argv[j]+2);
                 options = sdscat(options," ");
-                handled_last_config_arg = 0;
+
+                argv_tmp = sdssplitargs(argv[j], &argc_tmp);
+                if (argc_tmp == 1) {
+                    /* Means that we only have one option name, like --port or "--port " */
+                    handled_last_config_arg = 0;
+
+                    if ((j != argc-1) && argv[j+1][0] == '-' && argv[j+1][1] == '-' &&
+                        !strcasecmp(argv[j], "--save"))
+                    {
+                        /* Special case: handle some things like `--save --config value`.
+                         * In this case, if next argument starts with `--`, we will reset
+                         * handled_last_config_arg flag and append an empty "" config value
+                         * to the options, so it will become `--save "" --config value`.
+                         * We are doing it to be compatible with pre 7.0 behavior (which we
+                         * break it in #10660, 7.0.1), since there might be users who generate
+                         * a command line from an array and when it's empty that's what they produce. */
+                        options = sdscat(options, "\"\"");
+                        handled_last_config_arg = 1;
+                    }
+                    else if ((j == argc-1) && !strcasecmp(argv[j], "--save")) {
+                        /* Special case: when empty save is the last argument.
+                         * In this case, we append an empty "" config value to the options,
+                         * so it will become `--save ""` and will follow the same reset thing. */
+                        options = sdscat(options, "\"\"");
+                    }
+                } else {
+                    /* Means that we are passing both config name and it's value in the same arg,
+                     * like "--port 6380", so we need to reset handled_last_config_arg flag. */
+                    handled_last_config_arg = 1;
+                }
+                sdsfreesplitres(argv_tmp, argc_tmp);
             } else {
                 /* Option argument */
                 options = sdscatrepr(options,argv[j],strlen(argv[j]));

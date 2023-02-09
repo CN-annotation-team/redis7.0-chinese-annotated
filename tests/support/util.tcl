@@ -72,8 +72,8 @@ proc sanitizer_errors_from_file {filename} {
 }
 
 proc getInfoProperty {infostr property} {
-    if {[regexp "\r\n$property:(.*?)\r\n" $infostr _ value]} {
-        set _ $value
+    if {[regexp -lineanchor "^$property:(.*?)\r\n" $infostr _ value]} {
+        return $value
     }
 }
 
@@ -932,6 +932,12 @@ proc config_set {param value {options {}}} {
             }
         }
     }
+}
+
+proc config_get_set {param value {options {}}} {
+    set config [lindex [r config get $param] 1]
+    config_set $param $value $options
+    return $config
 }
 
 proc delete_lines_with_pattern {filename tmpfilename pattern} {

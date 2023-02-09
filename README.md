@@ -32,6 +32,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [intset.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/intset.h) |  整数集合数据结构的相关声明，作为集合键的底层实现之一 | 完成 |
 | [intset.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/intset.c) | 整数集合数据结构的具体实现 | 完成 |
 | [dict.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/dict.h) | 字典数据结构的相关声明，用于 redis 中 hashtable（哈希表）的底层实现 | 完成 |
+| [dict.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/dict.c) | 定义了 dict 集合类型相关数据结构 | 过半 |
 | [zmalloc.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/zmalloc.c) | redis 中内存管理的具体实现 | 低于一半 |
 | [ziplist.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ziplist.c) | ziplist 压缩列表的实现，7.0 版本后被 listpack 紧凑列表替换了 | 低于一半 |
 | [sentinel.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sentinel.c) | sentinel 哨兵机制的具体实现 | 低于一半 |
@@ -40,6 +41,22 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [object.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/object.c) | Redis 的对象系统实现 | 低于一半 |
 | [util.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/util.c) | Redis 工具函数 | 低于一半 |
 | [blocked.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/blocked.c) | Redis 对 BLPOP 和 WAIT 等阻塞操作的通用支持 | 低于一半 |
+| [rio.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/rio.c) | 四种 redis IO 类型操作的实现  | 过半 |
+| [cluster.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/cluster.h) | redis 集群数据结构定义 | 完成 |
+| [cluster.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/cluster.c) | redis 集群实现 | 低于一半 |
+| [bio.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/bio.c) | redis 后台 IO 线程模型 | 完成 |
+| [lazyfree.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/lazyfree.c) | redis 惰性删除功能 | 完成 |
+| [ae.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.h) | redis 事件循环器结构定义 | 完成 |
+| [ae.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ae.c) | redis 事件循环器功能 | 完成 |
+| [multi.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/multi.c) | redis 事务实现  | 完成 |
+| [redis-check-rdb.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/redis-check-rdb.c) | Redis RDB 检查工具 | 完成 |
+| [redis-check-aof.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/redis-check-aof.c) | Redis AOF 检查工具 | 低于一半 |
+| [evict.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/evict.c) | 四种 redis 内存淘汰算法  | 完成 |
+| [aof.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/aof.c) | redis AOF 功能  | 过半 |
+| [replication.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/replication.c) | Redis 主从复制 | 低于一半 |
+| [listpack.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/listpack.h) | listpack 紧凑列表定义  | 完成 |
+| [listpack.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/listpack.c) | listpack 紧凑列表实现  | 低于一半 |
+| [networking.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/networking.c) | Redis 客户端、主、副本 I/O 相关 | 低于一半 |
 | [hyperloglog.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/hyperloglog.c) | Redis HyperLogLog 实现以及相关命令 | 过半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>

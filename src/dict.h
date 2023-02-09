@@ -234,6 +234,7 @@ typedef void (dictScanBucketFunction)(dict *d, dictEntry **bucketref);
     if ((d)->type->keyDestructor) \
         (d)->type->keyDestructor((d), (entry)->key)
 
+/* 字典在给 entry 实体 key 赋值时会检查该字典是否有设置键拷贝方法 */
 #define dictSetKey(d, entry, _key_) do { \
     if ((d)->type->keyDup) \
         (entry)->key = (d)->type->keyDup((d), _key_); \
