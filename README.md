@@ -32,6 +32,7 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [intset.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/intset.h) |  整数集合数据结构的相关声明，作为集合键的底层实现之一 | 完成 |
 | [intset.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/intset.c) | 整数集合数据结构的具体实现 | 完成 |
 | [dict.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/dict.h) | 字典数据结构的相关声明，用于 redis 中 hashtable（哈希表）的底层实现 | 完成 |
+| [dict.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/dict.c) | 定义了 dict 集合类型相关数据结构 | 过半 |
 | [zmalloc.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/zmalloc.c) | redis 中内存管理的具体实现 | 低于一半 |
 | [ziplist.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/ziplist.c) | ziplist 压缩列表的实现，7.0 版本后被 listpack 紧凑列表替换了 | 低于一半 |
 | [sentinel.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/sentinel.c) | sentinel 哨兵机制的具体实现 | 低于一半 |
@@ -56,12 +57,13 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [listpack.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/listpack.h) | listpack 紧凑列表定义  | 完成 |
 | [listpack.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/listpack.c) | listpack 紧凑列表实现  | 低于一半 |
 | [networking.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/networking.c) | Redis 客户端、主、副本 I/O 相关 | 低于一半 |
+| [hyperloglog.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/hyperloglog.c) | Redis HyperLogLog 实现以及相关命令 | 过半 |
 | [geo.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/aof.c) | geo 功能  | 完成 |
 | [geohash.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/aof.c) | geo 功能  | 完成 |
 | [geohash_helper.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/aof.c) | geo 功能  | 完成 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2023/02/08
+更新日期：2023/02/09
 
 
 ## 关于提交 PR 的方法：
