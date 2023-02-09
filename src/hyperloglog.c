@@ -296,7 +296,7 @@ struct hllhdr {
 #define HLL_DENSE 0 /* Dense encoding. */
 /* 稀疏编码 */
 #define HLL_SPARSE 1 /* Sparse encoding. */
-/* RAW 编码，仅 redis 内部使用，不会暴露出去 */
+/* RAW 编码，仅 redis 内部使用，只在 pfmerge 合并多个 HLL 的时候用到，不会暴露出去 */
 #define HLL_RAW 255 /* Only used internally, never exposed. */
 #define HLL_MAX_ENCODING 1
 
