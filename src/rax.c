@@ -154,6 +154,8 @@ static inline void raxStackFree(raxStack *ts) {
  * 'nodesize'. The padding is needed to store the child pointers to aligned
  * addresses. Note that we add 4 to the node size because the node has a four
  * bytes header. */
+/* 计算指针对齐最少需要填充的字节数量，对齐时需要将 raxNode 4 bytes 的 header 考虑在内。
+ * 对下面公式简单介绍下: 设输入值为 n，输出值为 x，x 为满足 (n+x+4) % size(void*) == 0 条件的最小值 */
 #define raxPadding(nodesize) ((sizeof(void*)-((nodesize+4) % sizeof(void*))) & (sizeof(void*)-1))
 
 /* Return the pointer to the last child pointer in a node. For the compressed

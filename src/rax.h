@@ -94,7 +94,78 @@
  *
  */
 
+/* rax 是 Redis 对基数树(Radix tree) 的实现，这种数据结构比普通的前缀树(Trie) 更节省空间，又被称为压缩前缀树。
+ * 下面结合上面作者的注释对 rax 做一个简单介绍：
+ *
+ * 在 redis 的前缀树实现中，
+ *   1. 对任意节点，data 部分存储了子节点的值以及子节点的指针，其中非叶子节点的子节点数量至少有一个，叶子节点的子节点数量为 0。
+ *      下图中用`()`或`[]`为子节点的值，用连线`\`或`/`表示子节点的指针。
+ *   2. 对于前缀树中的一个 key，它不是保存在节点中，而是由节点的位置决定。 从根节点到当前节点的路径上(不包含当前节点)的字符串，就是这个节点的 key。
+ *   3. 不是所有位置的节点都是有效的 key，在具体实现中用标志位 iskey 表示，此时我们可以增加一个 value 指针。
+ *      在下图中，用`[]`表示这个位置是一个 key。
+ * 下图是一个普通前缀树的实现：
+ *
+ *              (f) ""
+ *                \
+ *                (o) "f"
+ *                  \
+ *                  (o) "fo"
+ *                    \
+ *                  [t   b] "foo"
+ *                  /     \
+ *         "foot" (e)     (a) "foob"
+ *                /         \
+ *      "foote" (r)         (r) "fooba"
+ *              /             \
+ *    "footer" []             [] "foobar"
+ *
+ *
+ * 压缩前缀树实现 (radix tree 模型）：
+ * 普通前缀树中存在一些连续的节点，它们都只有一个子节点。这些连续的特殊节点中的内容可以被压缩进一个节点中，表现形式为一个包含之前完整路径的字符串。
+ * 下图中，foo，er，ar 都做了压缩处理，这些压缩后的节点被称为压缩节点，其他节点为非压缩节点。
+ *
+ *                  ("foo") ""
+ *                     |
+ *                  [t   b] "foo"
+ *                  /     \
+ *        "foot" ("er")    ("ar") "foob"
+ *                 /          \
+ *       "footer" []          [] "foobar"
+ *
+ * 注意：只有连续的单孩子节点才可以压缩。有些节点存在多个子节点则不可压缩。，比如上图中的 `[t   b]`。
+ *
+ * 在 redis raxNode 结构体中，一个节点是否为压缩节点用 iscompr 表示。两种的节点的数据保存形式有所不同:
+ * 节点 `("foo")`
+ *   1. 压缩节点，数据被写进 `()` 中，所以不是一个 key。
+ *   2. 数据内容为: [header iskey=0,iscompr=1][foo][foo-ptr]
+ * 节点 `[t   b]`
+ *   1. 非压缩节点，在上图中表示 "foo" 这个 key，一般携带一个对应的 value 指针。
+ *   2. 数据内容为: [header iskey=1,iscompr=0][tb][t-ptr][b-ptr][foo-value-ptr]
+ *
+ *
+ * 虽然上述优化节省了空间，但额外增加了复杂度。如果 key "first" 要插入上面的 radix tree 中，节点 `(f)` 在已有一个子节点 `(o)` 的情况下，
+ * 又多了一个 `(i)`。即前缀 "foo" 不再是连续的单孩子节点，所以它需要进行切割。
+ * 下图是压缩节点 `("foo")` 被切割后的样子。
+ *
+ *                    (f) ""
+ *                    /
+ *                 (i o) "f"
+ *                 /   \
+ *    "firs"  ("rst")  (o) "fo"
+ *              /        \
+ *    "first" []       [t   b] "foo"
+ *                     /     \
+ *           "foot" ("er")    ("ar") "foob"
+ *                    /          \
+ *          "footer" []          [] "foobar"
+ *
+ * 插入一个 key 可能引起节点切割，同理删除一个 key 后，不满足压缩条件的前缀 (这个前缀不可以是一个 key) 可能会重新满足条件，
+ * 这个时候又需要将这个前缀压缩回一个节点中。
+ */
+
 #define RAX_NODE_MAX_SIZE ((1<<29)-1)
+/* radix tree 的节点，前四个字段占一个 32 位 INT，可以认为该结构的 header。
+ * 柔性数组 char data[] 不占空间，sizeof(raxNode) = 32 */
 typedef struct raxNode {
     uint32_t iskey:1;     /* Does this node contain a key? */
     uint32_t isnull:1;    /* Associated value is NULL (don't store it). */
@@ -130,9 +201,12 @@ typedef struct raxNode {
     unsigned char data[];
 } raxNode;
 
+/* 表示一颗 radix tree */
 typedef struct rax {
     raxNode *head;
+    /* 元素 (key) 的数量 */
     uint64_t numele;
+    /* 节点的数量 */
     uint64_t numnodes;
 } rax;
 
