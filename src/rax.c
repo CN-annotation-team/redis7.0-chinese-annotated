@@ -238,6 +238,7 @@ void raxSetData(raxNode *n, void *data) {
 }
 
 /* Get the node auxiliary data. */
+/* 返回指定 rax 节点 n 中 value 指针，需要调用方保证节点 n 是一个 key */
 void *raxGetData(raxNode *n) {
     if (n->isnull) return NULL;
     void **ndata =(void**)((char*)n+raxNodeCurrentLength(n)-sizeof(void*));
@@ -469,9 +470,23 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
         unsigned char *v = h->data;
 
         if (h->iscompr) {
+            /* 压缩节点由连续的单孩子节点序列压缩而来，所以每遍历一个压缩字符串中的字符 (j+1)，
+             * 代表 rax 树的逻辑深度加一，并去匹配字符串 s 的下一个字符 s[i+1] */
             for (j = 0; j < h->size && i < len; j++, i++) {
                 if (v[j] != s[i]) break;
             }
+            /* 压缩节点未遍历完只有两种可能
+             *   1. i == len，表示在这颗树中找到了字符串
+             *   2. i != len，表示字符串 s 中途失配
+             * 无论是匹配完成还是中途失配，都没有再遍历的必要了，所以退出这个 while 循环
+             *
+             * 题外话，假设在这一步时已经找到了字符串 s，即 i == len 条件满足，此时有两种可能
+             *   1. j < h->size: 触发下面 j != h->size 条件，直接跳出 while 循环。
+             *      虽然完全匹配字符串 s，但它不是一个 key，因为跳出循环，没走 if/else 后面的逻辑，指针 h 最终会指向当前这个压缩节点
+             *   2. j == h->size: 恰好匹配成功压缩节点的最后一个，满足连续的非 key 单孩子节点这个条件，
+             *      如果它的 child-ptr 指向的是一个非压缩节点（理论上肯定满足这个条件，如果是压缩节点，为什么不合并进当前节点呢），
+             *      那么它是一个 key
+             *  */
             if (j != h->size) break;
         } else {
             /* Even when h->size is large, linear scan provides good
@@ -480,15 +495,32 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
             for (j = 0; j < h->size; j++) {
                 if (v[j] == s[i]) break;
             }
+            /* 当前节点没有找到字符 s[i]，中途失配，退出 while 循环 */
             if (j == h->size) break;
+            /* 在当前节点的孩子列表中 */
             i++;
         }
 
+        /* 如果 raxStack ts 传了值，记录查找过程中经过的每个 rax 节点 */
         if (ts) raxStackPush(ts,h); /* Save stack of parent nodes. */
+        /* 当前节点 h 的子节点指针数组 */
         raxNode **children = raxNodeFirstChildPtr(h);
+        /* 因为压缩节点只有一个子节点，如果遍历了压缩节点，将 j 复位。*/
         if (h->iscompr) j = 0; /* Compressed node only child is at index 0. */
+        /* 将游标 h 移动到第 j 个子节点 */
         memcpy(&h,children+j,sizeof(h));
         parentlink = children+j;
+        /* 复位 j 的原因只是方便进行下一轮 while 循环，
+         * 英文注释是对 split position 赋值的解释，有两个版本，感觉都有问题
+         * 第一个版本是 If the new node is compressed
+         *   这个版本是作者本文所写，大意是如果新节点 h 是一个压缩节点，并恰好因为 (i == len) 条件满足退出下次 while 循环，
+         *   我们把 j 复位为 0，以便在执行到下面的 `if (splitpos && h->iscompr) *splitpos = j` 语句时将值 0 写入 splitpos，
+         *   来说明这个 node 表示 `the searched key`。
+         *   问题点在这个 `the searched key`，compressed node 不可能是一个 key
+         *   bug? 如果在 i == len 时，换到新节点 h，h 是一个压缩节点，这里会误将 h 判断为 key，然后返回它的 value。
+         *
+         * 第二个版本是 If the new node is non compressed
+         *   问题点在于非压缩节点根本不会给 splitpos 赋值 */
         j = 0; /* If the new node is non compressed and we do not
                   iterate again (since i == len) set the split
                   position to 0 to signal this node represents
@@ -498,6 +530,7 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
     if (stopnode) *stopnode = h;
     if (plink) *plink = parentlink;
     if (splitpos && h->iscompr) *splitpos = j;
+    /* 返回已经成功匹配的字符串 s 的长度 */
     return i;
 }
 
@@ -917,6 +950,7 @@ int raxTryInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old)
 /* Find a key in the rax, returns raxNotFound special void pointer value
  * if the item was not found, otherwise the value associated with the
  * item is returned. */
+/* 在 rax 中查找长度为 len 的字符串 s (存入 rax 中的 key)，若 key 存在，返回对应的 value 指针，否则返回指针 raxNotFound */
 void *raxFind(rax *rax, unsigned char *s, size_t len) {
     raxNode *h;
 
