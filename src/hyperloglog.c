@@ -180,15 +180,23 @@
  */
 
 struct hllhdr {
+    /* 前四位设置为 "HYLL" */
     char magic[4];      /* "HYLL" */
+    /* encoding 表示 hll 的编码格式为稀疏还是密集型 */
     uint8_t encoding;   /* HLL_DENSE or HLL_SPARSE. */
+    /* 保留位 */
     uint8_t notused[3]; /* Reserved for future use, must be zero. */
+    /* card 占用8字节，使用小端字节序存储 64 位整数，保存上一次的基数计算结果
+     * card 的最高位表示数据结构是否有被改变过，当最高位为 1 则表示已被改变，需要重新计算基数存储到 card 中 */
     uint8_t card[8];    /* Cached cardinality, little endian. */
+
     uint8_t registers[]; /* Data bytes. */
 };
 
 /* The cached cardinality MSB is used to signal validity of the cached value. */
+/* 此宏定义用于当 hll 数据结构被改变时，对 card 进行失效处理（把最高位置为 1 ） */
 #define HLL_INVALIDATE_CACHE(hdr) (hdr)->card[7] |= (1<<7)
+/* 用于检查当前 hll 数据结构是否有被改变过 */
 #define HLL_VALID_CACHE(hdr) (((hdr)->card[7] & (1<<7)) == 0)
 
 #define HLL_P 14 /* The greater is P, the smaller the error. */
@@ -329,6 +337,91 @@ static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected";
  * with "val" left-shifted by "rs" bits to set the new value.
  */
 
+/* 此处为在 dense 模式下获取和设置寄存器的宏
+ * redis 使用大量的宏来得到更高的计算性能，在 hyperloglog 中也不例外
+ *
+ * * +--------+--------+--------+------//
+ * |11000000|22221111|33333322|55444444
+ * +--------+--------+--------+------//
+ *
+ * hyperloglog 寄存器形式如上所示
+ * 采用大端序列，msb (最高位) 在左边，而 redis 从字节数组右边到左边计算
+ *
+ * 以下例子展示了 redis 如何计算获得在 8bits 字节数组中存储的 6bits 寄存器的值
+ *
+ * 例：假设我们需要获取位于寄存器 1（pos = 1）的值
+ *
+ * 1. 则 b0 = 6 * pos / 8 可以得到保存了我们想要获取数据的字节数组的下标，b0 = 0
+ *    则可以获得目前 b0 即为下标为 0 的字节数组 "11000000"
+ *
+ * 2. 然后我们需要获取 fb（6bits 寄存器在当前字节数组中的第一位），而因为寄存器采用大端序列，因此最低位在字节数组的最右端
+ *    所以 fb = 6 * pos % 8 = 6 ，可得寄存器 1 在当前字节数组 b0 = 0 中的第一位比特的下标为 6
+ *      +--------+
+ *      |11000000|
+ *      | ^ fb   |
+ *      +--------+
+ *
+ * 3. 因此我们可以先将 b0 = 0 向右移动6位，获得如下字节数组
+ *      +--------+
+ *      |00000011|
+ *      +--------+
+ *
+ * 4. 然后对 b0 = 0 的下一个字节数组，即 b1 = b0 + 1 = 1 进行位移操作，获得剩余的 bit
+ *    需要位移的位数为 8bits - fb = 8 - 6 = 2bits
+ *    可以理解为，获取一个字节数组剩余需要位移的位数，因为在上一步中我们已经移动了 6 位，此处需要位移剩下的两位
+ *    注：因为在步骤 2 和 3 中，我们通过右移操作，将最低位（lsb）位置放到了字节数组中的第一位
+ *       因此要获得获得剩余位数在字节数组中的正确位置，我们需要在这里做左移操作
+ *      +--------+
+ *      |22221111|  <- b1 起始值
+ *      |22111100|  <- 左移剩余位数之后
+ *      +--------+
+ *
+ * 5. 现在我们可以对右移后的 b0 和 b1 做 OR 操作来获得 pos = 1 的寄存器的完整表示
+ *    当然，因为 hll 寄存器为 6bits， 我们需要一个 6 位的掩码来和 OR 操作的结果做 AND 操作
+ *    从而获得在寄存器中正确的值
+ *      +--------+
+ *      |00000011|  <- b0
+ *      |22111100|  <- b1
+ *      |22111111|  <- b0 OR b1
+ *      |  111111|  <- (b0 OR b1) AND 63, our value.
+ *      +--------+
+ *
+ *
+ * 给寄存器设置新值要稍微复杂一点，但是其实原理和步骤都大同小异
+ * 以下给出一个例子：给 pos = 1 的寄存器设置新值 val
+ *
+ * 根据 hll 的寄存器结构可以得知，pos = 1 的寄存器的低 2 位位于下标位 0 的字节数组中
+ * 而剩余 4 位位于下标为 1 的字节数组中：
+ *      +--------+            +--------+
+ *      |11000000|            |22221111|
+ *      |^^      |            |    ^^^^|
+ *      +--------+            +--------+
+ *    下标为 0 的字节数组      下标为 1 的字节数组
+ *
+ * 因此给寄存器重新设置值可以分为两部：
+ * 1. 先清除原来的值
+ *      由 b0 = 6 * pos / 8 和 fb = 6 * pos % 8 可以得出需要处理的字节数组下标和寄存器的最低位
+ *      因此我们可以先设置一个 6bits 的掩码 "00111111"
+ *      然后对 "001111111" 左移 fb = 6 位，得到 "11000000"
+ *      并取反得到 "00111111"
+ *      通过 "00111111" 和 byte[0] = "11000000" 做 AND 操作得到 "00000000"，我们可以清除掉 pos = 1 的寄存器的低两位的值
+ *      然后我们可以对新值 val 向左移动 fb 位，并和 "00000000" 做 OR 操作，把 val 的低两位值赋值到如下位置：
+ *        +--------+
+ *        |00000000|
+ *        |^^      |
+ *        +--------+
+ *
+ *      同样，对于 pos = 1 寄存器的剩余 4 位，我们可以先设置一个掩码 "00111111" 然后右移 8 - fb 位并取反
+ *      得到掩码 "11110000"
+ *      再和 byte[1] = "22221111" 做 AND 操作得到 "22220000" 从而实现清除 pos = 1 寄存器的值
+ *      然后对新值 val 向右移动 8 - fb 位并和 "22220000" 做 OR 操作，得以将新值的剩余 4 位赋值到如下位置：
+ *        +--------+
+ *        |22220000|
+ *        |    ^^^^|
+ *        +--------+
+ *
+ * */
+
 /* Note: if we access the last counter, we will also access the b+1 byte
  * that is out of the array, but sds strings always have an implicit null
  * term, so the byte exists, and we can skip the conditional (or the need
@@ -362,6 +455,14 @@ static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected";
 
 /* Macros to access the sparse representation.
  * The macros parameter is expected to be an uint8_t pointer. */
+/* 以下宏用于判断稀疏类型下操作码类型
+ * HLL_SPARSE_ZERO_BIT 0xc0 二进制表示为 11000000 (代码中没有设置相应的宏，但由以下判断宏可以得出)
+ * HLL_SPARSE_XZERO_BIT 0x40 二进制表示为 01000000
+ * HLL_SPARSE_VAL_BIT 0x80 二进制表示为 10000000
+ *
+ * 观察上面的 3 个操作码，可知可以由操作码的前两位来区分
+ * 结合以上信息可以更清晰地读懂以下宏
+ * */
 #define HLL_SPARSE_XZERO_BIT 0x40 /* 01xxxxxx */
 #define HLL_SPARSE_VAL_BIT 0x80 /* 1vvvvvxx */
 #define HLL_SPARSE_IS_ZERO(p) (((*(p)) & 0xc0) == 0) /* 00xxxxxx */
@@ -449,6 +550,9 @@ uint64_t MurmurHash64A (const void * key, int len, unsigned int seed) {
 /* Given a string element to add to the HyperLogLog, returns the length
  * of the pattern 000..1 of the element hash. As a side effect 'regp' is
  * set to the register index this element hashes to. */
+/* 此方法总结来说就是
+ * regp 为添加元素所在桶的下标
+ * 返回的 count 为哈希后 50 位中 1 第一次出现的位置，表示目前寄存器中近似基数 */
 int hllPatLen(unsigned char *ele, size_t elesize, long *regp) {
     uint64_t hash, bit, index;
     int count;
@@ -491,6 +595,9 @@ int hllPatLen(unsigned char *ele, size_t elesize, long *regp) {
  * The function always succeed, however if as a result of the operation
  * the approximated cardinality changed, 1 is returned. Otherwise 0
  * is returned. */
+/* 此方法为在 dense 形式下给寄存器设值的方法
+ * 值得注意的是，只有当新的 count 大于目前基数 (old_count) 时才会将新 count 设置给该寄存器
+ * 此处的原理为伯努利实验 */
 int hllDenseSet(uint8_t *registers, long index, uint8_t count) {
     uint8_t oldcount;
 
@@ -509,6 +616,10 @@ int hllDenseSet(uint8_t *registers, long index, uint8_t count) {
  *
  * This is just a wrapper to hllDenseSet(), performing the hashing of the
  * element in order to retrieve the index and zero-run count. */
+/* 该方式是 hllDenseSet() 的一个 wrapper
+ * 实际上参数 *ele 并不会真的添加到寄存器中，这里的用处是获取此元素如果添加到 hll 中所在桶的下标 index
+ * 以及获得桶中的近似基数 count
+ * 然后通过比较该 index 所指桶的 old_count 和新的基数 count 来判断是否需要更新基数 */
 int hllDenseAdd(uint8_t *registers, unsigned char *ele, size_t elesize) {
     long index;
     uint8_t count = hllPatLen(ele,elesize,&index);
@@ -517,18 +628,25 @@ int hllDenseAdd(uint8_t *registers, unsigned char *ele, size_t elesize) {
 }
 
 /* Compute the register histogram in the dense representation. */
+/* 该方法用于计算 dense 形式下 hll 的统计直方图 */
 void hllDenseRegHisto(uint8_t *registers, int* reghisto) {
     int j;
 
     /* Redis default is to use 16384 registers 6 bits each. The code works
      * with other values by modifying the defines, but for our target value
      * we take a faster path with unrolled loops. */
+    /* Redis 中 hll 默认含有 16384 个 6 比特的寄存器
+     * 以下计算的方法可以参考在前文中所给出的计算 hllDenseSet 或 hllDenseGet 的例子 */
     if (HLL_REGISTERS == 16384 && HLL_BITS == 6) {
         uint8_t *r = registers;
         unsigned long r0, r1, r2, r3, r4, r5, r6, r7, r8, r9,
                       r10, r11, r12, r13, r14, r15;
         for (j = 0; j < 1024; j++) {
             /* Handle 16 registers per iteration. */
+            /* 此处之所以寄存器 r 只取出 12 个元素用于计算是因为每个寄存器为 6 比特，而每个 uint8_t 元素为 8bits
+             * 8bits * 12 = 96bits
+             * 96bits / 6bits = 16 registers
+             * 因此 12 个 uint8_t 就可以表示 16 个寄存器 */
             r0 = r[0] & 63;
             r1 = (r[0] >> 6 | r[1] << 2) & 63;
             r2 = (r[1] >> 4 | r[2] << 4) & 63;
@@ -576,12 +694,19 @@ void hllDenseRegHisto(uint8_t *registers, int* reghisto) {
 
 /* ================== Sparse representation implementation  ================= */
 
+/* 以下先说一下 sparse 形式下 3 种操作码
+ * ZERO 操作码：占用 1 个字节，表示为 00xxxxxx，后六位表示有 2^6 + 1 个寄存器可以被设置为 0
+ * XZERO 操作码：占用 2 个字节，表示为 01xxxxxx yyyyyyyy，表示有 2^14 + 1 个寄存器可以被设置为 0
+ * VAL 操作码：占用 1 个字节，表示为 1vvvvvxx。vvvvv 表示值，范围为 1-2^5。后两位 xx 表示数量 2^2，整体表示为最多有 2^2 个寄存器被设置为值 vvvvv */
+
 /* Convert the HLL with sparse representation given as input in its dense
  * representation. Both representations are represented by SDS strings, and
  * the input representation is freed as a side effect.
  *
  * The function returns C_OK if the sparse representation was valid,
  * otherwise C_ERR is returned if the representation was corrupted. */
+/* 此方法用于将 sparse 形式的 hll 转换为 dense 形式
+ * 并且在转换后将原来 sparse 形式的 hll 释放*/
 int hllSparseToDense(robj *o) {
     sds sparse = o->ptr, dense;
     struct hllhdr *hdr, *oldhdr = (struct hllhdr*)sparse;
@@ -602,6 +727,8 @@ int hllSparseToDense(robj *o) {
 
     /* Now read the sparse representation and set non-zero registers
      * accordingly. */
+    /* 如果 sparse 形式下操作码为 ZERO 或 XZERO 则跳过
+     * 如果操作码为 VAL 则取出 sparse 形式下该值，并设置到 dense 中 */
     p += HLL_HDR_SIZE;
     while(p < end) {
         if (HLL_SPARSE_IS_ZERO(p)) {
@@ -652,6 +779,9 @@ int hllSparseToDense(robj *o) {
  * sparse to dense: this happens when a register requires to be set to a value
  * not representable with the sparse representation, or when the resulting
  * size would be greater than server.hll_sparse_max_bytes. */
+/* 此方法为 sparse 形式的 hll 设置值
+ * 值的注意的是，如果被设置的值不足以被 sparse 形式下的 hll 表示，或大于 hll_sparse_max_bytes
+ * 那么该 hll 会被转化为 sparse 形式，然后再设置该值 */
 int hllSparseSet(robj *o, long index, uint8_t count) {
     struct hllhdr *hdr;
     uint8_t oldcount, *sparse, *end, *p, *prev, *next;
@@ -660,6 +790,7 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
 
     /* If the count is too big to be representable by the sparse representation
      * switch to dense representation. */
+    /* 当 sparse 形式不足以表示该值时，转化为 dense 形式 */
     if (count > HLL_SPARSE_VAL_MAX_VALUE) goto promote;
 
     /* When updating a sparse representation, sometimes we may need to
@@ -671,6 +802,8 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
 
     /* Step 1: we need to locate the opcode we need to modify to check
      * if a value update is actually needed. */
+    /* 步骤1：先找到 sparse 形式下 hll 的 metadata 地址，以及结束位置的地址
+     * 并且要获取当前的操作码形式 */
     sparse = p = ((uint8_t*)o->ptr) + HLL_HDR_SIZE;
     end = p + sdslen(o->ptr) - HLL_HDR_SIZE;
 
@@ -709,6 +842,7 @@ int hllSparseSet(robj *o, long index, uint8_t count) {
     /* Cache current opcode type to avoid using the macro again and
      * again for something that will not change.
      * Also cache the run-length of the opcode. */
+    /* 缓存操作码以及操作码长度，防止多余的宏操作 */
     if (HLL_SPARSE_IS_ZERO(p)) {
         is_zero = 1;
         runlen = HLL_SPARSE_ZERO_LEN(p);
@@ -901,6 +1035,7 @@ promote: /* Promote to dense representation. */
  *
  * This function is actually a wrapper for hllSparseSet(), it only performs
  * the hashing of the element to obtain the index and zeros run length. */
+/* 此处可参考 hllDenseAdd */
 int hllSparseAdd(robj *o, unsigned char *ele, size_t elesize) {
     long index;
     uint8_t count = hllPatLen(ele,elesize,&index);
@@ -909,6 +1044,10 @@ int hllSparseAdd(robj *o, unsigned char *ele, size_t elesize) {
 }
 
 /* Compute the register histogram in the sparse representation. */
+/* 计算 sparse 形式下 hll 的统计直方图
+ * 相比于 dense 形式，sparse 形式下的计算更为直观
+ * reghisto[0] 可广泛表示为 ZERO 和 XZERO 操作码下的统计基数
+ * reghisto[val] 则可以表示值为 val 的统计基数 */
 void hllSparseRegHisto(uint8_t *sparse, int sparselen, int *invalid, int* reghisto) {
     int idx = 0, runlen, regval;
     uint8_t *end = sparse+sparselen, *p = sparse;
