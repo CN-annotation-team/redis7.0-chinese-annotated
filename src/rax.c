@@ -58,6 +58,7 @@ void raxDebugShowNode(const char *msg, raxNode *n);
  * of debugging info to the standard output, however you can still turn
  * debugging on/off in order to enable it only when you suspect there is an
  * operation causing a bug using the function raxSetDebugMsg(). */
+#define RAX_DEBUG_MSG
 #ifdef RAX_DEBUG_MSG
 #define debugf(...)                                                            \
     if (raxDebugMsg) {                                                         \
@@ -187,6 +188,7 @@ static inline void raxStackFree(raxStack *ts) {
  * If datafield is true, the allocation is made large enough to hold the
  * associated data pointer.
  * Returns the new node pointer. On out of memory NULL is returned. */
+/* 数据形式 raxNode HDR, data (children, padding, children pointers) */
 raxNode *raxNewNode(size_t children, int datafield) {
     size_t nodesize = sizeof(raxNode)+children+raxPadding(children)+
                       sizeof(raxNode*)*children;
@@ -397,6 +399,7 @@ raxNode *raxAddChild(raxNode *n, unsigned char c, raxNode **childptr, raxNode **
  * The function also returns a child node, since the last node of the
  * compressed chain cannot be part of the chain: it has zero children while
  * we can only compress inner nodes with exactly one child each. */
+/* 将字符序列 s 以压缩节点的形式放入叶子节点 n 中，并通过二级指针返回新创建的叶子节点 */
 raxNode *raxCompressNode(raxNode *n, unsigned char *s, size_t len, raxNode **child) {
     assert(n->size == 0 && n->iscompr == 0);
     void *data = NULL; /* Initialized only to avoid warnings. */
@@ -469,6 +472,7 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
         debugnode("Lookup current node",h);
         unsigned char *v = h->data;
 
+        /* 假设匹配 s[len-1] 恰好匹配 v[0]，是否会导致将不是 key 的序列 s 误判为 key */
         if (h->iscompr) {
             /* 压缩节点由连续的单孩子节点序列压缩而来，所以每遍历一个压缩字符串中的字符 (j+1)，
              * 代表 rax 树的逻辑深度加一，并去匹配字符串 s 的下一个字符 s[i+1] */
@@ -541,6 +545,7 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
  * function returns 0 as well but sets errno to ENOMEM, otherwise errno will
  * be set to 0.
  */
+/* 插入长度为 len 的元素（字符串）s */
 int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old, int overwrite) {
     size_t i;
     int j = 0; /* Split position. If raxLowWalk() stops in a compressed
@@ -557,6 +562,8 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      * inserted or this middle node is currently not a key, but can represent
      * our key. We have just to reallocate the node and make space for the
      * data pointer. */
+    /* 如果 raxLowWalk 的返回值 i 等于字符串 s 的长度 len，表示在 rax 中找到了串 s 这样的序列。
+     * */
     if (i == len && (!h->iscompr || j == 0 /* not in the middle if j is 0 */)) {
         debugf("### Insert: node representing key exists\n");
         /* Make space for the value pointer if needed. */
@@ -880,12 +887,15 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
 
     /* We walked the radix tree as far as we could, but still there are left
      * chars in our string. We need to insert the missing nodes. */
+    /* rax 中没有同字符串 s 这样的序列，需要插入缺少的字符，缺少的序列长度为 len-i */
     while(i < len) {
         raxNode *child;
 
         /* If this node is going to have a single child, and there
          * are other characters, so that that would result in a chain
          * of single-childed nodes, turn it into a compressed node. */
+        /* 如果当前节点的孩子数量为 0，并且 rax 中缺少的序列长度大于 1，如果按照普通的插入方法，将构造一串连续的单孩子节点
+         * 这里直接将缺少的序列放入一个压缩节点中 */
         if (h->size == 0 && len-i > 1) {
             debugf("Inserting compressed node\n");
             size_t comprsize = len-i;
@@ -959,6 +969,7 @@ void *raxFind(rax *rax, unsigned char *s, size_t len) {
     size_t i = raxLowWalk(rax,s,len,&h,NULL,&splitpos,NULL);
     if (i != len || (h->iscompr && splitpos != 0) || !h->iskey)
         return raxNotFound;
+    // 压缩节点可以是一个 key, 但不能匹配压缩序列中的任何字符，匹配了就处在压缩节点中。
     return raxGetData(h);
 }
 
