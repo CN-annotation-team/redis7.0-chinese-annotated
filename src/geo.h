@@ -15,7 +15,9 @@ typedef struct geoPoint {
 
 typedef struct geoArray {
     struct geoPoint *array;
+    /* 总桶的数量，即 array 的大小 */
     size_t buckets;
+    /* 已使用的桶的数量 */
     size_t used;
 } geoArray;
 
