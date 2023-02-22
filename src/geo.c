@@ -34,7 +34,7 @@
 #include "pqsort.h"
 
 /* 该文件阅读顺序建议：
- * 先看 geoaddCommand,geoposCommand 这两个函数，了解地点的经纬度怎么存储和怎么取出来
+ * 先看 geoaddCommand, geoposCommand 这两个函数，了解地点的经纬度怎么存储和怎么取出来
  * 然后看 geodistCommand 函数，计算两个坐标之间的距离
  * 最后看 georadiusGeneric 范围搜索方法
  */
