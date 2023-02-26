@@ -177,6 +177,7 @@ static inline void raxStackFree(raxStack *ts) {
 /* Return the current total size of the node. Note that the second line
  * computes the padding after the string of characters, needed in order to
  * save pointers to aligned addresses. */
+/* 返回包含 raxNode header 和 柔性数组 raxNode->data 在内的总长度 */
 #define raxNodeCurrentLength(n) ( \
     sizeof(raxNode)+(n)->size+ \
     raxPadding((n)->size)+ \
@@ -227,6 +228,7 @@ raxNode *raxReallocForData(raxNode *n, void *data) {
 }
 
 /* Set the node auxiliary data to the specified pointer. */
+/* 将节点 n 标记为 key，如果数据指针不为 NULL，将指针 data 拷贝到 n->data 字段的最后一个指针大小空位 */
 void raxSetData(raxNode *n, void *data) {
     n->iskey = 1;
     if (data != NULL) {
@@ -399,7 +401,8 @@ raxNode *raxAddChild(raxNode *n, unsigned char c, raxNode **childptr, raxNode **
  * The function also returns a child node, since the last node of the
  * compressed chain cannot be part of the chain: it has zero children while
  * we can only compress inner nodes with exactly one child each. */
-/* 将字符序列 s 以压缩节点的形式放入叶子节点 n 中，并通过二级指针返回新创建的叶子节点 */
+/* 将字符序列 s 以压缩节点的形式放入叶子节点 n 中，并通过二级指针 child 返回新创建的叶子节点
+ * 方法返回经过 realloc 后的节点 newn 地址 */
 raxNode *raxCompressNode(raxNode *n, unsigned char *s, size_t len, raxNode **child) {
     assert(n->size == 0 && n->iscompr == 0);
     void *data = NULL; /* Initialized only to avoid warnings. */
@@ -462,6 +465,37 @@ raxNode *raxCompressNode(raxNode *n, unsigned char *s, size_t len, raxNode **chi
  * means that the current node represents the key (that is, none of the
  * compressed node characters are needed to represent the key, just all
  * its parents nodes). */
+/* 在 rax 树中查找一个长度为 len 的字符序列 s 的底层方法，在增删查改中均有调用
+ * 方法如入参:
+ *   rax: 待查找的 rax 树
+ *   s/len: 待查找的字符序列（地址以及长度）
+ *   stopnode: 查找过程中的终止节点，可能查找到这个节点时，待查找的字符序列匹配完成；也可能是第一个无法与待查找的序列匹配的节点
+ *   plink: 三级指针，在父节点中有一个指向 stopnode 节点的指针，这个三级指针用于记录该指针的地址返回给方法调用方
+ *   splitpos: 如果查找过程在一个压缩节点终止，这个二级指针用于记录该节点中压缩字符串的匹配位置，用于压缩节点后续的切割或插入。
+ *   ts: 辅助栈，如果 ts != NULL，记录查找字符序列的路径。
+ *
+ * 方法返回字符序列 s 在树中的匹配长度
+ *   1. 当 ret != len 时，表示未查找到该序列
+ *   2. 当 ret == len 是，表示树中存在该序列，但该序列可能为 key，可能不是 key，也可能停在压缩节点中间的某个元素以至于根本不可能表现为 key
+ *     a. stopnode 不是压缩节点，则序列正常，根据 *stopnode->iskey 判断序列是否为 key 即可
+ *     b. stopnode 是压缩节点，需要根据 splitnode 进一步判断，它为 0，序列可能是一个 key；它不为 0，表示停在压缩节点中间，序列不可能是一个 key
+ *
+ * 对于 rax 中的任意类型的节点来说，stopnode 节点中的字符表示的是它与它的子节点或者子孙节点的边，在这些字符中没有一个参与字符序列 s 的匹配，
+ * 与序列 s 匹配的字符全在 stopnode 节点的祖先节点中。
+ * 如果我们有这样一颗树，输入的字符序列为 "win"，那 stopnode 为节点 `["window"]`，splitnode != 0
+ *                  ["window"] ""
+ *                     \
+ *                     [] "window"
+ *
+ * 如果将 win 修改为一个 key，那么需要将树转变为如下，再次输入序列 "win"，它会停在 `["dow"]`，splitnode = 0，win 序列的所有值都在它的祖先
+ * 节点中，当前节点不存在 win 序列的字符。
+ *
+ *                  ("win") ""
+ *                     \
+ *                   ["dow"] "win"
+ *                       \
+ *                       [] "window"
+ */
 static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode **stopnode, raxNode ***plink, int *splitpos, raxStack *ts) {
     raxNode *h = rax->head;
     raxNode **parentlink = &rax->head;
@@ -563,7 +597,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      * our key. We have just to reallocate the node and make space for the
      * data pointer. */
     /* 如果 raxLowWalk 的返回值 i 等于字符串 s 的长度 len，表示在 rax 中找到了串 s 这样的序列。
-     * */
+     * 可以在这里提前返回 */
     if (i == len && (!h->iscompr || j == 0 /* not in the middle if j is 0 */)) {
         debugf("### Insert: node representing key exists\n");
         /* Make space for the value pointer if needed. */
@@ -716,6 +750,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      */
 
     /* ------------------------- ALGORITHM 1 --------------------------- */
+    /* 如果在一个压缩节点失配，那么这个压缩节点最起码需要分割 */
     if (h->iscompr && i != len) {
         debugf("ALGO 1: Stopped at compressed node %.*s (%p)\n",
             h->size, h->data, (void*)h);
@@ -822,7 +857,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
          * inserted key). */
         rax_free(h);
         h = splitnode;
-    } else if (h->iscompr && i == len) {
+    } else if (h->iscompr && i == len) { /* 压缩节点最后一位置，这个时候怎么处理 */
     /* ------------------------- ALGORITHM 2 --------------------------- */
         debugf("ALGO 2: Stopped at compressed node %.*s (%p) j = %d\n",
             h->size, h->data, (void*)h, j);
