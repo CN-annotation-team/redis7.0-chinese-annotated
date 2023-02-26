@@ -221,6 +221,7 @@ rax *raxNew(void) {
 
 /* realloc the node to make room for auxiliary data in order
  * to store an item in that node. On out of memory NULL is returned. */
+/* 重新分配内存，增加一个存放 value 指针的空间 */
 raxNode *raxReallocForData(raxNode *n, void *data) {
     if (data == NULL) return n; /* No reallocation needed, setting isnull=1 */
     size_t curlen = raxNodeCurrentLength(n);
@@ -579,9 +580,16 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
  * function returns 0 as well but sets errno to ENOMEM, otherwise errno will
  * be set to 0.
  */
-/* 插入长度为 len 的元素（字符串）s */
+/* 插入长度为 len 的元素（字符串）s，该方法是覆盖插入和非覆盖插入的底层实现，代码量比较大，过程也比较复杂，主要分了以下几种情况来作不同的操作
+ *   1. 序列匹配成功，stopnode 是非压缩节点或不需要切割的压缩节点，可简单记录后直接返回必要数据。
+ *   2. 序列匹配成功，stopnode 是压缩节点但需要分割。在下面方法中用 ALGO 2 算法处理。
+ *   3. 序列匹配失败，分两种子情况，先判断失配的位置需不需要分割节点。
+ *     a. 失配的位置在压缩节点中间，用 ALGO 1 算法将压缩节点切割后处理后，此时等价与在普通节点失配，按情况 b 作进一步处理
+ *     b. 失配的位置是普通节点，将缺少的序列用新增的节点补其
+ */
 int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old, int overwrite) {
     size_t i;
+    /* 切割位置，当 raxLowWalk 查找停在压缩节点时，用于记录压缩节点待插入的为位置 */
     int j = 0; /* Split position. If raxLowWalk() stops in a compressed
                   node, the index 'j' represents the char we stopped within the
                   compressed node, that is, the position where to split the
@@ -596,11 +604,13 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      * inserted or this middle node is currently not a key, but can represent
      * our key. We have just to reallocate the node and make space for the
      * data pointer. */
-    /* 如果 raxLowWalk 的返回值 i 等于字符串 s 的长度 len，表示在 rax 中找到了串 s 这样的序列。
-     * 可以在这里提前返回 */
+    /* 1. i == len，表示在 rax 中找到了串 s 这样的序列。
+     * 2. stopnode（节点h） 不是压缩节点 或者 是压缩节点，但 splitpos != 0（压缩节点不需要切割）
+     * 若同时满足上述两个条件，此时稍加处理便可以提前返回。*/
     if (i == len && (!h->iscompr || j == 0 /* not in the middle if j is 0 */)) {
         debugf("### Insert: node representing key exists\n");
         /* Make space for the value pointer if needed. */
+        /* 如果之前没有 value 指针，并且这次是覆盖插入，那么重新分配内存，以便增加一个存储 value 指针的空间 */
         if (!h->iskey || (h->isnull && overwrite)) {
             h = raxReallocForData(h,data);
             if (h) memcpy(parentlink,&h,sizeof(h));
@@ -611,6 +621,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
         }
 
         /* Update the existing key if there is already one. */
+        /* 如果之前已经是存在 kv 对，则记录旧 value，并且在覆盖插入的场景下，写入新 value */
         if (h->iskey) {
             if (old) *old = raxGetData(h);
             if (overwrite) raxSetData(h,data);
@@ -620,6 +631,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
 
         /* Otherwise set the node as a key. Note that raxSetData()
          * will set h->iskey. */
+        /* 如果当前表示的字符序列之前不是一个 key，则只写入新 value，并且将 rax 树的 key 计数器加一 */
         raxSetData(h,data);
         rax->numele++;
         return 1; /* Element inserted. */
@@ -627,6 +639,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
 
     /* If the node we stopped at is a compressed node, we need to
      * split it before to continue.
+     * 如果 stopnode 是一个需要分割的压缩节点
      *
      * Splitting a compressed node have a few possible cases.
      * Imagine that the node 'h' we are currently at is a compressed
@@ -635,10 +648,13 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      * pointer of this node pointing at the 'E' node, because remember that
      * we have characters at the edges of the graph, not inside the nodes
      * themselves.
+     * 因为 rax 实现中，字符存储在父节点而不是子节点中，所有上文中的 'E' node 指压缩节点 `"SCO"`
      *
      * In order to show a real case imagine our node to also point to
      * another compressed node, that finally points at the node without
      * children, representing 'O':
+     * 假设当前压缩节点 h 的压缩序列为 "ANNIBALE"，h 的子节点是另一个压缩节点 'E' node，其压缩序列为 "SCO"，
+     * 最后需要提醒的是，'O' node 是叶子节点，没有任何子节点。
      *
      *     "ANNIBALE" -> "SCO" -> []
      *
@@ -646,6 +662,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      * require the insertion of a non compressed node with exactly two
      * children, except for the last case which just requires splitting a
      * compressed node.
+     * 下面五种情况中，前四种都需要切割后插入一个包含两个孩子的节点，最后一种仅需要切割压缩节点。
      *
      * 1) Inserting "ANNIENTARE"
      *
@@ -653,32 +670,63 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      *     "ANNI" -> |-|
      *               |E| -> (... continue algo ...) "NTARE" -> []
      *
+     *   树形图如下：
+     *   原来包含 "ANNIBALE" 序列的节点被拆成了三部分, 压缩节点，非压缩节点，压缩节点。
      * 2) Inserting "ANNIBALI"
      *
      *                  |E| -> "SCO" -> []
      *     "ANNIBAL" -> |-|
      *                  |I| -> (... continue algo ...) []
      *
+     *   树形图如下：
+     *   原来包含 "ANNIBALE" 序列的节点被拆成了两部分，压缩节点，非压缩节点。
      * 3) Inserting "AGO" (Like case 1, but set iscompr = 0 into original node)
      *
      *            |N| -> "NIBALE" -> "SCO" -> []
      *     |A| -> |-|
      *            |G| -> (... continue algo ...) |O| -> []
      *
+     *   树形图如下：
+     *   原来包含 "ANNIBALE" 序列的节点被拆成了三部分，非压缩节点，非压缩节点，压缩节点。
+     *   和 case 1 一样，但第一部分 |A| 继承了原节点，目前仅有一个孩子，需要设置 iscompr = 0，表示它不再是一个压缩节点。
      * 4) Inserting "CIAO"
      *
      *     |A| -> "NNIBALE" -> "SCO" -> []
      *     |-|
      *     |C| -> (... continue algo ...) "IAO" -> []
      *
+     *   原来包含 "ANNIBALE" 序列的节点被拆成了两部分，第一部分为两个孩子的非压缩节点，第二部分为压缩节点
+     *   类似 case 2，但也要像 case 3 一样标记原节点为非压缩节点。
+     *   树形图如下：
+     *            (A         C)
+     *            /           \
+     *   ("NNIBALE") "A"      ("IAO") "C"
+     *         /                 \
+     *   ("SCO") "ANNIBALE"     [] "CIAO"
+     *     /
+     *   [] "ANNIBALESCO"
+     *
      * 5) Inserting "ANNI"
      *
      *     "ANNI" -> "BALE" -> "SCO" -> []
      *
+     *   仅仅将包含 "ANNIBALE" 序列的压缩节点拆分为两个压缩节点。
+     *   树形图如下：
+     *     ("ANNI") ""
+     *        \
+     *      ["BALE"] "ANNI"
+     *          \
+     *         ("SCO") "ANNIBALE"
+     *            \
+     *            [] "ANNIBALESCO"
+     *
      * The final algorithm for insertion covering all the above cases is as
      * follows.
+     * 下面两个算法用来处理上述 5 个 case
      *
      * ============================= ALGO 1 =============================
+     *
+     * 算法 1 针对 case 1-4，即在压缩节点中间失配
      *
      * For the above cases 1 to 4, that is, all cases where we stopped in
      * the middle of a compressed node for a character mismatch, do:
@@ -722,6 +770,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      *    and continue insertion algorithm as usually.
      *
      * ============================= ALGO 2 =============================
+     * 算法 2 针对 case 5，即在树中找到了字符序列 s，但匹配终点恰好在压缩节点中间
      *
      * For case 5, that is, if we stopped in the middle of a compressed
      * node but no mismatch was found, do:
@@ -981,6 +1030,7 @@ oom:
 
 /* Overwriting insert. Just a wrapper for raxGenericInsert() that will
  * update the element if there is already one for the same key. */
+/* 向 rax 插入 key-vaule（s 和 data），如果 kv 已存在，覆盖原有的 vaule */
 int raxInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old) {
     return raxGenericInsert(rax,s,len,data,old,1);
 }
@@ -988,6 +1038,7 @@ int raxInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old) {
 /* Non overwriting insert function: if an element with the same key
  * exists, the value is not updated and the function returns 0.
  * This is just a wrapper for raxGenericInsert(). */
+/* 向 rax 插入 key-vaule（s 和 data），如果 kv 已存在，不覆盖原有的 vaule */
 int raxTryInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old) {
     return raxGenericInsert(rax,s,len,data,old,0);
 }
