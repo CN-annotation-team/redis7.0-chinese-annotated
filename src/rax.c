@@ -156,11 +156,16 @@ static inline void raxStackFree(raxStack *ts) {
  * addresses. Note that we add 4 to the node size because the node has a four
  * bytes header. */
 /* 计算指针对齐最少需要填充的字节数量，对齐时需要将 raxNode 4 bytes 的 header 考虑在内。
- * 对下面公式简单介绍下: 设输入值为 n，输出值为 x，x 为满足 (n+x+4) % size(void*) == 0 条件的最小值 */
+ * 设输入值（入参）为 n，输出值（返回值）为 x，x 为满足 (n+x+4) % size(void*) == 0 条件的最小值
+ * 32 位系统表现: (4 - (n+4)%4) & 3
+ * 64 位系统表现: (8 - (n+4)%8) & 7
+ * 这个填充恰好使包含 data 数组在内的节点长度为 4 或者 8 的倍数 */
 #define raxPadding(nodesize) ((sizeof(void*)-((nodesize+4) % sizeof(void*))) & (sizeof(void*)-1))
 
 /* Return the pointer to the last child pointer in a node. For the compressed
  * nodes this is the only child pointer. */
+/* 返回最后一个子节点指针的地址
+ * 直接以 raxNode 外第一个字节为起点，如果它是一个 key，左移两个指针长度，如果它不是一个 key，左移一个指针长度 */
 #define raxNodeLastChildPtr(n) ((raxNode**) ( \
     ((char*)(n)) + \
     raxNodeCurrentLength(n) - \
@@ -169,6 +174,8 @@ static inline void raxStackFree(raxStack *ts) {
 ))
 
 /* Return the pointer to the first child pointer. */
+/* 返回第一个子节点指针的地址
+ * 以 data 数组为起点，右移 size(子节点的数量或者压缩序列的长度) 个字节，再跨过填充的字节数量 */
 #define raxNodeFirstChildPtr(n) ((raxNode**) ( \
     (n)->data + \
     (n)->size + \
@@ -177,7 +184,8 @@ static inline void raxStackFree(raxStack *ts) {
 /* Return the current total size of the node. Note that the second line
  * computes the padding after the string of characters, needed in order to
  * save pointers to aligned addresses. */
-/* 返回包含 raxNode header 和 柔性数组 raxNode->data 在内的总长度 */
+/* 返回包含 raxNode header 和 柔性数组 raxNode->data 在内的总长度
+ * 因为 raxPadding 填充的原因，这个长度一定是 4(32位) 或者 8(64位) 的倍数 */
 #define raxNodeCurrentLength(n) ( \
     sizeof(raxNode)+(n)->size+ \
     raxPadding((n)->size)+ \
@@ -189,10 +197,12 @@ static inline void raxStackFree(raxStack *ts) {
  * If datafield is true, the allocation is made large enough to hold the
  * associated data pointer.
  * Returns the new node pointer. On out of memory NULL is returned. */
-/* 数据形式 raxNode HDR, data (children, padding, children pointers) */
+/* 创建一个新的，指定孩子数量的非压缩节点，并根据 datafield 的值决定是否预留一个 value 指针的空间 */
 raxNode *raxNewNode(size_t children, int datafield) {
+    /* 数据形式 [raxNode HDR, data(children, padding, children pointers) ]*/
     size_t nodesize = sizeof(raxNode)+children+raxPadding(children)+
                       sizeof(raxNode*)*children;
+    /* 是否要预留一个 value 指针的空间 */
     if (datafield) nodesize += sizeof(void*);
     raxNode *node = rax_malloc(nodesize);
     if (node == NULL) return NULL;
@@ -205,6 +215,7 @@ raxNode *raxNewNode(size_t children, int datafield) {
 
 /* Allocate a new rax and return its pointer. On out of memory the function
  * returns NULL. */
+/* 创建一颗空的 rax 树，这颗树只有一个无孩子的根节点 */
 rax *raxNew(void) {
     rax *rax = rax_malloc(sizeof(*rax));
     if (rax == NULL) return NULL;
@@ -221,7 +232,7 @@ rax *raxNew(void) {
 
 /* realloc the node to make room for auxiliary data in order
  * to store an item in that node. On out of memory NULL is returned. */
-/* 重新分配内存，增加一个存放 value 指针的空间 */
+/* 重新分配内存，增加一个存放 value 指针的空间，返回新分配的内存地址 */
 raxNode *raxReallocForData(raxNode *n, void *data) {
     if (data == NULL) return n; /* No reallocation needed, setting isnull=1 */
     size_t curlen = raxNodeCurrentLength(n);
@@ -229,7 +240,7 @@ raxNode *raxReallocForData(raxNode *n, void *data) {
 }
 
 /* Set the node auxiliary data to the specified pointer. */
-/* 将节点 n 标记为 key，如果数据指针不为 NULL，将指针 data 拷贝到 n->data 字段的最后一个指针大小空位 */
+/* 将节点 n 标记为 key，如果数据指针 data 不为 NULL，将其值拷贝到 n->data 字段的最后一个指针大小空位 */
 void raxSetData(raxNode *n, void *data) {
     n->iskey = 1;
     if (data != NULL) {
@@ -261,19 +272,28 @@ void *raxGetData(raxNode *n) {
  * On success the new parent node pointer is returned (it may change because
  * of the realloc, so the caller should discard 'n' and use the new value).
  * On out of memory NULL is returned, and the old node is still valid. */
+/* 非压缩节点 n 增加一个表示字符 'c' 的子节点。
+ * 方法返回值为 n 的新地址，新增的子节点地址通过二级指针 childptr 写回调用发起方。
+ * 参数 parentlink 的作用:
+ *   生成的新节点可能在 raxAddChild() 完成之后的操作里重新分配内存（比如扩容来增加一个存放 value 指针的空间），
+ *   如果新节点地址因此被改变，那么它父节点里的相应指针的值也应该跟着改变，三级指针 parentlink 的作用就是将这个指针的地址写回调用发起方，
+ *   以便发生上述情况时，可以将新地址的值直接写入 *parentlink 指向的位置。*/
 raxNode *raxAddChild(raxNode *n, unsigned char c, raxNode **childptr, raxNode ***parentlink) {
     assert(n->iscompr == 0);
 
+    /* 暂时将孩子数目加 1，来计算节点 n 扩容后的大小 */
     size_t curlen = raxNodeCurrentLength(n);
     n->size++;
     size_t newlen = raxNodeCurrentLength(n);
     n->size--; /* For now restore the original size. We'll update it only on
                   success at the end. */
 
+    /* 生成一个无孩子，无 value 指针的新节点，它将以字符 c 的形式作为节点 n 的子节点 */
     /* Alloc the new child we will link to 'n'. */
     raxNode *child = raxNewNode(0,0);
     if (child == NULL) return NULL;
 
+    /* 节点 n 扩容 */
     /* Make space in the original node. */
     raxNode *newn = rax_realloc(n,newlen);
     if (newn == NULL) {
@@ -310,6 +330,14 @@ raxNode *raxAddChild(raxNode *n, unsigned char c, raxNode **childptr, raxNode **
      * it is inserted in-place lexicographically. Assuming we are adding
      * a child "c" in our case pos will be = 2 after the end of the following
      * loop. */
+    /* 由于指针需要内存对齐，所以 raxNode->data 字段的 字符区域和指针区域之前可能有一定数量的填充，填充的大小见宏 raxPadding 的计算逻辑。
+     * 以 32位系统为例，
+     *   1. 当存在填充时，新字符可以直接占用一个字节的填充空间，额外再需要分配 4 bytes 的空间来存放新节点指针。这时重新分配内存增加的空间为 4 bytes；
+     *   2. 若此时填充大小为 0，新增的一个字符需要额外 3 bytes 的填充来保证后面的指针时内存对齐的，此时就增加的空间最多，为 1+3+4 = 8 bytes
+     * 同理可计算 64 位系统增加的内存最多为 16 bytes。
+     * 新节点的字符需要按照字典序存储在父节点 n 的指定位置，如何确定这个位置，需要对 raxNode->data 字段的内存结构有一定了解 */
+    /* 确定字符和指针应该存放在第几个位置，
+     * 下面会分别对 value 指针、孩子指针、填充、字符向后移动，以便空出新字符和新指针的地址 */
     int pos;
     for (pos = 0; pos < n->size; pos++) {
         if (n->data[pos] > c) break;
@@ -321,6 +349,7 @@ raxNode *raxAddChild(raxNode *n, unsigned char c, raxNode **childptr, raxNode **
      *
      * [HDR*][abde][Aptr][Bptr][Dptr][Eptr][....][....]|AUXP|
      */
+    /* 如果当前节点是一个 key 且 value 有值，直接将 value 指针复制到最后面 */
     unsigned char *src, *dst;
     if (n->iskey && !n->isnull) {
         src = ((unsigned char*)n+curlen-sizeof(void*));
@@ -339,6 +368,7 @@ raxNode *raxAddChild(raxNode *n, unsigned char c, raxNode **childptr, raxNode **
      * Another way to think at the shift is, how many bytes we need to
      * move child pointers forward *other than* the obvious sizeof(void*)
      * needed for the additional pointer itself. */
+    /* shift 的值就是增加的填充大小，32位系统可能为 0 或者 4 bytes，64位系统可能为 0 或者 8 bytes */
     size_t shift = newlen - curlen - sizeof(void*);
 
     /* We said we are adding a node with edge 'c'. The insertion
@@ -351,6 +381,7 @@ raxNode *raxAddChild(raxNode *n, unsigned char c, raxNode **childptr, raxNode **
      *
      * [HDR*][abde][Aptr][Bptr][....][....][Dptr][Eptr]|AUXP|
      */
+    /* 将比新节点的字典序大的所有子节点指针向后移动 shift + sizeof(raxNode*) 个字节，其实就是 newlen - curlen 个字节 */
     src = n->data+n->size+
           raxPadding(n->size)+
           sizeof(raxNode*)*pos;
@@ -365,6 +396,7 @@ raxNode *raxAddChild(raxNode *n, unsigned char c, raxNode **childptr, raxNode **
      *
      * [HDR*][abde][....][Aptr][Bptr][....][Dptr][Eptr]|AUXP|
      */
+    /* 如果本次扩容增加了填充空间，将比新节点的字典序小的所有子节点指针向后移动 shift 个字节 */
     if (shift) {
         src = (unsigned char*) raxNodeFirstChildPtr(n);
         memmove(src+shift,src,sizeof(raxNode*)*pos);
@@ -376,6 +408,7 @@ raxNode *raxAddChild(raxNode *n, unsigned char c, raxNode **childptr, raxNode **
      *
      * [HDR*][ab.d][e...][Aptr][Bptr][....][Dptr][Eptr]|AUXP|
      */
+    /* 当前已经确保字符区域后面已经空出了足够的安全空间，将 c 后面的所有字符后移 1 byte */
     src = n->data+pos;
     memmove(src+1,src,n->size-pos);
 
@@ -384,11 +417,15 @@ raxNode *raxAddChild(raxNode *n, unsigned char c, raxNode **childptr, raxNode **
      * [HDR*][abcd][e...][Aptr][Bptr][....][Dptr][Eptr]|AUXP|
      * [HDR*][abcd][e...][Aptr][Bptr][Cptr][Dptr][Eptr]|AUXP|
      */
+    /* 目前可以安全的将新字符和新节点地址写入腾挪空出的位置 */
     n->data[pos] = c;
     n->size++;
+    /* 对于指针区域，后面的指针向后移动了 shift + sizeof(raxNode*) 个字节，前面的指针向后移动了 shift 个字节，中间正好空出了一个存放指针的空间
+     * 把新节点的地址拷贝到这个空间 */
     src = (unsigned char*) raxNodeFirstChildPtr(n);
     raxNode **childfield = (raxNode**)(src+sizeof(raxNode*)*pos);
     memcpy(childfield,&child,sizeof(child));
+    /* 将新节点的地址和对应父节点中的指针地址写回方法调用方 */
     *childptr = child;
     *parentlink = childfield;
     return n;
@@ -402,8 +439,9 @@ raxNode *raxAddChild(raxNode *n, unsigned char c, raxNode **childptr, raxNode **
  * The function also returns a child node, since the last node of the
  * compressed chain cannot be part of the chain: it has zero children while
  * we can only compress inner nodes with exactly one child each. */
-/* 将字符序列 s 以压缩节点的形式放入叶子节点 n 中，并通过二级指针 child 返回新创建的叶子节点
- * 方法返回经过 realloc 后的节点 newn 地址 */
+/* 将字符序列 s 以压缩节点的形式放入节点 n 中，方法返回节点 n 的新地址。
+ * 方法要求节点 n 一定没有任何子节点（即 n 为叶子节点），字符序列 s 放入 n 后，需要重新创建一个叶子节点作为 n 的子节点，
+ * 来表示以 s 为后缀的字符序列，二级指针 child 用来记录新创建的叶子节点地址 */
 raxNode *raxCompressNode(raxNode *n, unsigned char *s, size_t len, raxNode **child) {
     assert(n->size == 0 && n->iscompr == 0);
     void *data = NULL; /* Initialized only to avoid warnings. */
@@ -466,7 +504,7 @@ raxNode *raxCompressNode(raxNode *n, unsigned char *s, size_t len, raxNode **chi
  * means that the current node represents the key (that is, none of the
  * compressed node characters are needed to represent the key, just all
  * its parents nodes). */
-/* 在 rax 树中查找一个长度为 len 的字符序列 s 的底层方法，在增删查改中均有调用
+/* 在 rax 树中查找字符序列 s 的底层方法，在增删查改中均有调用
  * 方法如入参:
  *   rax: 待查找的 rax 树
  *   s/len: 待查找的字符序列（地址以及长度）
@@ -475,91 +513,89 @@ raxNode *raxCompressNode(raxNode *n, unsigned char *s, size_t len, raxNode **chi
  *   splitpos: 如果查找过程在一个压缩节点终止，这个二级指针用于记录该节点中压缩字符串的匹配位置，用于压缩节点后续的切割或插入。
  *   ts: 辅助栈，如果 ts != NULL，记录查找字符序列的路径。
  *
- * 方法返回字符序列 s 在树中的匹配长度
- *   1. 当 ret != len 时，表示未查找到该序列
- *   2. 当 ret == len 是，表示树中存在该序列，但该序列可能为 key，可能不是 key，也可能停在压缩节点中间的某个元素以至于根本不可能表现为 key
- *     a. stopnode 不是压缩节点，则序列正常，根据 *stopnode->iskey 判断序列是否为 key 即可
- *     b. stopnode 是压缩节点，需要根据 splitnode 进一步判断，它为 0，序列可能是一个 key；它不为 0，表示停在压缩节点中间，序列不可能是一个 key
+ * 方法返回序列 s 成功匹配的长度，设 i 为返回值
+ *   1. 当 i == len 时，表示树中存在一个同 s 一样的序列，但该序列可能为 key，可能不是 key，也可能停在压缩节点中间的某个元素以至于根本不可能表现为 key
+ *     a. 终止节点 stopnode 是非压缩节点，根据节点的 iskey 字段判断序列是否为 key 即可
+ *     b. 终止节点 stopnode 是压缩节点
+ *        如果 splitnode != 0，表示匹配了压缩节点至少一个但小于 stopnode->size 个字符，按压缩节点的特点，这个序列不可能是 key；
+ *        如果 splitnode == 0，根据节点的 iskey 字段判断序列是否为 key 即可
+ *   2. 当 i != len 时，表示未查找到完整的序列 s。
  *
- * 对于 rax 中的任意类型的节点来说，stopnode 节点中的字符表示的是它与它的子节点或者子孙节点的边，在这些字符中没有一个参与字符序列 s 的匹配，
- * 与序列 s 匹配的字符全在 stopnode 节点的祖先节点中。
- * 如果我们有这样一颗树，输入的字符序列为 "win"，那 stopnode 为节点 `["window"]`，splitnode != 0
+ * 在 redis rax 树的实现中，某个节点的字符不是存在本节点中，而是存在父节点中。
+ * 如果换成边的概念理解：一个父节点有多个子节点，那么就对应多个边，每条边包括一个字符和一个节点指针，这些内容全部存放在父节点。
+ * 子节点的数据块中并不存在它本身的字符内容。详细的解释和为什么这么做，见 raxNode 数据结构的注释。
+ *
+ * 如果我们有这样一颗树，要查找的序列 s = "win"，那么 stopnode 节点为 `["window"]`，splitpos = 3，树中存在序列 s，但不是 key。
  *                  ["window"] ""
  *                     \
  *                     [] "window"
  *
- * 如果将 win 修改为一个 key，那么需要将树转变为如下，再次输入序列 "win"，它会停在 `["dow"]`，splitnode = 0，win 序列的所有值都在它的祖先
- * 节点中，当前节点不存在 win 序列的字符。
- *
+ * 如果将树中的序列 "win" 修改为一个 key，那么需要将树转变为如下:
  *                  ("win") ""
  *                     \
  *                   ["dow"] "win"
  *                       \
  *                       [] "window"
+ * 再次查找序列 s = "win"，它会停在压缩节点 `["dow"]`，此时 splitpos = 0，树中存在序列 s，且这个序列是一个 key。
  */
 static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode **stopnode, raxNode ***plink, int *splitpos, raxStack *ts) {
     raxNode *h = rax->head;
     raxNode **parentlink = &rax->head;
 
+    /* i 表示当前正在匹配的字符索引，其值等价于已经匹配成功的长度，当 i == len 时，表示字符串 s 已经全部匹配完成
+     * j 在压缩节点中表示第几个字符，在非压缩节点中表示第几个孩子 */
     size_t i = 0; /* Position in the string. */
     size_t j = 0; /* Position in the node children (or bytes if compressed).*/
     while(h->size && i < len) {
         debugnode("Lookup current node",h);
         unsigned char *v = h->data;
 
-        /* 假设匹配 s[len-1] 恰好匹配 v[0]，是否会导致将不是 key 的序列 s 误判为 key */
         if (h->iscompr) {
-            /* 压缩节点由连续的单孩子节点序列压缩而来，所以每遍历一个压缩字符串中的字符 (j+1)，
-             * 代表 rax 树的逻辑深度加一，并去匹配字符串 s 的下一个字符 s[i+1] */
+            /* 压缩节点由连续的单孩子节点序列压缩而来，它表示的是一段序列；每匹配成功一个压缩字符，代表 rax 树的逻辑深度 +1
+             * j++, i++，继续比较下一对字符 */
             for (j = 0; j < h->size && i < len; j++, i++) {
                 if (v[j] != s[i]) break;
             }
-            /* 压缩节点未遍历完只有两种可能
-             *   1. i == len，表示在这颗树中找到了字符串
-             *   2. i != len，表示字符串 s 中途失配
-             * 无论是匹配完成还是中途失配，都没有再遍历的必要了，所以退出这个 while 循环
-             *
-             * 题外话，假设在这一步时已经找到了字符串 s，即 i == len 条件满足，此时有两种可能
-             *   1. j < h->size: 触发下面 j != h->size 条件，直接跳出 while 循环。
-             *      虽然完全匹配字符串 s，但它不是一个 key，因为跳出循环，没走 if/else 后面的逻辑，指针 h 最终会指向当前这个压缩节点
-             *   2. j == h->size: 恰好匹配成功压缩节点的最后一个，满足连续的非 key 单孩子节点这个条件，
+            /* 压缩节点未遍历完只有两种原因
+             *   1. 压缩字符串太长，提前触发 i == len，虽然找到了目标序列，但 stopnode 是压缩节点且 splitpos(j) != 0
+             *   2. 因 v[j] != s[i] 提前退出 for 循环，字符串 s 失配，此时 i != len，树中不存在目标序列。
+             * 无论是匹配完成(1) 还是已经失配(2)，都没有再遍历的必要了，所以退出这个 while 循环
+             * 由于没走 if/else 后面的逻辑，它们的 stopnode 都是当前节点 */
+            if (j != h->size) break;
+            /* 若 j == h->size:
              *      如果它的 child-ptr 指向的是一个非压缩节点（理论上肯定满足这个条件，如果是压缩节点，为什么不合并进当前节点呢），
              *      那么它是一个 key
              *  */
-            if (j != h->size) break;
         } else {
+            /*  */
             /* Even when h->size is large, linear scan provides good
              * performances compared to other approaches that are in theory
              * more sounding, like performing a binary search. */
             for (j = 0; j < h->size; j++) {
+                /* 如果节点 h 的第 j 个孩子等于字符 s[i]，则退出 for 循环，准备去树的下一层找 s[i+1] */
                 if (v[j] == s[i]) break;
             }
-            /* 当前节点没有找到字符 s[i]，中途失配，退出 while 循环 */
+            /* 当前节点所有孩子中，没有一个等于 s[i]，查找失败，退出 while 循环，stopnode 是当前节点 */
             if (j == h->size) break;
-            /* 在当前节点的孩子列表中 */
+            /* 准备匹配序列 s 的下一个字符，在下面的代码中，游标 h 会挪到表示字符 v[j] 的子节点中 */
             i++;
         }
 
-        /* 如果 raxStack ts 传了值，记录查找过程中经过的每个 rax 节点 */
+        /* 如果 raxStack ts 传了值，以栈的形式记录查找过程中经过的每个 raxNode 节点，在节点 h 入栈之前，栈顶元素总是 h 的父节点 */
         if (ts) raxStackPush(ts,h); /* Save stack of parent nodes. */
-        /* 当前节点 h 的子节点指针数组 */
+        /* h 的第一个子节点指针地址，也可以认为 children 是一个指针数组 */
         raxNode **children = raxNodeFirstChildPtr(h);
-        /* 因为压缩节点只有一个子节点，如果遍历了压缩节点，将 j 复位。*/
+        /* 后面用 j 的值作为指针数组的索引，如果 h 是压缩节点，那么它只有一个子节点，这个子节点指针的索引为 0
+         * 补充以下，如果从 `if (h->iscompr)` 这个条件分支到达了这个位置，那么 j 必定等于 h-size */
         if (h->iscompr) j = 0; /* Compressed node only child is at index 0. */
-        /* 将游标 h 移动到第 j 个子节点 */
+        /* 跳转到第 j 个子节点中, 即 rax 树的下一层 */
         memcpy(&h,children+j,sizeof(h));
+        /* 随时更新节点 h 在父节点中，对应子指针的地址 */
         parentlink = children+j;
-        /* 复位 j 的原因只是方便进行下一轮 while 循环，
-         * 英文注释是对 split position 赋值的解释，有两个版本，感觉都有问题
-         * 第一个版本是 If the new node is compressed
-         *   这个版本是作者本文所写，大意是如果新节点 h 是一个压缩节点，并恰好因为 (i == len) 条件满足退出下次 while 循环，
-         *   我们把 j 复位为 0，以便在执行到下面的 `if (splitpos && h->iscompr) *splitpos = j` 语句时将值 0 写入 splitpos，
-         *   来说明这个 node 表示 `the searched key`。
-         *   问题点在这个 `the searched key`，compressed node 不可能是一个 key
-         *   bug? 如果在 i == len 时，换到新节点 h，h 是一个压缩节点，这里会误将 h 判断为 key，然后返回它的 value。
-         *
-         * 第二个版本是 If the new node is non compressed
-         *   问题点在于非压缩节点根本不会给 splitpos 赋值 */
+        /* 复位 j，刚刚我们跳到了子节点中，在 i == len 的情况下，
+         *   如果新节点不是压缩节点，splitpos 对外没有意义，也不会做赋值动作，j 不复位也无所谓
+         *   如果新节点是压缩节点，splitpos 此时应该为 0，j 才有必要复位
+         * 所以英文注释的 'non compressed' 应该是 'compressed'，被改错了 */
         j = 0; /* If the new node is non compressed and we do not
                   iterate again (since i == len) set the split
                   position to 0 to signal this node represents
@@ -567,9 +603,10 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
     }
     debugnode("Lookup stop node is",h);
     if (stopnode) *stopnode = h;
+    /* 将 stopnode 在父节点中 对应指针的地址 写回方法调用方，以便 stopnode 因为扩容导致地址变动的时候，可以直接修改这个指针的值 */
     if (plink) *plink = parentlink;
     if (splitpos && h->iscompr) *splitpos = j;
-    /* 返回已经成功匹配的字符串 s 的长度 */
+    /* 返回字符串 s 已经被成功匹配的长度 */
     return i;
 }
 
@@ -580,12 +617,14 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
  * function returns 0 as well but sets errno to ENOMEM, otherwise errno will
  * be set to 0.
  */
-/* 插入长度为 len 的元素（字符串）s，该方法是覆盖插入和非覆盖插入的底层实现，代码量比较大，过程也比较复杂，主要分了以下几种情况来作不同的操作
+/* 向 rax 树中插入字符序列 s，并将其设置为 key。
+ * 该方法是两个插入方法的底层实现，最开始使用 raxLowWalk() 查找一次序列 s，根据几个返回值可以归类为下面几类情况
  *   1. 序列匹配成功，stopnode 是非压缩节点或不需要切割的压缩节点，可简单记录后直接返回必要数据。
  *   2. 序列匹配成功，stopnode 是压缩节点但需要分割。在下面方法中用 ALGO 2 算法处理。
  *   3. 序列匹配失败，分两种子情况，先判断失配的位置需不需要分割节点。
  *     a. 失配的位置在压缩节点中间，用 ALGO 1 算法将压缩节点切割后处理后，此时等价与在普通节点失配，按情况 b 作进一步处理
  *     b. 失配的位置是普通节点，将缺少的序列用新增的节点补其
+ * overwrite 表示是否覆盖原来的 value。
  */
 int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old, int overwrite) {
     size_t i;
@@ -1014,6 +1053,9 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
             memcpy(parentlink,&h,sizeof(h));
             parentlink = raxNodeLastChildPtr(h);
             i += comprsize;
+        /* 当前节点 h 可能为至少有一个孩子的非压缩节点，也可能缺少的序列长度仅剩一
+         * 这两种情况都只能将当前字符 s[i] 作为普通节点连接到节点 h 的孩子列表中
+         * 这里的 h 不可能是压缩节点 */
         } else {
             debugf("Inserting normal node\n");
             raxNode **new_parentlink;
@@ -1027,6 +1069,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
         rax->numnodes++;
         h = child;
     }
+    /* 此时节点 h 表示序列 s，重新分配下内存，留出存在 value 指针的空间 */
     raxNode *newh = raxReallocForData(h,data);
     if (newh == NULL) goto oom;
     h = newh;
@@ -1053,7 +1096,7 @@ oom:
 
 /* Overwriting insert. Just a wrapper for raxGenericInsert() that will
  * update the element if there is already one for the same key. */
-/* 向 rax 插入 key-vaule（s 和 data），如果 kv 已存在，覆盖原有的 vaule */
+/* 向 rax 插入一对 kv（s 和 data），如果 kv 已存在，覆盖原有的 value */
 int raxInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old) {
     return raxGenericInsert(rax,s,len,data,old,1);
 }
@@ -1061,7 +1104,7 @@ int raxInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old) {
 /* Non overwriting insert function: if an element with the same key
  * exists, the value is not updated and the function returns 0.
  * This is just a wrapper for raxGenericInsert(). */
-/* 向 rax 插入 key-vaule（s 和 data），如果 kv 已存在，不覆盖原有的 vaule */
+/* 向 rax 插入一对 kv（s 和 data），如果 kv 已存在，不覆盖原有的 value */
 int raxTryInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old) {
     return raxGenericInsert(rax,s,len,data,old,0);
 }
@@ -1069,7 +1112,7 @@ int raxTryInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old)
 /* Find a key in the rax, returns raxNotFound special void pointer value
  * if the item was not found, otherwise the value associated with the
  * item is returned. */
-/* 在 rax 中查找长度为 len 的字符串 s (存入 rax 中的 key)，若 key 存在，返回对应的 value 指针，否则返回指针 raxNotFound */
+/* 在 rax 中查找字符序列为 s 的 key；若 key 存在，返回对应的 value 指针，否则返回常量 raxNotFound */
 void *raxFind(rax *rax, unsigned char *s, size_t len) {
     raxNode *h;
 
@@ -1495,9 +1538,11 @@ int raxIteratorNextStep(raxIterator *it, int noup) {
     size_t orig_stack_items = it->stack.items;
     raxNode *orig_node = it->node;
 
+    /* noup == 0 表示向下找，noup == 1 表示向上找 */
     while(1) {
         int children = it->node->iscompr ? 1 : it->node->size;
         if (!noup && children) {
+        /* 迭代器当前所在节点存在子节点，我们才能继续向下找 */
             debugf("GO DEEPER\n");
             /* Seek the lexicographically smaller key in this subtree, which
              * is the first one found always going towards the first child
@@ -1519,14 +1564,17 @@ int raxIteratorNextStep(raxIterator *it, int noup) {
                 return 1;
             }
         } else {
+        /* noup == 1 或者当前节点已经是叶子节点，则开始向上回溯 */
             /* If we finished exploring the previous sub-tree, switch to the
              * new one: go upper until a node is found where there are
              * children representing keys lexicographically greater than the
              * current key. */
+            /*  */
             while(1) {
                 int old_noup = noup;
 
                 /* Already on head? Can't go up, iteration finished. */
+                /* 已经到 rax 树的根节点了，无法继续向上，这棵树无法找到满足条件的 key，迭代器状态设置为 EOF，结束遍历 */
                 if (!noup && it->node == it->rt->head) {
                     it->flags |= RAX_ITER_EOF;
                     it->stack.items = orig_stack_items;
@@ -1602,6 +1650,7 @@ int raxSeekGreatest(raxIterator *it) {
 /* Like raxIteratorNextStep() but implements an iteration step moving
  * to the lexicographically previous element. The 'noup' option has a similar
  * effect to the one of raxIteratorNextStep(). */
+/* 寻找上一个元素的底层实现 */
 int raxIteratorPrevStep(raxIterator *it, int noup) {
     if (it->flags & RAX_ITER_EOF) {
         return 1;
@@ -1661,6 +1710,7 @@ int raxIteratorPrevStep(raxIterator *it, int noup) {
                 if (!raxStackPush(&it->stack,it->node)) return 0;
                 memcpy(&it->node,cp,sizeof(it->node));
                 /* Seek sub-tree max. */
+                /* 目前的前缀是最接近目标序列但不大于它，当前节点的最右子孙节点表示的就是不大于目标序列的条件下，最大的那个 key */
                 if (!raxSeekGreatest(it)) return 0;
             }
         }
@@ -1682,8 +1732,7 @@ int raxIteratorPrevStep(raxIterator *it, int noup) {
 /* 方法参数介绍
  * it: 初始化后的迭代器
  * op: 查找操作符，支持以下操作符
- *     大于（>） 小于（<） 大于等于（>=） 小于等于（<=） 等于（=）
- *     字典序最小元素（^） 字典序最大元素（$）
+ *     >, <, >=, <=, =, ^(字典序最小的 key), $(字典序最大的 key)
  * ele: 目标 key
  * len: key 的长度
  *
@@ -1730,7 +1779,7 @@ int raxSeek(raxIterator *it, const char *op, unsigned char *ele, size_t len) {
         return raxSeek(it,">=",NULL,0);
     }
 
-    /* '$' 查找最大的 key 等价于查找 rax 树的最右子节点，它表示的 key 是这颗 rax 中字典序最大的字符序列 */
+    /* '$' 查找最大的 key 等价于查找 rax 树的最右子节点，它表示的 key 是这颗 rax 树中字典序最大的字符序列 */
     if (last) {
         /* Find the greatest key taking always the last child till a
          * final node is found. */
@@ -1770,20 +1819,30 @@ int raxSeek(raxIterator *it, const char *op, unsigned char *ele, size_t len) {
         if (!raxIteratorAddChars(it,ele,len)) return 0; /* OOM. */
         it->data = raxGetData(it->node);
     } else if (lt || gt) {
+        /* 经过第一个 if 条件过滤，在当前包含大于/小于操作符的情况下，
+         *   (2a, 2b) 要么 key未被找到， raxLowWalk() 只匹配成功了部分
+         *   (2c) 要么完整的 key 被找到但不包含等于操作符，
+         * 几种情况都需要找到下一个更大或更小的 key 来满足 seek 要求。
+         *
+         * raxLowWalk 匹配成功的序列长度为 i，但可能存在长度为 splitpos 的后缀存储在压缩节点中，这部分为直接舍弃
+         * 迭代器目前的序列 取 ele 的前 i-splitpos 个字符。然后使用 next/prev 操作来跳转到更大或更小的 key */
         /* Exact key not found or eq flag not set. We have to set as current
          * key the one represented by the node we stopped at, and perform
          * a next/prev operation to seek. */
-        /* 在包含大于/小于操作符的情况下，要么完整的 key 被找到且不包含等于操作符，要么 raxLowWalk() 只匹配成功了部分
-         * 两种情况都需要进一步找更大或更小的 key 来满足 seek 要求。
-         * 这里将当前 stopnode 表示的字符序列 ele[0,i-splitpos] 视为迭代器目前的 key，然后使用 next/prev 操作来找更大或更小的 key */
         raxIteratorAddChars(it, ele, i-splitpos);
 
         /* We need to set the iterator in the correct state to call next/prev
          * step in order to seek the desired element. */
         debugf("After initial seek: i=%d len=%d key=%.*s\n",
             (int)i, (int)len, (int)it->key_len, it->key);
-        /* 2a. key 未被找到，stopnode 是非压缩节点 */
         if (i != len && !it->node->iscompr) {
+            /* 2a. key 未被找到，stopnode 是非压缩节点。
+             * 此时第一个匹配失败的字符在一个非压缩节点中:
+             *   迭代器当前节点表示的序列是目标序列的一个前缀，但这个节点的所有子节点没有一个和目标序列的下一个字符 ele[i] 相等。
+             * 当前节点中的子节点字符按字典序排列
+             *   如果找比 ele 更大的下一个 key，就是在第一个比 ele[i] 大的子节点的子孙中找一个最小的 key
+             *   如果找比 ele 更小的上一个 key，就是在最后一个比 ele[i] 小的子节点的子孙中找一个最大的 key
+             * 如果 ele[i] 比所有的子孩子都大或者都小，以致于无法找到比 ele[i] 更大/更小的子节点，那么需要回溯到当前节点的父节点，对 ele[i-1] 重复上述步骤 */
             /* If we stopped in the middle of a normal node because of a
              * mismatch, add the mismatching character to the current key
              * and call the iterator with the 'noup' flag so that it will try
@@ -1797,14 +1856,21 @@ int raxSeek(raxIterator *it, const char *op, unsigned char *ele, size_t len) {
             if (lt && !raxIteratorPrevStep(it,1)) return 0;
             if (gt && !raxIteratorNextStep(it,1)) return 0;
             it->flags |= RAX_ITER_JUST_SEEKED; /* Ignore next call. */
-        /* 2b. key 未被找到，stopnode 是压缩节点 */
         } else if (i != len && it->node->iscompr) {
+            /* 2b. key 未被找到，stopnode 是压缩节点 */
             debugf("Compressed mismatch: %.*s\n",
                 (int)it->key_len, (char*)it->key);
             /* In case of a mismatch within a compressed node. */
+            /* nodechar > keychar:
+             *   表示已匹配前缀加上压缩字符后的序列比 ele 大，推导出当前压缩节点的所有子孙中，任意一个 key 都比 ele 大
+             * nodechar < keychar:
+             *   表示已匹配前缀加上压缩字符后的序列比 ele 小，推导出当前压缩节点的所有子孙中，任意一个 key 都比 ele 小 */
             int nodechar = it->node->data[splitpos];
             int keychar = ele[i];
             it->flags &= ~RAX_ITER_JUST_SEEKED;
+            /* 操作符是大于
+             *   1. 如果 nodechar > keychar，表示加上压缩字符后的序列比 ele 大，直接在当前压缩节点的子孙中找一个最小的 key
+             *   2. 如果 nodechar < keychar，代表压缩节点所有子孙表示的 key 都比 ele 小，需要回溯到父节点来找一个更大的前缀 */
             if (gt) {
                 /* If the key the compressed node represents is greater
                  * than our seek element, continue forward, otherwise set the
@@ -1814,9 +1880,14 @@ int raxSeek(raxIterator *it, const char *op, unsigned char *ele, size_t len) {
                 } else {
                     if (!raxIteratorAddChars(it,it->node->data,it->node->size))
                         return 0;
+                    /* 回溯到父节点寻找更大的前缀， noup == 1，向上查找 */
                     if (!raxIteratorNextStep(it,1)) return 0;
                 }
             }
+            /* 操作符是小于
+             *   1. 如果 nodechar < keychar，代表压缩节点所有子孙表示的 key 都比 ele 小，
+             *      直接在当前压缩节点的子孙中找一个最大的 key，即最右子孙节点
+             *   2. 如果 nodechar > keychar，表示加上压缩字符后的序列比 ele 大，需要回溯到父节点来找一个更小的前缀 */
             if (lt) {
                 /* If the key the compressed node represents is smaller
                  * than our seek element, seek the greater key in this
@@ -1828,6 +1899,7 @@ int raxSeek(raxIterator *it, const char *op, unsigned char *ele, size_t len) {
                 } else {
                     if (!raxIteratorAddChars(it,it->node->data,it->node->size))
                         return 0;
+                    /* 回溯到父节点寻找更小的前缀， noup == 1，向上查找 */
                     if (!raxIteratorPrevStep(it,1)) return 0;
                 }
             }
@@ -1843,6 +1915,19 @@ int raxSeek(raxIterator *it, const char *op, unsigned char *ele, size_t len) {
              * a legitimate key we stopped at. */
             it->flags &= ~RAX_ITER_JUST_SEEKED;
             if (it->node->iscompr && it->node->iskey && splitpos && lt) {
+                /* ele 可以在 rax 树中存在完全匹配成功的序列，只是存在长度至少为 1 的后缀在压缩字符串中。
+                 * 这个 iskey == 1 的压缩节点就是就是比 ele 小的，且最接近 ele 的 key。
+                 * 比如 op(<), ele("foo"),
+                 *     ...
+                 *    /   \
+                 *      ["oobar"] ("f")
+                 *         ...
+                 * 节点 `["oobar"]` 表示的 key "f" 就是 ele 序列的前一个 key，
+                 *
+                 * 给当前压缩节点起个名字叫 A，A 节点的子孙 >= "foobar"，A 的哥哥一系 >= "g" (f 的下一个字符）
+                 * A 节点的祖先比 A 更短更小，A 的弟弟一系 < "f"，序列 "f" 是比序列 "foo" 小的里面最大的，节点表示的序列。
+                 * 这种情况命中目标，直接返回 */
+
                 /* If we stopped in the middle of a compressed node with
                  * perfect match, and the condition is to seek a key "<" than
                  * the specified one, then if this node is a key it already
@@ -1874,6 +1959,10 @@ int raxSeek(raxIterator *it, const char *op, unsigned char *ele, size_t len) {
 /* Go to the next element in the scope of the iterator 'it'.
  * If EOF (or out of memory) is reached, 0 is returned, otherwise 1 is
  * returned. In case 0 is returned because of OOM, errno is set to ENOMEM. */
+/* 迭代器按字典序的下一个 key，成功移动到下一个 key 返回 1，迭代器存在结束标识 EOF 或者 OOM 了返回 0
+ * RAX_ITER_EOF:
+ *   1. 迭代器只初始化未 seek 确定位置会标记为 EOF
+ *   2. 在 rax 树中没有比目前更大的 key，也会设置 EOF 标识 */
 int raxNext(raxIterator *it) {
     if (!raxIteratorNextStep(it,0)) {
         errno = ENOMEM;
@@ -1889,6 +1978,10 @@ int raxNext(raxIterator *it) {
 /* Go to the previous element in the scope of the iterator 'it'.
  * If EOF (or out of memory) is reached, 0 is returned, otherwise 1 is
  * returned. In case 0 is returned because of OOM, errno is set to ENOMEM. */
+/* 迭代器按字典序跳转到上一个 key，成功移动到上一个 key 返回 1，迭代器存在结束标识 EOF 或者 OOM 了返回 0
+ * RAX_ITER_EOF:
+ *   1. 迭代器只初始化未 seek 确定位置会标记为 EOF
+ *   2. rax 树中没有比目前更小的 key，也会设置 EOF 标识 */
 int raxPrev(raxIterator *it) {
     if (!raxIteratorPrevStep(it,0)) {
         errno = ENOMEM;
@@ -1913,6 +2006,13 @@ int raxPrev(raxIterator *it) {
  * random elements if the tree is not sparse, however in the case of a radix
  * tree certain keys will be reported much more often than others. At least
  * this function should be able to explore every possible element eventually. */
+/* 从迭代器当前所在的 key 开始，根据字典序每次随机跳到树中前一个 key 或者后一个 key，返回重复 steps 次后，迭代器指向的 key
+ * 如果入参 steps 的值为 0，则为它取一个随机值。
+ * 该方法可用来在一颗 rax 树中随机取一个 key，但如果 rax 树比较稀疏，随机效果不太理想
+ *
+ * 个人认为 rax 树在逻辑是一个有序的字符串数组，每个字符串是一个 key，字符串的数量是 it->rt->numele
+ * 从 rax 树中随机取一个 key 最好的方式是取一个 [0, numele) 范围内的随机数 x，迭代器从最小的 key 开始 raxNext() x 步，
+ * 以此时的 key 作为 rax 树的随机元素 */
 int raxRandomWalk(raxIterator *it, size_t steps) {
     if (it->rt->numele == 0) {
         it->flags |= RAX_ITER_EOF;
@@ -1956,6 +2056,7 @@ int raxRandomWalk(raxIterator *it, size_t steps) {
 /* Compare the key currently pointed by the iterator to the specified
  * key according to the specified operator. Returns 1 if the comparison is
  * true, otherwise 0 is returned. */
+/* 迭代器当前 key 与入参 key 比较，支持 ==, >, >=, <, <= 这 5 种操作 */
 int raxCompare(raxIterator *iter, const char *op, unsigned char *key, size_t key_len) {
     int eq = 0, lt = 0, gt = 0;
 
@@ -1972,6 +2073,7 @@ int raxCompare(raxIterator *iter, const char *op, unsigned char *key, size_t key
 
     /* Handle >, >=, <, <= */
     if (cmp == 0) {
+        /* 一方是另一方的前缀，双方一样长就相等，否则谁长谁大 */
         /* Same prefix: longer wins. */
         if (eq && key_len == iter->key_len) return 1;
         else if (lt) return iter->key_len < key_len;
@@ -1994,6 +2096,9 @@ void raxStop(raxIterator *it) {
  * failed to seek an appropriate element, so that raxNext() or raxPrev()
  * will return zero, or when an EOF condition was reached while iterating
  * with raxNext() and raxPrev(). */
+/* 添加结束标记
+ * 刚 raxStart() 初始化的迭代器自带 EOF 标记
+ * 当 raxSeek() 无法找到一个符合要求的目标元素的时候，调用此方法设置一个 EOF 标记 */
 int raxEOF(raxIterator *it) {
     return it->flags & RAX_ITER_EOF;
 }
@@ -2007,9 +2112,9 @@ uint64_t raxSize(rax *rax) {
 /* ----------------------------- Introspection ------------------------------ */
 
 /* 以下方法主要用于辅助开发和 debug:
- *   1. redisShow(rax *rax) 用于打印整颗 rax 树，作辅助开发用，实际代码中未使用该方法。
- *   2. raxDebugShowNode() debug 用途，通过宏 `debugnode()` 打开，打开后输出相关过程中的 log 信息。
- *   3. raxTouch(raxNode *n) 递归计算校验和，用于校验数据完整性。*/
+ *   1. redisShow(rax *rax) 用于打印整颗 rax 树，作辅助开发用，生产代码中未使用该方法。
+ *   2. raxDebugShowNode() debug 用途，通过定义宏 `RAX_DEBUG_MSG` 打开，打开后输出 rax 树各个操作过程中的 log 日志。
+ *   3. raxTouch(raxNode *n) 递归计算校验和，用于校验数据完整性? */
 
 /* This function is mostly used for debugging and learning purposes.
  * It shows an ASCII representation of a tree on standard output, outline

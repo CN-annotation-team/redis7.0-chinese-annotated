@@ -253,8 +253,8 @@ typedef struct rax {
  * a list of parent nodes to the caller. The nodes do not have a "parent"
  * field for space concerns, so we use the auxiliary stack when needed. */
 /* 为了减少空间占用，raxNode 结构中没有父节点的引用。
- * 作为补充，raxStack 这个辅助结构用于在遍历 rax 过程中记录 raxNode 的父节点信息。
- * rax tree 遍历的底层实现是 raxLowWalk 函数 */
+ * 作为补充，raxStack 这个辅助结构用于在查找 rax 过程中记录 raxNode 的父节点信息。
+ * rax 迭代器以这些内容为辅助，来完成前一个 key 或者 后一个 key 的遍历跳转 */
 #define RAX_STACK_STATIC_ITEMS 32
 typedef struct raxStack {
     void **stack; /* Points to static_items or an heap allocated array. */
