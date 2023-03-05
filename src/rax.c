@@ -619,20 +619,29 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
  */
 /* 向 rax 树中插入字符序列 s，并将其设置为 key。
  * 该方法是两个插入方法的底层实现，最开始使用 raxLowWalk() 查找一次序列 s，根据几个返回值可以归类为下面几类情况
- *   1. 序列匹配成功，stopnode 是非压缩节点或不需要切割的压缩节点，可简单记录后直接返回必要数据。
- *   2. 序列匹配成功，stopnode 是压缩节点但需要分割。在下面方法中用 ALGO 2 算法处理。
- *   3. 序列匹配失败，分两种子情况，先判断失配的位置需不需要分割节点。
- *     a. 失配的位置在压缩节点中间，用 ALGO 1 算法将压缩节点切割后处理后，此时等价与在普通节点失配，按情况 b 作进一步处理
- *     b. 失配的位置是普通节点，将缺少的序列用新增的节点补其
- * overwrite 表示是否覆盖原来的 value。
+ *
+ *   1. rax 中存在完整的序列 s，且这个序列就是从 根节点 到 stopnode 所有边组成的字符序列，等价于 (!stopnode->iscompr || splitpos == 0)
+ *      此时不需要插入任何字符，也不需要分割任何节点。记录 kv 后方法结束。
+ *   2. rax 中不存在完整的序列 s，stopnode 是压缩节点，splitpos != 0；
+ *      失配的位置在压缩节点中间，用 ALGO 1 的逻辑将压缩节点切割，切割后符合条件 4，继续执行 4 的逻辑
+ *   3. rax 中存在完整的序列 s，stopnode 是压缩节点，且 splitpos != 0。
+ *      用 ALGO 2 的逻辑将压缩字符串从 splitpos 位置切开，分为一对父子节点。将新的子节点标记为等于序列 s 的 key，记录 kv 后方法结束。
+ *
+ *   4. 不符合分支 1，3，或者经过分支 2 处理后的插入操作会进入这个最终步骤。
+ *      此时所在的节点一定是非压缩节点，假设我们还剩 "xyz" 没匹配上，那么当前节点中需要补充一个表示字符 'x' 的孩子，
+ *      孩子的指针指向新创建的压缩节点，压缩字符串为 "xyz"，最后再创建一个叶子节点，作为压缩节点的孩子。
+ *      叶子节点的字符序列就是 s，记录 kv 后方法结束。
+ *
+ * 方法如参：overwrite 表示是否覆盖原来的 value。
  */
 int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **old, int overwrite) {
     size_t i;
-    /* 切割位置，当 raxLowWalk 查找停在压缩节点时，用于记录压缩节点待插入的为位置 */
+    /* 切割位置，raxLowWalk()方法的 splitpos */
     int j = 0; /* Split position. If raxLowWalk() stops in a compressed
                   node, the index 'j' represents the char we stopped within the
                   compressed node, that is, the position where to split the
                   node for insertion. */
+    /* parentlink 是 stopnode h 在它的父节点中，对应指针的地址（引用），若节点 h 的地址改变，直接用这个引用更新指针的值 */
     raxNode *h, **parentlink;
 
     debugf("### Insert %.*s with value %p\n", (int)len, s, data);
@@ -643,9 +652,10 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      * inserted or this middle node is currently not a key, but can represent
      * our key. We have just to reallocate the node and make space for the
      * data pointer. */
-    /* 1. i == len，表示在 rax 中找到了串 s 这样的序列。
-     * 2. stopnode（节点h） 不是压缩节点 或者 是压缩节点，但 splitpos != 0（压缩节点不需要切割）
-     * 若同时满足上述两个条件，此时稍加处理便可以提前返回。*/
+    /* 分支 1，rax 中存在完整的序列 s，且这个序列就是从 根节点 到 stopnode 所有边组成的字符序列
+     *   i == len 表示 rax 中存在完整的序列 s
+     *   stopnode (节点h) 不是压缩节点 或者 是压缩节点，但 splitpos == 0，表示节点不需要切割。
+     * 此时稍加处理便可以结束方法。*/
     if (i == len && (!h->iscompr || j == 0 /* not in the middle if j is 0 */)) {
         debugf("### Insert: node representing key exists\n");
         /* Make space for the value pointer if needed. */
@@ -676,9 +686,9 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
         return 1; /* Element inserted. */
     }
 
+    /* 以下是分支 2 和分支 3 */
     /* If the node we stopped at is a compressed node, we need to
      * split it before to continue.
-     * 如果 stopnode 是一个需要分割的压缩节点
      *
      * Splitting a compressed node have a few possible cases.
      * Imagine that the node 'h' we are currently at is a compressed
@@ -701,7 +711,17 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      * require the insertion of a non compressed node with exactly two
      * children, except for the last case which just requires splitting a
      * compressed node.
-     * 下面五种情况中，前四种都需要切割后插入一个包含两个孩子的节点，最后一种仅需要切割压缩节点。
+     *
+     * 方法描述部分讨论的 分支2 和 分支3，都需要对压缩节点的压缩序列进行分割，
+     * 分割后的序列最多分成三份，按顺序装填进 压缩节点、非压缩节点、压缩节点中
+     * 我们把前面的压缩节点叫 trimmed，后面的叫 postfix，中间的非压缩节点叫 split node
+     *
+     * 分支2 因为缺少完整的序列 s
+     *   需要将原压缩节点 h 在索引 j 位置的字符 h->data[j] 单独拆出来，和匹配失败的字符 s[i] 一起放在非压缩节点 split 中。
+     *   对应下面的 case 1~4
+     * 分支3 情况下，已经存在完整的序列 s
+     *   只需要将原压缩节点的 [0,j-1] 拆到新压缩节点 trimmed 中，[j,h->size) 拆到新压缩节点 postfix 中。
+     *   对应下面的 case 5
      *
      * 1) Inserting "ANNIENTARE"
      *
@@ -709,39 +729,40 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      *     "ANNI" -> |-|
      *               |E| -> (... continue algo ...) "NTARE" -> []
      *
-     *   树形图如下：
-     *   原来包含 "ANNIBALE" 序列的节点被拆成了三部分, 压缩节点，非压缩节点，压缩节点。
+     *   "ANNI" 为 trimmed 节点，"ALE" 为 postfix 节点，"ANNIBALE" 中的字符 'B' 被单独拆出来和 s[i]('E') 组合为一个非压缩节点 split。
+     *   待插入序列 "ANNIENTARE" 的剩余的字符 "NTARE" 将进入分支 4 后处理。
+     *
      * 2) Inserting "ANNIBALI"
      *
      *                  |E| -> "SCO" -> []
      *     "ANNIBAL" -> |-|
      *                  |I| -> (... continue algo ...) []
      *
-     *   树形图如下：
-     *   原来包含 "ANNIBALE" 序列的节点被拆成了两部分，压缩节点，非压缩节点。
+     *   h->data[j] 已经是原压缩节点的最后一个字符，postfixlen = 0，此时只拆成了 trimmed 和 split 两部分，
+     *   后面的压缩节点 postfix 不存在，仍然需要进入分支 4 添加一个叶子节点
+     *
      * 3) Inserting "AGO" (Like case 1, but set iscompr = 0 into original node)
      *
      *            |N| -> "NIBALE" -> "SCO" -> []
      *     |A| -> |-|
      *            |G| -> (... continue algo ...) |O| -> []
      *
-     *   树形图如下：
-     *   原来包含 "ANNIBALE" 序列的节点被拆成了三部分，非压缩节点，非压缩节点，压缩节点。
-     *   和 case 1 一样，但第一部分 |A| 继承了原节点，目前仅有一个孩子，需要设置 iscompr = 0，表示它不再是一个压缩节点。
+     *   同 case 1，但 trimmedlen = 1，此时可以将 trimmed 标记为非压缩节点
+     *
      * 4) Inserting "CIAO"
      *
      *     |A| -> "NNIBALE" -> "SCO" -> []
      *     |-|
      *     |C| -> (... continue algo ...) "IAO" -> []
      *
-     *   原来包含 "ANNIBALE" 序列的节点被拆成了两部分，第一部分为两个孩子的非压缩节点，第二部分为压缩节点
-     *   类似 case 2，但也要像 case 3 一样标记原节点为非压缩节点。
+     *   raxLowWalk() 返回值 j = 0，trimmedlen = 0，只存在中间的非压缩节点 split 和后面的压缩节点 postfix
+     *   如果原节点 `["ANNIBALE"]` 本来就是一个 key(假设为 "")，那么拆出去的字符 'A' 与字符 s[i]('C') 组成的节点仍应该被标记为 key
      *   树形图如下：
-     *            (A         C)
+     *            [A         C] ""
      *            /           \
      *   ("NNIBALE") "A"      ("IAO") "C"
      *         /                 \
-     *   ("SCO") "ANNIBALE"     [] "CIAO"
+     *   ["SCO"] "ANNIBALE"     [] "CIAO"
      *     /
      *   [] "ANNIBALESCO"
      *
@@ -749,34 +770,43 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      *
      *     "ANNI" -> "BALE" -> "SCO" -> []
      *
-     *   仅仅将包含 "ANNIBALE" 序列的压缩节点拆分为两个压缩节点。
+     *   rax 树中存在完整的序列 "ANNI"，仅需要将后面的 "BALE" 拆出去，分为前面的 trimmed 和 后面的 postfix，没有中间的非压缩节点 split，
      *   树形图如下：
      *     ("ANNI") ""
      *        \
      *      ["BALE"] "ANNI"
      *          \
-     *         ("SCO") "ANNIBALE"
+     *         ["SCO"] "ANNIBALE"
      *            \
      *            [] "ANNIBALESCO"
      *
      * The final algorithm for insertion covering all the above cases is as
      * follows.
-     * 下面两个算法用来处理上述 5 个 case
      *
      * ============================= ALGO 1 =============================
      *
      * 算法 1 针对 case 1-4，即出现字符不匹配的位置，是在某个压缩节点中间
      *
-     * 索引 splitpos 从 0 开始，它的值表示不匹配的字符在压缩节点的压缩序列中的位置。
+     * 索引 splitpos 从 0 开始，在算法 1 的针对的情况下下，它的值表示压缩序列索引为 splitpos 位置的字符发生不匹配。
      * 比如含有序列 "ANNIBALE" 的压缩节点，若我们插入 "ANNIENTARE"，那么在索引为 4 的位置出现不匹配，splitpos 的值为 4。
      *
-     * 一个压缩节点总会被切割为 3 部分，trimmed, split, postfix，按上面这个情况，分为 "ANNI", "E", "NTARE"，
-     * trimmedLen=4, splitLen=1, postfixLen=5，情况不同，前后两个的长度可能为 0，中间 splitLen 总是为 1
-     * 下面是几种可能出现的情况
+     * 一个压缩节点总会被切割为 3 部分，trimmed, split, postfix，按上面这个情况，分为 "ANNI", "B", "ALE"，
+     * trimmedLen=4, splitLen=1, postfixLen=3，在 case 1-4，前后两段可能存在一段长度为 0，中间 splitLen 总是为 1
+     * 下面是处理上述 case 的主要步骤
      *
-     * 1. 保存当前压缩节点的 NEXT 指针（唯一孩子节点的指针）
-     * 2. 在未匹配位置创建切割节点 `split node`。
-     * 4b. 如果 postfix len == 0，仅仅设置 NEXT 作为 postfix 的指针。原压缩节点切割为两部分，公共前缀和 splitnode
+     * 1. 保存当前压缩节点的 NEXT 指针（压缩节点唯一的子节点）
+     * 2. 在未匹配位置创建切割节点 `split node`，存储压缩节点中未匹配的那个字符 'B'，这个字符只作为 split 节点的孩子之一，
+     *    split 节点的另一个孩子是序列 s 中未匹配的那个字符 'E'，这个孩子将在步骤 6 处理。
+     * 3. splitpos 是否为 0 (第一部分 trimmed 长度是否为 0)
+     *   a. splitpos == 0，用 split 节点接替 trimed 节点的位置，作为原压缩节点的父节点的新子节点，顶替原压缩节点。
+     *   b. splitpos != 0，第一部分 trimmed 节点，作为原压缩节点的父节点的新子节点，顶替原压缩节点；并设置 split 为 trimmed 的子节点。
+     *      如果 trimmedlen == 1，将其标记为非压缩节点 (对应上文中的 case 3)
+     * 4. 第三部分 postfix 长度是否为 0
+     *   a. postfixlen ！= 0，NEXT 节点设置为 postfix 的子节点。如果 postfixlen == 0，将其标记为非压缩节点
+     *   b. postfixlen == 0，原压缩节点切割为两部分，公共前缀 trimmed 和 split node，将 NEXT 节点作为 postfix。
+     * 5. 将 postfix 设置为 split 索引为 0 的子节点 (这是 split 的第一个孩子，之后序列 s 中那个未匹配字符将作为第二个孩子放在合适的位置)
+     * 6. 此时 h's parent -> trimmed -> split -> postfix -> NEXT 已经串起来了，将当前节点设置为 split 节点，继续处理序列 s 中剩下
+     *    未匹配的字符。
      *
      * For the above cases 1 to 4, that is, all cases where we stopped in
      * the middle of a compressed node for a character mismatch, do:
@@ -800,16 +830,12 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      *     data if any. Fix parent's reference. Free old node eventually
      *     (we still need its data for the next steps of the algorithm).
      *
-     * 3b. 如果 splitpos != 0
-     *     切割压缩节点，来保存匹配成功的 [0,splitpos-1] 共 splitpos 个字符。将原来的孩子指针指向新增的 `split node` 节点
-     *     如果切割后的节点孩子数量为 1，将它标记为非压缩节点。
      * 3b. IF $SPLITPOS != 0:
      *     Trim the compressed node (reallocating it as well) in order to
      *     contain $splitpos characters. Change child pointer in order to link
      *     to the split node. If new compressed node len is just 1, set
      *     iscompr to 0 (layout is the same). Fix parent's reference.
      *
-     * 4a.
      * 4a. IF the postfix len (the length of the remaining string of the
      *     original compressed node after the split character) is non zero,
      *     create a "postfix node". If the postfix node has just one character
@@ -824,7 +850,8 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      *    and continue insertion algorithm as usually.
      *
      * ============================= ALGO 2 =============================
-     * 算法 2 针对 case 5，即在树中找到了字符序列 s，但匹配终点恰好在压缩节点中间
+     * 算法 2 针对 case 5，即在树中找到了字符序列 s，但匹配终点恰好在压缩节点中间；
+     * 这种情况采用分支 3 的逻辑处理，只分成 trimmed 和 postfix 两个部分，做好 key 的标记和 value 信息的处理后，直接退出方法。
      *
      * For case 5, that is, if we stopped in the middle of a compressed
      * node but no mismatch was found, do:
@@ -853,8 +880,8 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
      */
 
     /* ------------------------- ALGORITHM 1 --------------------------- */
-    /* 如果在一个压缩节点失配，那么这个压缩节点最起码需要分割 */
     if (h->iscompr && i != len) {
+    /* 分支2: 在压缩节点中间失配 */
         debugf("ALGO 1: Stopped at compressed node %.*s (%p)\n",
             h->size, h->data, (void*)h);
         debugf("Still to insert: %.*s\n", (int)(len-i), s+i);
@@ -862,7 +889,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
         debugf("Other (key) letter is '%c'\n", s[i]);
 
         /* 1: Save next pointer. */
-        /* 保存压缩节点的孩子指针 */
+        /* 1: 保存压缩节点的孩子指针 */
         raxNode **childfield = raxNodeLastChildPtr(h);
         raxNode *next;
         memcpy(&next,childfield,sizeof(next));
@@ -873,20 +900,22 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
         }
 
         /* Set the length of the additional nodes we will need. */
-        /* 计算切割下来的压缩序列的长度，split_node_is_key 判断原节点是否为 key */
         size_t trimmedlen = j;
         size_t postfixlen = h->size - j - 1;
+        /* 如果 j == 0 且原压缩节点之前表示一个 key，后面新创建的 splitnode 也应该是一个表示 key 的节点
+         * 在创建 split 节点时，split_node_is_key 用于判断是否需要预留 value 指针的存储空间 */
         int split_node_is_key = !trimmedlen && h->iskey && !h->isnull;
         size_t nodesize;
 
         /* 2: Create the split node. Also allocate the other nodes we'll need
          *    ASAP, so that it will be simpler to handle OOM. */
-        /* 创建一个单孩子的节点 split node */
+        /* 2: 创建中间的 split 节点，同时视情况将第一部分的 trimmed 节点和第三部分的 postfix 节点创建出来
+         * split_node_is_key 表示是否需要预留 value 指针 */
         raxNode *splitnode = raxNewNode(1, split_node_is_key);
         raxNode *trimmed = NULL;
         raxNode *postfix = NULL;
 
-        /* 原压缩节点切割后仍存储有序列，重新分配内存，起名为 trimmed */
+        /* 处理第一部分 trimmed */
         if (trimmedlen) {
             nodesize = sizeof(raxNode)+trimmedlen+raxPadding(trimmedlen)+
                        sizeof(raxNode*);
@@ -894,7 +923,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
             trimmed = rax_malloc(nodesize);
         }
 
-        /* 切割后的序列，起名为 postfix */
+        /* 处理第三部分，postfix */
         if (postfixlen) {
             nodesize = sizeof(raxNode)+postfixlen+raxPadding(postfixlen)+
                        sizeof(raxNode*);
@@ -912,18 +941,22 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
             errno = ENOMEM;
             return 0;
         }
-        /* splitnode 唯一的孩子是原来切割位置的字符 */
+        /* split 节点存储中间分割出来的那个字符 */
         splitnode->data[0] = h->data[j];
 
         if (j == 0) {
             /* 3a: Replace the old node with the split node. */
+            /* 3a: trimmedlen == 0，
+             * 把 split 节点当 trimmed 操作，原压缩节点是个 key 的情况下，将原节点的 value 指针拷贝到新节点 split */
             if (h->iskey) {
                 void *ndata = raxGetData(h);
                 raxSetData(splitnode,ndata);
             }
+            /* 用 split 节点替代原节点 h，parentlink 的值是节点 h 在其父节点中 指针的地址，修改这个指针使其指向 split */
             memcpy(parentlink,&splitnode,sizeof(splitnode));
         } else {
             /* 3b: Trim the compressed node. */
+            /* 3b: trimedlen != 0，用 trimmed 节点替代原节点 h，继承 h 的内容；split 作为 trimmed 的子节点 */
             trimmed->size = j;
             memcpy(trimmed->data,h->data,j);
             trimmed->iscompr = j > 1 ? 1 : 0;
@@ -933,6 +966,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
                 void *ndata = raxGetData(h);
                 raxSetData(trimmed,ndata);
             }
+            /* 将 split 节点作为 trimmed 节点的子节点，trimmed 节点作为原 h 父节点的子节点 */
             raxNode **cp = raxNodeLastChildPtr(trimmed);
             memcpy(cp,&splitnode,sizeof(splitnode));
             memcpy(parentlink,&trimmed,sizeof(trimmed));
@@ -942,34 +976,60 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
 
         /* 4: Create the postfix node: what remains of the original
          * compressed node after the split. */
-        /* 如果第三部分割下来的长度大于 0, 将最开始保存的 next 指针作为它的孩子指针 */
+        /* 4: 处理 postfix，将最开始保存的 NEXT 指针作为 postfix 节点的孩子指针 */
         if (postfixlen) {
             /* 4a: create a postfix node. */
+            /* 4a: postfixlen != 0，处理分割的第三部分，将原 h 节点剩下的序列 [j+1, h->size) 保存进 postfix */
             postfix->iskey = 0;
             postfix->isnull = 0;
             postfix->size = postfixlen;
             postfix->iscompr = postfixlen > 1;
             memcpy(postfix->data,h->data+j+1,postfixlen);
+            /* 如果第三部分割下来的长度大于 0, 将最开始保存的 NEXT 指针作为它的孩子指针，(NEXT 本来是原 h 节点的孩子) */
             raxNode **cp = raxNodeLastChildPtr(postfix);
             memcpy(cp,&next,sizeof(next));
             rax->numnodes++;
         } else {
             /* 4b: just use next as postfix node. */
-            /* 第三部分的长度为 0 */
+            /* 4b: 第三部分的长度为 0，将原 h 节点的孩子作为 postfix */
             postfix = next;
         }
 
         /* 5: Set splitnode first child as the postfix node. */
+        /* 5. 第三部分 postfix 作为中间的 split 节点的孩子 */
         raxNode **splitchild = raxNodeLastChildPtr(splitnode);
         memcpy(splitchild,&postfix,sizeof(postfix));
 
         /* 6. Continue insertion: this will cause the splitnode to
          * get a new child (the non common character at the currently
          * inserted key). */
+        /* 6: 将当前节点设置为 split，处理字符串 s 剩下的序列 [i+1, len)
+         * 目前已经将原压缩节点 h 分割为合适的 2~3 个部分，后面开始着手插入序列 s[i+1, end] 未匹配的后缀
+         *
+         * 以 case 1 举例，rax 树的初始状态 "ANNIBALE" -> "SCO" -> []，假设我们要插入序列 s = "ANNIENTARE"，目前在这种状态：
+         *
+         *     "ANNI" -> |B| -> "ALE" -> "SCO" -> []
+         *
+         * "ANNI" 是压缩节点 trimmed，|B| 是非压缩节点 split，"ALE" 是压缩节点 postfix。
+         * 距离最终的目标:
+         *
+         *             |B| -> "ALE" -> "SCO" -> []
+         *   "ANNI" -> |-|
+         *             |E| -> (... continue algo ...) "NTARE" -> []
+         *
+         * 还需要继续插入序列缺少的后缀 "ENTARE"，剩下的这部分进入方法头讨论的分支 4 继续处理 */
         rax_free(h);
         h = splitnode;
-    } else if (h->iscompr && i == len) { /* 压缩节点最后一位置，这个时候怎么处理 */
+    } else if (h->iscompr && i == len) {
     /* ------------------------- ALGORITHM 2 --------------------------- */
+    /* 对应分支 3：存在的完整序列 s，但正好停在压缩节点中间
+     * 这块逻辑只对应 case 5，在 "ANNIBALE" -> "SCO" -> [] 插入 "ANNI"
+     * 最终目标：
+     *
+     *   "ANNI" -> "BALE" -> "SCO" -> []
+     *
+     * 只需要第一部分 trimmed，第三部分 postfix，并没有因为匹配失败产生的 split 部分
+     * 也不需要继续插入缺少的后缀，这块逻辑处理完后方法直接结束 */
         debugf("ALGO 2: Stopped at compressed node %.*s (%p) j = %d\n",
             h->size, h->data, (void*)h, j);
 
@@ -1033,16 +1093,16 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
 
     /* We walked the radix tree as far as we could, but still there are left
      * chars in our string. We need to insert the missing nodes. */
-    /* rax 中没有同字符串 s 这样的序列，需要插入缺少的字符，缺少的序列长度为 len-i */
+    /* 分支 4，循环添加 rax 中字符串 s 剩下的序列，当前的 h 节点一定是一个非压缩节点 */
     while(i < len) {
         raxNode *child;
 
         /* If this node is going to have a single child, and there
          * are other characters, so that that would result in a chain
          * of single-childed nodes, turn it into a compressed node. */
-        /* 如果当前节点的孩子数量为 0，并且 rax 中缺少的序列长度大于 1，如果按照普通的插入方法，将构造一串连续的单孩子节点
-         * 这里直接将缺少的序列放入一个压缩节点中 */
         if (h->size == 0 && len-i > 1) {
+        /* 如果当前节点 h 的孩子数量为 0 (叶子节点)，并且 rax 中缺少的序列长度大于 1，
+         * 直接将缺少的序列放入一个压缩节点中 (如果按照普通的插入方法，将构造一串连续的单孩子节点) */
             debugf("Inserting compressed node\n");
             size_t comprsize = len-i;
             if (comprsize > RAX_NODE_MAX_SIZE)
@@ -1053,12 +1113,13 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
             memcpy(parentlink,&h,sizeof(h));
             parentlink = raxNodeLastChildPtr(h);
             i += comprsize;
-        /* 当前节点 h 可能为至少有一个孩子的非压缩节点，也可能缺少的序列长度仅剩一
-         * 这两种情况都只能将当前字符 s[i] 作为普通节点连接到节点 h 的孩子列表中
-         * 这里的 h 不可能是压缩节点 */
         } else {
+        /* 节点 h 至少有一个孩子 (分支 2 结束时总是这种状况)，也可能缺少的序列长度仅剩一
+         * 这两种情况都只能将当前字符 s[i] 作为当前节点 h 的孩子存入子节点列表中
+         * 扩容的时候，为新增的孩子创建了一个叶子节点，完成这次循环后，重新进入的时候可能符合第一个 if 语句 h->size == 0 的情况 */
             debugf("Inserting normal node\n");
             raxNode **new_parentlink;
+            /* 为了增加一个存放孩子的空间，扩容，并增加一个对应这个孩子的叶子节点 */
             raxNode *newh = raxAddChild(h,s[i],&child,&new_parentlink);
             if (newh == NULL) goto oom;
             h = newh;
@@ -1066,13 +1127,15 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
             parentlink = new_parentlink;
             i++;
         }
+        /* rax 树的节点数量 +1 */
         rax->numnodes++;
         h = child;
     }
-    /* 此时节点 h 表示序列 s，重新分配下内存，留出存在 value 指针的空间 */
+    /* 最后添加一个叶子节点作为表示序列 s 的 key，重新分配下内存，留出存在 value 指针的空间 */
     raxNode *newh = raxReallocForData(h,data);
     if (newh == NULL) goto oom;
     h = newh;
+    /* key 的数量 +1 */
     if (!h->iskey) rax->numele++;
     raxSetData(h,data);
     memcpy(parentlink,&h,sizeof(h));
