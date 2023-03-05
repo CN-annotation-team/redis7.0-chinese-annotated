@@ -58,7 +58,9 @@ void raxDebugShowNode(const char *msg, raxNode *n);
  * of debugging info to the standard output, however you can still turn
  * debugging on/off in order to enable it only when you suspect there is an
  * operation causing a bug using the function raxSetDebugMsg(). */
+/* 开启 rax debug
 #define RAX_DEBUG_MSG
+*/
 #ifdef RAX_DEBUG_MSG
 #define debugf(...)                                                            \
     if (raxDebugMsg) {                                                         \
