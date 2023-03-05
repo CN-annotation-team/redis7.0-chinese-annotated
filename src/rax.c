@@ -1193,6 +1193,7 @@ void *raxFind(rax *rax, unsigned char *s, size_t len) {
  * one if needed. The function assumes it will find a match, otherwise the
  * operation is an undefined behavior (it will continue scanning the
  * memory without any bound checking). */
+/* 返回子节点 child 在父节点 parent 中对应指针的地址 */
 raxNode **raxFindParentLink(raxNode *parent, raxNode *child) {
     raxNode **cp = raxNodeFirstChildPtr(parent);
     raxNode *c;
@@ -1208,13 +1209,17 @@ raxNode **raxFindParentLink(raxNode *parent, raxNode *child) {
  * removal) is returned. Note that this function does not fix the pointer
  * of the parent node in its parent, so this task is up to the caller.
  * The function never fails for out of memory. */
+/* 从父节点 parent 中移除子节点 child: 删除子节点的字符以及子节点的指针
+ * 差不多算 insert 的反操作，可参考 raxGenericInsert */
 raxNode *raxRemoveChild(raxNode *parent, raxNode *child) {
     debugnode("raxRemoveChild before", parent);
     /* If parent is a compressed node (having a single child, as for definition
      * of the data structure), the removal of the child consists into turning
      * it into a normal node without children. */
+    /* 1. 如果 parent 是一个压缩节点，那么整个压缩字符串都算子节点的字符，其唯一的孩子指针就是要删除的那个子节点的指针 */
     if (parent->iscompr) {
         void *data = NULL;
+        /* 改变 raxNode header 几个字段的长度会破坏 data 数据域的结构，先将 value 指针拿出来，一会儿重新写回去 */
         if (parent->iskey) data = raxGetData(parent);
         parent->isnull = 0;
         parent->iscompr = 0;
@@ -1224,6 +1229,7 @@ raxNode *raxRemoveChild(raxNode *parent, raxNode *child) {
         return parent;
     }
 
+    /* 对于非压缩节点，需要遍历 parent 的边（字符）找出子节点对应的那一个 */
     /* Otherwise we need to scan for the child pointer and memmove()
      * accordingly.
      *
@@ -1243,6 +1249,7 @@ raxNode *raxRemoveChild(raxNode *parent, raxNode *child) {
         e++;
     }
 
+    /* 找到后，在 parent 中删除对应的边（字符）和指针 */
     /* 3. Remove the edge and the pointer by memmoving the remaining children
      *    pointer and edge bytes one position before. */
     int taillen = parent->size - (e - parent->data) - 1;
