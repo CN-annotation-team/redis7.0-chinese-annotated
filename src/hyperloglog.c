@@ -424,6 +424,91 @@ static char *invalid_hll_err = "-INVALIDOBJ Corrupted HLL object detected";
  * with "val" left-shifted by "rs" bits to set the new value.
  */
 
+/* 此处为在 dense 模式下获取和设置寄存器的宏
+ * redis 使用大量的宏来得到更高的计算性能，在 hyperloglog 中也不例外
+ *
+ * +--------+--------+--------+------//
+ * |11000000|22221111|33333322|55444444
+ * +--------+--------+--------+------//
+ *
+ * hyperloglog 寄存器形式如上所示
+ * 采用大端序列，msb (最高位) 在左边，而 redis 从字节数组右边到左边计算
+ *
+ * 以下例子展示了 redis 如何计算获得在 8bits 字节数组中存储的 6bits 寄存器的值
+ *
+ * 例：假设我们需要获取位于寄存器 1（pos = 1）的值
+ *
+ * 1. 则 b0 = 6 * pos / 8 可以得到保存了我们想要获取数据的字节数组的下标，b0 = 0
+ *    则可以获得目前 b0 即为下标为 0 的字节数组 "11000000"
+ *
+ * 2. 然后我们需要获取 fb（6bits 寄存器在当前字节数组中的第一位），而因为寄存器采用大端序列，因此最低位在字节数组的最右端
+ *    所以 fb = 6 * pos % 8 = 6 ，可得寄存器 1 在当前字节数组 b0 = 0 中的第一位比特的下标为 6
+ *      +--------+
+ *      |11000000|
+ *      | ^ fb   |
+ *      +--------+
+ *
+ * 3. 因此我们可以先将 b0 = 0 向右移动6位，获得如下字节数组
+ *      +--------+
+ *      |00000011|
+ *      +--------+
+ *
+ * 4. 然后对 b0 = 0 的下一个字节数组，即 b1 = b0 + 1 = 1 进行位移操作，获得剩余的 bit
+ *    需要位移的位数为 8bits - fb = 8 - 6 = 2bits
+ *    可以理解为，获取一个字节数组剩余需要位移的位数，因为在上一步中我们已经移动了 6 位，此处需要位移剩下的两位
+ *    注：因为在步骤 2 和 3 中，我们通过右移操作，将最低位（lsb）位置放到了字节数组中的第一位
+ *       因此要获得获得剩余位数在字节数组中的正确位置，我们需要在这里做左移操作
+ *      +--------+
+ *      |22221111|  <- b1 起始值
+ *      |22111100|  <- 左移剩余位数之后
+ *      +--------+
+ *
+ * 5. 现在我们可以对右移后的 b0 和 b1 做 OR 操作来获得 pos = 1 的寄存器的完整表示
+ *    当然，因为 hll 寄存器为 6bits， 我们需要一个 6 位的掩码来和 OR 操作的结果做 AND 操作
+ *    从而获得在寄存器中正确的值
+ *      +--------+
+ *      |00000011|  <- b0
+ *      |22111100|  <- b1
+ *      |22111111|  <- b0 OR b1
+ *      |  111111|  <- (b0 OR b1) AND 63, our value.
+ *      +--------+
+ *
+ *
+ * 给寄存器设置新值要稍微复杂一点，但是其实原理和步骤都大同小异
+ * 以下给出一个例子：给 pos = 1 的寄存器设置新值 val
+ *
+ * 根据 hll 的寄存器结构可以得知，pos = 1 的寄存器的低 2 位位于下标位 0 的字节数组中
+ * 而剩余 4 位位于下标为 1 的字节数组中：
+ *      +--------+            +--------+
+ *      |11000000|            |22221111|
+ *      |^^      |            |    ^^^^|
+ *      +--------+            +--------+
+ *    下标为 0 的字节数组      下标为 1 的字节数组
+ *
+ * 因此给寄存器重新设置值可以分为两步：
+ * 1. 先清除原来的值
+ *      由 b0 = 6 * pos / 8 和 fb = 6 * pos % 8 可以得出需要处理的字节数组下标和寄存器的最低位
+ *      因此我们可以先设置一个 6bits 的掩码 "00111111"
+ *      然后对 "001111111" 左移 fb = 6 位，得到 "11000000"
+ *      并取反得到 "00111111"
+ *      通过 "00111111" 和 byte[0] = "11000000" 做 AND 操作得到 "00000000"，我们可以清除掉 pos = 1 的寄存器的低两位的值
+ *      然后我们可以对新值 val 向左移动 fb 位，并和 "00000000" 做 OR 操作，把 val 的低两位值赋值到如下位置：
+ *        +--------+
+ *        |00000000|
+ *        |^^      |
+ *        +--------+
+ *
+ *      同样，对于 pos = 1 寄存器的剩余 4 位，我们可以先设置一个掩码 "00111111" 然后右移 8 - fb 位并取反
+ *      得到掩码 "11110000"
+ *      再和 byte[1] = "22221111" 做 AND 操作得到 "22220000" 从而实现清除 pos = 1 寄存器的值
+ *      然后对新值 val 向右移动 8 - fb 位并和 "22220000" 做 OR 操作，得以将新值的剩余 4 位赋值到如下位置：
+ *        +--------+
+ *        |22220000|
+ *        |    ^^^^|
+ *        +--------+
+ *
+ * */
+
 /* Note: if we access the last counter, we will also access the b+1 byte
  * that is out of the array, but sds strings always have an implicit null
  * term, so the byte exists, and we can skip the conditional (or the need
@@ -661,6 +746,10 @@ int hllDenseSet(uint8_t *registers, long index, uint8_t count) {
  * This is just a wrapper to hllDenseSet(), performing the hashing of the
  * element in order to retrieve the index and zero-run count. */
 /* 向 hyperloglog 数据结构中添加一个元素 */
+/* 该方式是 hllDenseSet() 的一个 wrapper
+ * 实际上参数 *ele 并不会真的添加到寄存器中，这里的用处是获取此元素如果添加到 hll 中所在桶的下标 index
+ * 以及获得桶中的近似基数 count
+ * 然后通过比较该 index 所指桶的 old_count 和新的基数 count 来判断是否需要更新基数 */
 int hllDenseAdd(uint8_t *registers, unsigned char *ele, size_t elesize) {
     long index;
     /* 计算桶的位置，以及获取该元素的 count 值 */
@@ -745,6 +834,11 @@ void hllDenseRegHisto(uint8_t *registers, int* reghisto) {
 }
 
 /* ================== Sparse representation implementation  ================= */
+
+/* 以下先说一下 sparse 形式下 3 种操作码
+ * ZERO 操作码：占用 1 个字节，表示为 00xxxxxx，后六位表示有 2^6 + 1 个寄存器可以被设置为 0
+ * XZERO 操作码：占用 2 个字节，表示为 01xxxxxx yyyyyyyy，表示有 2^14 + 1 个寄存器可以被设置为 0
+ * VAL 操作码：占用 1 个字节，表示为 1vvvvvxx。vvvvv 表示值，范围为 1-2^5。后两位 xx 表示数量 2^2，整体表示为最多有 2^2 个寄存器被设置为值 vvvvv */
 
 /* Convert the HLL with sparse representation given as input in its dense
  * representation. Both representations are represented by SDS strings, and
