@@ -40,12 +40,15 @@ extern "C" {
 #endif
 
 #define HASHISZERO(r) (!(r).bits && !(r).step)
+/* 判断 GeoHashRange 实例的 min 和 max 是否都为 0 */
 #define RANGEISZERO(r) (!(r).max && !(r).min)
+/* 该宏判断 GeoHashRange 实例结构是否为空或其中的元素都是 0 */
 #define RANGEPISZERO(r) (r == NULL || RANGEISZERO(*r))
 
 #define GEO_STEP_MAX 26 /* 26*2 = 52 bits. */
 
 /* Limits from EPSG:900913 / EPSG:3785 / OSGEO:41001 */
+/* 下面四个宏分别是纬度和经度的最大值和最小值 */
 #define GEO_LAT_MIN -85.05112878
 #define GEO_LAT_MAX 85.05112878
 #define GEO_LONG_MIN -180
@@ -63,21 +66,31 @@ typedef enum {
 } GeoDirection;
 
 typedef struct {
+    /* 编码后的 bit 串 */
     uint64_t bits;
+    /* 将经纬度都分割成 2^step 块 */
     uint8_t step;
 } GeoHashBits;
 
+/* 存储经纬度的范围 */
 typedef struct {
+    /* 最小值 */
     double min;
+    /* 最大值 */
     double max;
 } GeoHashRange;
 
+/* 存储经纬度和其编码信息信息 */
 typedef struct {
+    /* 编码信息 */
     GeoHashBits hash;
+    /* 经度 */
     GeoHashRange longitude;
+    /* 纬度 */
     GeoHashRange latitude;
 } GeoHashArea;
 
+/* 存储一个区域的附近八个区域的 geohash 编码信息 */
 typedef struct {
     GeoHashBits north;
     GeoHashBits east;
@@ -89,16 +102,23 @@ typedef struct {
     GeoHashBits south_west;
 } GeoHashNeighbors;
 
+/* 下面两个宏是搜索类型 */
+/* 圆形 */
 #define CIRCULAR_TYPE 1
+/* 矩形 */
 #define RECTANGLE_TYPE 2
 typedef struct {
+    /* 范围搜索类型 */
     int type; /* search type */
+    /* 存储中心点的经纬度，以该点为基准进行查找 */
     double xy[2]; /* search center point, xy[0]: lon, xy[1]: lat */
+    /* 单位转换，基础单位是 m，conversion = 1000 则表示 km */
     double conversion; /* km: 1000 */
     double bounds[4]; /* bounds[0]: min_lon, bounds[1]: min_lat
                        * bounds[2]: max_lon, bounds[3]: max_lat */
     union {
         /* CIRCULAR_TYPE */
+        /* 半径 */
         double radius;
         /* RECTANGLE_TYPE */
         struct {
