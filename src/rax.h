@@ -194,7 +194,7 @@ typedef struct raxNode {
      *   2. 压缩节点：子孙节点对应的合并字符串，指向最后一个子孙节点的指针，以及节点为 key 时的 value 指针。
      *
      * 对于压缩和非压缩节点，rax tee 中的任意节点都可以表示 key。由于压缩节点的存在，这些 key 不可能囊括所有的字符序列。
-     * 比如压缩节点 "window"] 表示 key ""，非压缩节点 [] 表示 key "window"
+     * 比如压缩节点 ["window"] 表示 key ""，非压缩节点 [] 表示 key "window"
      *                  ["window"] ""
      *                     \
      *                     [] "window"
