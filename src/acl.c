@@ -53,6 +53,7 @@ list *UsersToLoad;  /* This is a list of users found in the configuration file
 list *ACLLog;       /* Our security log, the user is able to inspect that
                        using the ACL LOG command .*/
 
+/* 指令名和 ID 的映射关系 */
 static rax *commandId = NULL; /* Command name to id mapping */
 
 static unsigned long nextid = 0; /* Next command id that has not been assigned */
@@ -1424,6 +1425,7 @@ int ACLAuthenticateUser(client *c, robj *username, robj *password) {
  *
  * The function does not take ownership of the 'cmdname' SDS string.
  * */
+/* 为字符串 cmdname 生成一个从 0 递增且唯一的 ID，这个函数里把 rax 前缀树当 set 使。 */
 unsigned long ACLGetCommandID(sds cmdname) {
     sds lowername = sdsdup(cmdname);
     sdstolower(lowername);
@@ -1436,6 +1438,9 @@ unsigned long ACLGetCommandID(sds cmdname) {
     raxInsert(commandId,(unsigned char*)lowername,strlen(lowername),
               (void*)nextid,NULL);
     sdsfree(lowername);
+    serverLogRaw(LL_WARNING, "=========== raxShow ============");
+    raxShow(commandId);
+    serverLogRaw(LL_WARNING, "=========== raxShowEnd ============");
     unsigned long thisid = nextid;
     nextid++;
 

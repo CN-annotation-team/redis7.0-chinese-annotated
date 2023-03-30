@@ -1958,6 +1958,7 @@ void initServerConfig(void) {
      * redis.conf using the rename-command directive. */
     server.commands = dictCreate(&commandTableDictType);
     server.orig_commands = dictCreate(&commandTableDictType);
+    /* 构建指令表 */
     populateCommandTable();
 
     /* Debugging */
@@ -2842,6 +2843,7 @@ int populateArgsStructure(struct redisCommandArg *args) {
  *
  * On success, the function return C_OK. Otherwise C_ERR is returned and we won't
  * add this command in the commands dict. */
+/* 递归生成指令数据结构 */
 int populateCommandStructure(struct redisCommand *c) {
     /* If the command marks with CMD_SENTINEL, it exists in sentinel. */
     if (!(c->flags & CMD_SENTINEL) && server.sentinel_mode)
@@ -2881,6 +2883,7 @@ int populateCommandStructure(struct redisCommand *c) {
     populateCommandLegacyRangeSpec(c);
 
     /* Assign the ID used for ACL. */
+    /* 为当前指令名生成一个从 0 定增且唯一的 ID，用于访问控制 */
     c->id = ACLGetCommandID(c->fullname);
 
     /* Handle subcommands */
@@ -2888,7 +2891,9 @@ int populateCommandStructure(struct redisCommand *c) {
         for (int j = 0; c->subcommands[j].declared_name; j++) {
             struct redisCommand *sub = c->subcommands+j;
 
+            /* c->declared_name|sub->declared_name 的形式拼接子指令名 */
             sub->fullname = catSubCommandFullname(c->declared_name, sub->declared_name);
+            /* 递归处理子指令 */
             if (populateCommandStructure(sub) == C_ERR)
                 continue;
 
@@ -2899,10 +2904,13 @@ int populateCommandStructure(struct redisCommand *c) {
     return C_OK;
 }
 
+/* Redis 指令表数组，在 generate-command-code.py 自动生成的文件 commands.c 中，包含了这个表的数据，
+ * 其数据来源为 commands 文件夹下的 json 文件，数组结构采用类似字符串的模式，最后一个元素设置为 NULL，表示数组结束，这样可以不用保存长度信息。*/
 extern struct redisCommand redisCommandTable[];
 
 /* Populates the Redis Command Table dict from the static table in commands.c
  * which is auto generated from the json files in the commands folder. */
+/* 用指令数组生成指令字典 */
 void populateCommandTable(void) {
     int j;
     struct redisCommand *c;
