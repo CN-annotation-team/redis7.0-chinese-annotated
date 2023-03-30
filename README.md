@@ -58,9 +58,10 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [listpack.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/listpack.c) | listpack 紧凑列表实现  | 低于一半 |
 | [networking.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/networking.c) | Redis 客户端、主、副本 I/O 相关 | 低于一半 |
 | [hyperloglog.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/hyperloglog.c) | Redis HyperLogLog 实现以及相关命令 | 过半 |
+| [rax.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/rax.c) | Redis 压缩前缀树实现 | 过半 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2023/02/09
+更新日期：2023/03/30
 
 
 ## 关于提交 PR 的方法：
