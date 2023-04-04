@@ -555,7 +555,7 @@ void markRewrittenIncrAofAsHistory(aofManifest *am) {
      * last AOF, because this file is our currently writing. */
     /* 如果之前存在 incr aof 文件，需要忽略最后一个，因为它是当前写入的 incr aof */
     if (server.aof_fd != -1) {
-         /* 获取尾结点的前一个结点 */
+        /* 获取尾结点的前一个结点 */
         ln = listNext(&li);
         serverAssert(ln != NULL);
     }
