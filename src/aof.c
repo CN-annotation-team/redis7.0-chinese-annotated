@@ -2970,7 +2970,6 @@ cleanup:
         aofDelTempIncrAofFile();
     }
     server.aof_rewrite_time_last = time(NULL)-server.aof_rewrite_time_start;
-
     server.aof_rewrite_time_start = -1;
     /* Schedule a new rewrite if we are waiting for it to switch the AOF ON. */
     if (server.aof_state == AOF_WAIT_REWRITE)
