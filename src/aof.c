@@ -1536,6 +1536,8 @@ struct client *createAOFClient(void) {
  * AOF_NOT_EXIST: AOF file doesn't exist.
  * AOF_EMPTY: The AOF file is empty (nothing to load).
  * AOF_FAILED: Failed to load the AOF file. */
+/* 加载单个 AOF 文件，
+ * 也包括 RDB 格式的 base 文件 */
 int loadSingleAppendOnlyFile(char *filename) {
     struct client *fakeClient;
     struct redis_stat sb;
@@ -1714,7 +1716,7 @@ int loadSingleAppendOnlyFile(char *filename) {
              * anyway.*/
             queueMultiCommand(fakeClient, cmd->flags);
         } else {
-            /* 是 exec 命令，调用命令的处理函数 */
+            /* 是 exec 命令或不处于事务中，调用命令的处理函数 */
             cmd->proc(fakeClient);
         }
 
@@ -1737,6 +1739,7 @@ int loadSingleAppendOnlyFile(char *filename) {
      * If the client is in the middle of a MULTI/EXEC, handle it as it was
      * a short read, even if technically the protocol is correct: we want
      * to remove the unprocessed tail and continue. */
+    /* 事务未执行 exec 但文件已到达末尾 */
     if (fakeClient->flags & CLIENT_MULTI) {
         serverLog(LL_WARNING,
             "Revert incomplete MULTI/EXEC transaction in AOF file %s", filename);
@@ -1803,6 +1806,7 @@ cleanup:
 }
 
 /* Load the AOF files according the aofManifest pointed by am. */
+/* 加载清单文件中包含的 AOF 文件 */
 int loadAppendOnlyFiles(aofManifest *am) {
     serverAssert(am != NULL);
     int status, ret = AOF_OK;
@@ -1820,6 +1824,7 @@ int loadAppendOnlyFiles(aofManifest *am) {
      *    has only one base AOF record, and the file name of this base AOF is 'server.aof_filename',
      *    and the 'server.aof_filename' file not exist in 'server.aof_dirname' directory
      * */
+    /* 检测 AOF 文件是否为旧版本，并进行升级 */
     if (fileExist(server.aof_filename)) {
         if (!dirExists(server.aof_dirname) ||
             (am->base_aof_info == NULL && listLength(am->incr_aof_list) == 0) ||
@@ -1877,6 +1882,7 @@ int loadAppendOnlyFiles(aofManifest *am) {
     }
 
     /* Load INCR AOFs if needed. */
+    /* 加载 incr 文件（如果存在） */
     if (listLength(am->incr_aof_list)) {
         listNode *ln;
         listIter li;
@@ -1919,6 +1925,11 @@ int loadAppendOnlyFiles(aofManifest *am) {
      * to the size of BASE AOF file. This might cause the first AOFRW to be
      * executed early, but that shouldn't be a problem since everything will be
      * fine after the first AOFRW. */
+    /* 理想情况下 'aof_rewrite_base_size' 应该包括写入的 base + incr 文件的大小，
+     * 而 redis 启动加载 AOF 文件时只令 'aof_rewrite_base_size' 等于 base 文件大小，
+     * 这可能会导致第一次 AOF 自动重写提前发生，但一切都会在第一次 AOF 重写后变得正常，
+     * 而如果启动时令 'aof_rewrite_base_size' = base + incr 文件大小，第一次重写可能会比预期晚
+     * 详见 https://github.com/redis/redis/issues/10549 */
     server.aof_rewrite_base_size = base_size;
     server.aof_fsync_offset = server.aof_current_size;
 
@@ -2807,7 +2818,7 @@ void backgroundRewriteDoneHandler(int exitcode, int bysignal) {
 
         /* Get a new BASE file name and mark the previous (if we have)
          * as the HISTORY type. */
-        /* 获取新的 base 文件，标记之前的 base 文件为历史文件 */
+        /* 获取新的 base 文件名，标记之前的 base 文件为历史文件 */
         sds new_base_filename = getNewBaseFileNameAndMarkPreAsHistory(temp_am);
         serverAssert(new_base_filename != NULL);
         new_base_filepath = makePath(server.aof_dirname, new_base_filename);
@@ -2868,40 +2879,13 @@ void backgroundRewriteDoneHandler(int exitcode, int bysignal) {
             sdsfree(temp_incr_aof_name);
         }
 
-        /* Rename the temporary incr aof file to 'new_incr_filename'. */
-        if (server.aof_state == AOF_WAIT_REWRITE) {
-            /* Get temporary incr aof name. */
-            sds temp_incr_aof_name = getTempIncrAofName();
-            sds temp_incr_filepath = makePath(server.aof_dirname, temp_incr_aof_name);
-            sdsfree(temp_incr_aof_name);
-            /* Get next new incr aof name. */
-            sds new_incr_filename = getNewIncrAofName(temp_am);
-            new_incr_filepath = makePath(server.aof_dirname, new_incr_filename);
-            latencyStartMonitor(latency);
-            if (rename(temp_incr_filepath, new_incr_filepath) == -1) {
-                serverLog(LL_WARNING,
-                    "Error trying to rename the temporary incr AOF file %s into %s: %s",
-                    temp_incr_filepath,
-                    new_incr_filepath,
-                    strerror(errno));
-                bg_unlink(new_base_filepath);
-                sdsfree(new_base_filepath);
-                aofManifestFree(temp_am);
-                sdsfree(temp_incr_filepath);
-                sdsfree(new_incr_filepath);
-                goto cleanup;
-            }
-            latencyEndMonitor(latency);
-            latencyAddSampleIfNeeded("aof-rename", latency);
-            sdsfree(temp_incr_filepath);
-        }
-
         /* Change the AOF file type in 'incr_aof_list' from AOF_FILE_TYPE_INCR
          * to AOF_FILE_TYPE_HIST, and move them to the 'history_aof_list'. */
         /* 标记之前的 incr aof 文件为历史文件，并修改清单信息 */
         markRewrittenIncrAofAsHistory(temp_am);
 
         /* Persist our modifications. */
+        /* 持久化清单文件 */
         if (persistAofManifest(temp_am) == C_ERR) {
             bg_unlink(new_base_filepath);
             aofManifestFree(temp_am);
