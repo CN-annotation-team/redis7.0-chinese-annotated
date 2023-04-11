@@ -1185,7 +1185,7 @@ ssize_t aofWrite(int fd, const char *buf, size_t len) {
  * 3) 做 bgrewrite 的时候
  *
  * 这里还要注意两种 aof fsync 刷盘策略：
- * always 表示写入内存缓冲区之后就执行刷盘
+ * always 表示调用 write 将数据写入 page cache 之后就执行刷盘
  * everysec 会使用 bio 大概每秒做一次异步刷盘，且该策略下存在非强制刷盘的功能
  */
 void flushAppendOnlyFile(int force) {
