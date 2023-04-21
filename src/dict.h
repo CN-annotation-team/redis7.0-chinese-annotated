@@ -126,14 +126,14 @@ typedef struct dict {
 } dict;
  *
  * 做的优化大概是这样的：
- * 1. 从字典结构里删除 privdata （这个扩展其实一直是个 dead code）会影响很多行（社区里的做法都是想尽量减少 diff 变更，避免说破坏 git blame log）
+ * 1. 从字典结构里删除 privdata （这个扩展其实一直是个 dead code，会影响很多行，社区里的做法都是想尽量减少 diff 变更，避免说破坏 git blame log）
  * 2. 将 dictht 字典哈希表结构融合进 dict 字典结构里，相关元数据直接放到了 dict 中
  * 3. 去掉 sizemark 字段，这个值可以通过 size - 1 计算得到，这样就可以少 8 字节
- * 4. 将 size 字段转变为 size_exp（就是 2 的 n 次方，指数），因为 size 目前是严格都是 2 的幂，这边存储那个幂而不是具体的数值，size 内存占用从 8 字节降到了 1 字节
+ * 4. 将 size 字段转变为 size_exp（就是 2 的 n 次方，指数），因为 size 目前是严格都是 2 的幂，size_exp 存储指数而不是具体数值，size 内存占用从 8 字节降到了 1 字节
  *
  * 内存方面：
  *   默认情况下通过 sizeof 我们是可以看到新 dict 是 56 个字节
- *   dict：一个指针 + 两个指针 + 一个 unsigned long + 一个 long + 一个 int16_t + 两个 char，总共实际上是 52 个字节，但是因为 jemalloc 内存分配机制，实际会分配 56 个字节
+ *   dict：一个指针 + 两个指针 + 两个 unsigned long + 一个 long + 一个 int16_t + 两个 char，总共实际上是 52 个字节，但是因为 jemalloc 内存分配机制，实际会分配 56 个字节
  *   而实际上因为对齐，最后的 int16_t pauserehash 和 char ht_size_exp[2] 加起来是占用 8 个字节，代码注释也有说，将小变量放到最后来获得最小的填充。
  */
 
