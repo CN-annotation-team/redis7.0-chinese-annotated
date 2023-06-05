@@ -120,3 +120,9 @@ A: 这是一个大家用爱发电的项目，包括我们 "CN-Annotation-Team" �
   除此之外，要是你贡献累计达到50行注释以上，我们会邀请你成为 "CN-Annotation-Team" 组织的一员！身为 "CN-Annotation-Team" 组织的一员去完善现有项目的中文注释，或者推动其它热门开源项目的中文注释项目吧！🍭🍭（虽然目前组织还很小也没什么名气，但是这也是个好机会让你可以成为元老级的member啊~）<br>
 还有，偷偷告诉你，在你做中文注释的同时，由于你详细阅读了源码，你是有很大机会找出问题给 Redis 提 PR 的哦！<br>
 
+***
+  
+### Redis 学习交流群
+
+![](https://jmlab2.oss-cn-beijing.aliyuncs.com/wechatGroup.png)
+
