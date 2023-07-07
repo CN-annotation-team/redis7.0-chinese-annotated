@@ -117,6 +117,8 @@ dict *dictCreate(dictType *type)
 }
 
 /* Initialize the hash table */
+/* 字典实现使用了两个哈希表，一个作为主表，另一个作为副表
+ * 所以调用2次 _dictReset */
 int _dictInit(dict *d, dictType *type)
 {
     _dictReset(d, 0);
@@ -235,6 +237,7 @@ int dictTryExpand(dict *d, unsigned long size) {
  * rehashidx 记录上一次重哈希结束时遍历到哈希表元素的下标
  * */
 int dictRehash(dict *d, int n) {
+    /* 防止死循环的常见做法 设置循环次数上限 empty_visits */
     int empty_visits = n*10; /* Max number of empty buckets to visit. */
     if (!dictIsRehashing(d)) return 0;
 
@@ -244,6 +247,7 @@ int dictRehash(dict *d, int n) {
         /* Note that rehashidx can't overflow as we are sure there are more
          * elements because ht[0].used != 0 */
         /* 当 rehashidx 等于哈希表大小时，表明重哈希完成 */
+        /* 找出一个非空槽位，遇到空槽时 rehashidx 直接加1 */
         assert(DICTHT_SIZE(d->ht_size_exp[0]) > (unsigned long)d->rehashidx);
         while(d->ht_table[0][d->rehashidx] == NULL) {
             d->rehashidx++;
@@ -251,6 +255,7 @@ int dictRehash(dict *d, int n) {
         }
         de = d->ht_table[0][d->rehashidx];
         /* Move all the keys in this bucket from the old to the new hash HT */
+        /* 因用拉链法解决哈希冲突，需转移整个链表上的节点 */
         while(de) {
             uint64_t h;
 
