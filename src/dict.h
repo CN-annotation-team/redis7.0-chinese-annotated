@@ -192,6 +192,7 @@ struct dict {
  * 如果 'safe' 不为 1, 则是不安全的迭代器, 在遍历时应该只调用 dictNext(). */
 typedef struct dictIterator {
     dict *d;
+    /* hash 字典中 bucket 的索引，使用方法：d->ht_table[0/1][index] */
     long index;
     int table, safe;
     dictEntry *entry, *nextEntry;

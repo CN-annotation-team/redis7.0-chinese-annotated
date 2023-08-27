@@ -667,9 +667,14 @@ dictIterator *dictGetSafeIterator(dict *d) {
 
 dictEntry *dictNext(dictIterator *iter)
 {
+    /* 1) 找到下一个不为 NULL 的 entry，直接返回
+     * 2) 或者已经查找完字典所有的 bucket，退出循环，方法返回 NULL */
     while (1) {
+        /* 1) 如果 entry 为 NULL，index++，切换到下一个 bucket
+         * 2) 否则 entry = entry->next，若新 entry 不为 NULL，直接返回，否则循环重复这段逻辑 */
         if (iter->entry == NULL) {
             if (iter->index == -1 && iter->table == 0) {
+                /* 迭代器第一次执行时，1)标记 dict 暂停 rehash。2)或计算并记录 dict 指纹 */
                 if (iter->safe)
                     dictPauseRehashing(iter->d);
                 else
@@ -677,6 +682,9 @@ dictEntry *dictNext(dictIterator *iter)
             }
             iter->index++;
             if (iter->index >= (long) DICTHT_SIZE(iter->d->ht_size_exp[iter->table])) {
+                /* 在字典的 ht[0] 查找完毕的情况下
+                 *   若字典正在 rehash 的中间状态，则切换到 ht[1] 继续查找下一个 entry
+                 *   否则结束查找，方法返回 NULL，表示迭代器到达终点 */
                 if (dictIsRehashing(iter->d) && iter->table == 0) {
                     iter->table++;
                     iter->index = 0;
