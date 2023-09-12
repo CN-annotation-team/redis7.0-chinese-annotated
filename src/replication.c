@@ -51,6 +51,7 @@ int cancelReplicationHandshake(int reconnect);
 /* We take a global flag to remember if this instance generated an RDB
  * because of replication, so that we can remove the RDB file in case
  * the instance is configured to have no persistence. */
+/* 使用全局标志来记住此实例是否因为复制而生成 RDB ，以便在实例被配置为没有持久性的情况下删除 RDB 文件 */
 int RDBGeneratedByReplication = 0;
 
 /* 从节点建立主从复制的调用链： 
@@ -76,6 +77,11 @@ int RDBGeneratedByReplication = 0;
  * pair. Mostly useful for logging, since we want to log a slave using its
  * IP address and its listening port which is more clear for the user, for
  * example: "Closing connection with replica 10.1.2.3:6380". */
+
+/* 返回一个从节点的 ip:port 信息，主要功能用于打印日志
+ * 其中记录的是从节点的 ip 以及从节点监听的端口，该端口是通过 REPLCONF 命令获取
+ * 例如 "Closing connection with replica 10.1.2.3:6380"
+ */
 char *replicationGetSlaveName(client *c) {
     static char buf[NET_HOST_PORT_STR_LEN];
     char ip[NET_IP_STR_LEN];
@@ -782,6 +788,8 @@ long long addReplyReplicationBacklog(client *c, long long offset) {
  * from the slave. The returned value is only valid immediately after
  * the BGSAVE process started and before executing any other command
  * from clients. */
+/* 返回偏移量，作为对从从节点接收到的 PSYNC 命令的回复。
+ * 返回的值仅在 BGSAVE 进程启动后以及从节点执行任何其他命令之前才有效 */
 long long getPsyncInitialOffset(void) {
     return server.master_repl_offset;
 }
@@ -983,6 +991,12 @@ need_full_resync:
  *    started.
  *
  * Returns C_OK on success or C_ERR otherwise. */
+
+/* 为复制目标启动 BGSAVE，即根据配置选择磁盘或套接字目标，并确保在启动之前刷新脚本缓存。
+ * mincapa 参数是等待此 BGSAVE 的从机的所有从机功能中的逐位 AND，因此表示所有从机支持的从机功能。可以通过 SLAVE_CAPA_* 宏进行测试。
+ * 除启动 BGSAVE 外的副作用：
+ * 1. 处理处于 WAIT_START状态的从机，如果 BGSAVE 成功启动，则为它们准备完全同步，或者向它们发送错误并将它们从从机列表中删除。 
+ * 2. 如果 BGSAVE 实际启动，则刷新 Lua 脚本脚本缓存。*/
 int startBgsaveForReplication(int mincapa, int req) {
     int retval;
     int socket_target = 0;
@@ -1006,6 +1020,7 @@ int startBgsaveForReplication(int mincapa, int req) {
     rsiptr = rdbPopulateSaveInfo(&rsi);
     /* Only do rdbSave* when rsiptr is not NULL,
      * otherwise slave will miss repl-stream-db. */
+    /* 只有 无复制链的 master、未连接 master 的 slave、不存在 cachemaster 的 slave 无法进行 rdb 生成 */
     if (rsiptr) {
         if (socket_target)
             /* 直接通过 socket 发送 RDB */
@@ -1022,18 +1037,23 @@ int startBgsaveForReplication(int mincapa, int req) {
      * that we don't set the flag to 1 if the feature is disabled, otherwise
      * it would never be cleared: the file is not deleted. This way if
      * the user enables it later with CONFIG SET, we are fine. */
+    /* 如果我们成功地启动了一个带有磁盘目标的 BGSAVE ，让我们记住这个事实，以便稍后在需要时删除该文件。
+     * 请注意，如果功能被禁用，我们不会将标志设置为1，否则它将永远不会被清除：文件不会被删除。
+     * 这样，如果用户稍后使用 CONFIG SET 启用它，我们就可以了*/
     if (retval == C_OK && !socket_target && server.rdb_del_sync_files)
         RDBGeneratedByReplication = 1;
 
     /* If we failed to BGSAVE, remove the slaves waiting for a full
      * resynchronization from the list of slaves, inform them with
      * an error about what happened, close the connection ASAP. */
+    /* 如果我们无法 BGSAVE，请从从机列表中删除等待完全重新同步的从机，并通知他们发生的错误，尽快关闭连接 */
     if (retval == C_ERR) {
         serverLog(LL_WARNING,"BGSAVE for replication failed");
         listRewind(server.slaves,&li);
         while((ln = listNext(&li))) {
             client *slave = ln->value;
 
+            /* 发送给所有等待 bgsave 开始的 slave 发送错误 BGSAVE failed */
             if (slave->replstate == SLAVE_STATE_WAIT_BGSAVE_START) {
                 slave->replstate = REPL_STATE_NONE;
                 slave->flags &= ~CLIENT_SLAVE;
@@ -1048,6 +1068,7 @@ int startBgsaveForReplication(int mincapa, int req) {
 
     /* If the target is socket, rdbSaveToSlavesSockets() already setup
      * the slaves for a full resync. Otherwise for disk target do it now.*/
+    /* 如果目标是套接字，则 rdbSaveToSlavesSockets() 已设置从机以进行完全重新同步。否则，对于磁盘目标，请立即执行 */
     if (!socket_target) {
         listRewind(server.slaves,&li);
         while((ln = listNext(&li))) {
@@ -1432,7 +1453,15 @@ void replconfCommand(client *c) {
  * 1) Put the slave in ONLINE state.
  * 2) Update the count of "good replicas".
  * 3) Trigger the module event. */
+/**
+ * 此函数将副本置于联机状态，并应在副本收到用于初始同步的RDB文件后立即调用。
+ * 其中包括以下影响：
+ * 1. 将从节点设置为 online 状态
+ * 2. 更新 repl_good_slaves_count 计数
+ * 3. 触发 module 的事件
+*/
 void replicaPutOnline(client *slave) {
+    /* 如果从节点只需要 RDB 文件，则不需要继续设置为 online 状态，参考：redis-cli --rdb */
     if (slave->flags & CLIENT_REPL_RDBONLY) {
         return;
     }
@@ -1460,7 +1489,14 @@ void replicaPutOnline(client *slave) {
  *    command we had no replies and it was disabled, and then we could
  *    accumulate output buffer data without sending it to the replica so it
  *    won't get mixed with the RDB stream. */
+
+/* 在同步的 RDB 文件之后立即调用此函数，并且开始发送增量命令流
+ *
+ * 它做了一些事情：
+ * 1. 如果不需要复制命令缓冲流，则异步关闭副本的连接，因为它实际上不是有效的副本。
+ * 2. 将当前的 slave 写入 pendingWriteQueue 待写队列中 */
 void replicaStartCommandStream(client *slave) {
+    /* 设置当前的 slave 已经设置了可写事件，不需要重入 */
     slave->repl_start_cmd_stream_on_ack = 0;
     if (slave->flags & CLIENT_REPL_RDBONLY) {
         serverLog(LL_NOTICE,
@@ -1478,6 +1514,8 @@ void replicaStartCommandStream(client *slave) {
  * without any persistence. We don't want instances without persistence
  * to take RDB files around, this violates certain policies in certain
  * environments. */
+/* 定期调用此函数以删除由于复制而生成的 RDB 文件，而该文件在其他情况下没有任何持久性。
+ * 不希望没有持久性的实例到处携带 RDB 文件，这违反了某些环境中的某些策略 */
 void removeRDBUsedToSyncReplicas(void) {
     /* If the feature is disabled, return ASAP but also clear the
      * RDBGeneratedByReplication flag in case it was set. Otherwise if the
@@ -1485,6 +1523,9 @@ void removeRDBUsedToSyncReplicas(void) {
      * flag may remain set to one: then next time the feature is re-enabled
      * via CONFIG SET we have it set even if no RDB was generated
      * because of replication recently. */
+    /* 如果该功能被禁用，请尽快返回，但如果设置了 RDBGeneratedByReplication 标志，请清除该标志。否则，如果该功能已启用，
+     * 但稍后使用 CONFIG SET 被禁用，则该标志可能会保持为1
+     * 那么下次通过 CONFIG NET 重新启用该功能时，即使最近由于复制而没有生成 RDB，我们也会将其设置为1 */
     if (!server.rdb_del_sync_files) {
         RDBGeneratedByReplication = 0;
         return;
@@ -1507,6 +1548,7 @@ void removeRDBUsedToSyncReplicas(void) {
                 break; /* No need to check the other replicas. */
             }
         }
+        /* 如果不存在等待 bgsave 的从节点，则开始删除 rdb 文件 */
         if (delrdb) {
             struct stat sb;
             if (lstat(server.rdb_filename,&sb) != -1) {
@@ -1520,6 +1562,9 @@ void removeRDBUsedToSyncReplicas(void) {
     }
 }
 
+/**
+ * 主节点进行主从同步时绑定的写回调事件
+*/
 void sendBulkToSlave(connection *conn) {
     client *slave = connGetPrivateData(conn);
     char buf[PROTO_IOBUF_LEN];
@@ -1528,6 +1573,9 @@ void sendBulkToSlave(connection *conn) {
     /* Before sending the RDB file, we send the preamble as configured by the
      * replication process. Currently the preamble is just the bulk count of
      * the file in the form "$<length>\r\n". */
+    /* 在发送 RDB 文件之前，需要提前发送复制内容的属性
+     * 目前，属性只是包含文件的大小，格式为 “$<length>\r\n”
+     * 这个字段在设置写事件时设置，并在发送后设置为 NULL */
     if (slave->replpreamble) {
         nwritten = connWrite(conn,slave->replpreamble,sdslen(slave->replpreamble));
         if (nwritten == -1) {
@@ -1538,7 +1586,9 @@ void sendBulkToSlave(connection *conn) {
             return;
         }
         atomicIncr(server.stat_net_repl_output_bytes, nwritten);
+        /* 移除 replpreamble 已发送的数据 */
         sdsrange(slave->replpreamble,nwritten,-1);
+        /* 若 replpreamble 已经发送完成，则直接清空 */
         if (sdslen(slave->replpreamble) == 0) {
             sdsfree(slave->replpreamble);
             slave->replpreamble = NULL;
@@ -1549,6 +1599,7 @@ void sendBulkToSlave(connection *conn) {
     }
 
     /* If the preamble was already transferred, send the RDB bulk data. */
+    /* 发送 replpreamble 后，开始发送 RDB 文件数据，同时设置当前的偏移量，以及每次传输 16K 数据 */
     lseek(slave->repldbfd,slave->repldboff,SEEK_SET);
     buflen = read(slave->repldbfd,buf,PROTO_IOBUF_LEN);
     if (buflen <= 0) {
@@ -1567,6 +1618,7 @@ void sendBulkToSlave(connection *conn) {
     }
     slave->repldboff += nwritten;
     atomicIncr(server.stat_net_repl_output_bytes, nwritten);
+    /* 当写入的数据量和RDB数据大小相同，则认为传输完成，开始关闭RDB的fd，并重置写事件 */
     if (slave->repldboff == slave->repldbsize) {
         close(slave->repldbfd);
         slave->repldbfd = -1;
@@ -1915,6 +1967,7 @@ void replicationEmptyDbCallback(dict *d) {
 /* Once we have a link with the master and the synchronization was
  * performed, this function materializes the master client we store
  * at server.master, starting from the specified file descriptor. */
+/* 一旦我们与 master 建立了链接并执行了同步，此函数将从指定的文件描述符开始具体化我们存储在 server.master 中的 master 客户端 */
 void replicationCreateMasterClient(connection *conn, int dbid) {
     server.master = createClient(conn);
     if (conn)
@@ -3650,6 +3703,7 @@ void roleCommand(client *c) {
 /* Send a REPLCONF ACK command to the master to inform it about the current
  * processed offset. If we are not connected with a master, the command has
  * no effects. */
+/* 向主节点发送 REPLCONF ACK 命令，通知其当前处理的偏移量。如果我们没有与主机连接，则该命令无效 */
 void replicationSendAck(void) {
     client *c = server.master;
 
@@ -3819,6 +3873,11 @@ void replicationResurrectCachedMaster(connection *conn) {
 /* This function counts the number of slaves with lag <= min-slaves-max-lag.
  * If the option is active, the server will prevent writes if there are not
  * enough connected slaves with the specified lag (or less). */
+/**
+ * 只有 lag <= min-slaves-max-lag 才被认为是好的从节点。
+ * 其中 repl_good_slaves_count 计数主要用于与 repl_min_slaves_to_write 对比，确定当前主节点是否可写
+ * 若 repl_min_slaves_to_write 未设置，则不需要进行 repl_good_slaves_count 的计数操作
+*/
 void refreshGoodSlavesCount(void) {
     listIter li;
     listNode *ln;
@@ -3839,6 +3898,14 @@ void refreshGoodSlavesCount(void) {
 }
 
 /* return true if status of good replicas is OK. otherwise false */
+/**
+ * 判断当前主节点是否可用：
+ * 1. 从节点可用
+ * 2. 未设置了偏移容忍度 repl_min_slaves_max_lag
+ * 3. 未设置了最小可用 slave：repl_min_slaves_to_write
+ * 4. 存在足够多的好节点
+ * 若完全不满足，则会导致主节点禁止写入
+ */
 int checkGoodReplicasStatus(void) {
     return server.masterhost || /* not a primary status should be OK */
            !server.repl_min_slaves_max_lag || /* Min slave max lag not configured */
@@ -3882,6 +3949,7 @@ void replicationRequestAckFromSlaves(void) {
 
 /* Return the number of slaves that already acknowledged the specified
  * replication offset. */
+/* 返回已确认指定复制偏移量的从机数量 */
 int replicationCountAcksByOffset(long long offset) {
     listIter li;
     listNode *ln;
@@ -3899,6 +3967,7 @@ int replicationCountAcksByOffset(long long offset) {
 
 /* WAIT for N replicas to acknowledge the processing of our latest
  * write command (and all the previous commands). */
+/* 等待 N 个副本，以确认我们最新的写入命令（以及所有以前的命令）的处理 */
 void waitCommand(client *c) {
     mstime_t timeout;
     long numreplicas, ackreplicas;
@@ -3932,6 +4001,7 @@ void waitCommand(client *c) {
 
     /* Make sure that the server will send an ACK request to all the slaves
      * before returning to the event loop. */
+    /* 在返回事件循环之前，确保服务器将向所有从节点发送ACK请求 */
     replicationRequestAckFromSlaves();
 }
 
@@ -3947,6 +4017,7 @@ void unblockClientWaitingReplicas(client *c) {
 
 /* Check if there are clients blocked in WAIT that can be unblocked since
  * we received enough ACKs from slaves. */
+/* 检查是否有在等待中被阻止的客户端可以被解除阻止，因为我们从从属服务器收到了足够的 ACK */
 void processClientsWaitingReplicas(void) {
     long long last_offset = 0;
     int last_numreplicas = 0;
@@ -4358,6 +4429,7 @@ const char *getFailoverStateString() {
 /* Resets the internal failover configuration, this needs
  * to be called after a failover either succeeds or fails
  * as it includes the client unpause. */
+/* 重置内部故障切换配置，这需要在故障切换成功或失败后调用，因为它包括客户端取消连接 */
 void clearFailoverState() {
     server.failover_end_time = 0;
     server.force_failover = 0;
@@ -4369,6 +4441,7 @@ void clearFailoverState() {
 }
 
 /* Abort an ongoing failover if one is going on. */
+/* 如果正在进行故障转移，则中止正在进行的故障转移 */
 void abortFailover(const char *err) {
     if (server.failover_state == NO_FAILOVER) return;
 
@@ -4411,6 +4484,16 @@ void abortFailover(const char *err) {
  * a replica to sync up before aborting. If not specified, the failover
  * will attempt forever and must be manually aborted.
  */
+/* 
+ * 此命令将协调主节点和从节点之间的故障转移
+ * 包含以下步骤：
+ * 1. 主节点将启动客户端暂停写入，以停止复制。
+ * 2. 主节点将定期检查其任何副本是否具有通过ack消耗了整个复制流。
+ * 3. 一旦任何副本赶上，主节点本身将成为副本。
+ * 4. 主节点将向目标副本发送 PSYNC FAILOVER 请求如果接受，将使副本成为新的主副本并开始同步。
+ * 
+ * 其中包括 FORCE、ABORT、TIMEOUT 的选项，分别代表强制切换、中断切换、切换超时
+*/
 void failoverCommand(client *c) {
     if (server.cluster_enabled) {
         addReplyError(c,"FAILOVER not allowed in cluster mode. "
@@ -4525,11 +4608,17 @@ void failoverCommand(client *c) {
  * failover doesn't work like blocked clients will be unblocked and replicas will
  * be disconnected. This could be optimized further.
  */
+/* 故障转移 cron 功能，检查协调的故障转移状态。
+ *
+ * 实施说明：当前的实现调用 replicationSetMaster() 来启动故障转移请求，如果故障转移无法正常工作，则会产生一些意外的副作用，
+ * 比如被阻止的客户端将被解锁，副本将被断开连接。这可以进一步优化。
+ */
 void updateFailoverStatus(void) {
     if (server.failover_state != FAILOVER_WAIT_FOR_SYNC) return;
     mstime_t now = server.mstime;
 
     /* Check if failover operation has timed out */
+    /* 如果 failover 的时间已过，则判断是否强制 failover */
     if (server.failover_end_time && server.failover_end_time <= now) {
         if (server.force_failover) {
             serverLog(LL_NOTICE,
@@ -4537,17 +4626,20 @@ void updateFailoverStatus(void) {
                 server.target_replica_host, server.target_replica_port);
             server.failover_state = FAILOVER_IN_PROGRESS;
             /* If timeout has expired force a failover if requested. */
+            /* 如果强行 failover，则直接设置 master */
             replicationSetMaster(server.target_replica_host,
                 server.target_replica_port);
             return;
         } else {
             /* Force was not requested, so timeout. */
+            /* 超时则直接暂停 failover 操作 */
             abortFailover("Replica never caught up before timeout");
             return;
         }
     }
 
     /* Check to see if the replica has caught up so failover can start */
+    /* 选取一个 replica 作为新的 master */
     client *replica = NULL;
     if (server.target_replica_host) {
         replica = findReplica(server.target_replica_host, 
@@ -4560,6 +4652,7 @@ void updateFailoverStatus(void) {
         /* Find any replica that has matched our repl_offset */
         while((ln = listNext(&li))) {
             replica = ln->value;
+            /* 如果存在一个 replica 偏移量和当前 master 的偏移量相同，则采用当前的 replica */
             if (replica->repl_ack_off == server.master_repl_offset) {
                 char ip[NET_IP_STR_LEN], *replicaaddr = replica->slave_addr;
 
@@ -4578,6 +4671,7 @@ void updateFailoverStatus(void) {
     }
 
     /* We've found a replica that is caught up */
+    /* 找到了一个 replica，且偏移量满足需求，则直接设置 master 信息 */
     if (replica && (replica->repl_ack_off == server.master_repl_offset)) {
         server.failover_state = FAILOVER_IN_PROGRESS;
         serverLog(LL_NOTICE,
