@@ -78,7 +78,7 @@ static inline uint_fast64_t crc_reflect(uint_fast64_t data, size_t data_len) {
 }
 
 /**
- *  Update the crc value with new data.
+ *  用新值更新crc64.
  *
  * \param crc      The current crc value.
  * \param data     Pointer to a buffer of \a data_len bytes.
