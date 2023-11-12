@@ -29,7 +29,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* CRC16 implementation according to CCITT standards.
+/* CRC16按照CCITT标准.
  *
  * Note by @antirez: this is actually the XMODEM CRC 16 algorithm, using the
  * following parameters:
