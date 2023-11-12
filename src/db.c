@@ -41,7 +41,7 @@
  * C-level DB API
  *----------------------------------------------------------------------------*/
 
-/* Flags for expireIfNeeded */
+/* 过期标致 */
 #define EXPIRE_FORCE_DELETE_EXPIRED 1
 #define EXPIRE_AVOID_DELETE_EXPIRED 2
 
