@@ -8,6 +8,10 @@
  * to make redis cluster route a request to the shard holding this slot 
  */
 
+/* 提供一种 ​CRC16 到 Redis 集群槽位（slot）的映射关系。
+* Redis 集群使用 CRC16 算法对键进行哈希计算，将键分配到 16384 个槽位（slot）中。
+* 此处定义了一个查找表，用于快速确定某个 CRC16 值对应的槽位
+*/
 const char *crc16_slot_table[] = {
 "06S", "Qi", "5L5", "4Iu", "4gY", "460", "1Y7", "1LV", "0QG", "ru", "7Ok", "4ji", "4DE", "65n", "2JH", "I8", "F9", "SX", "7nF", "4KD", 
 "4eh", "6PK", "2ke", "1Ng", "0Sv", "4L", "491", "4hX", "4Ft", "5C4", "2Hy", "09R", "021", "0cX", "4Xv", "6mU", "6Cy", "42R", "0Mt", "nF", 

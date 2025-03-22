@@ -35,26 +35,38 @@ typedef uint64_t (*crcfn64)(uint64_t, const void *, const uint64_t);
 typedef uint16_t (*crcfn16)(uint16_t, const void *, const uint64_t);
 
 /* CRC-64 */
+/* CRC 表初始化函数：初始化 64 位 CRC 查找表，用于小端架构 */
 void crcspeed64little_init(crcfn64 fn, uint64_t table[8][256]);
+/* 大端架构 CRC 表初始化函数：初始化 64 位 CRC 查找表，用于大端架构 */
 void crcspeed64big_init(crcfn64 fn, uint64_t table[8][256]);
+/* 自动选择架构的 CRC 表初始化函数 */
 void crcspeed64native_init(crcfn64 fn, uint64_t table[8][256]);
 
+/* CRC 计算函数（小端架构）：在小端架构上计算 64 位 CRC */
 uint64_t crcspeed64little(uint64_t table[8][256], uint64_t crc, void *buf,
                           size_t len);
+/* CRC 计算函数（大端架构）：在大端架构上计算 64 位 CRC */
 uint64_t crcspeed64big(uint64_t table[8][256], uint64_t crc, void *buf,
                        size_t len);
+/* 自动选择架构的 CRC 计算函数：根据当前架构自动选择小端或大端的 CRC 计算函数 */
 uint64_t crcspeed64native(uint64_t table[8][256], uint64_t crc, void *buf,
                           size_t len);
 
 /* CRC-16 */
+/* CRC16 表初始化函数：初始化 16 位 CRC 查找表，用于小端架构 */
 void crcspeed16little_init(crcfn16 fn, uint16_t table[8][256]);
+/* 大端架构 CRC16 表初始化函数：初始化 16 位 CRC 查找表，用于大端架构 */
 void crcspeed16big_init(crcfn16 fn, uint16_t table[8][256]);
+/* 自动选择架构的 CRC16 表初始化函数 */
 void crcspeed16native_init(crcfn16 fn, uint16_t table[8][256]);
 
+/* CRC16 计算函数（小端架构）：在小端架构上计算 16 位 CRC */
 uint16_t crcspeed16little(uint16_t table[8][256], uint16_t crc, void *buf,
                           size_t len);
+/* CRC16 计算函数（大端架构）：在大端架构上计算 16 位 CRC */
 uint16_t crcspeed16big(uint16_t table[8][256], uint16_t crc, void *buf,
                        size_t len);
+/* 自动选择架构的 CRC16 计算函数：根据当前架构自动选择小端或大端的 CRC16 计算函数 */
 uint16_t crcspeed16native(uint16_t table[8][256], uint16_t crc, void *buf,
                           size_t len);
 #endif
