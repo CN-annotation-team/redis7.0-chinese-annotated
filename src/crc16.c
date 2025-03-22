@@ -1,4 +1,4 @@
-#include "server.h"
+#include "server.h"         // crc16声明所在头文件
 
 /*
  * Copyright 2001-2010 Georges Menie (www.menie.org)

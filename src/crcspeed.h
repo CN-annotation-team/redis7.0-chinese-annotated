@@ -28,9 +28,15 @@
 #ifndef CRCSPEED_H
 #define CRCSPEED_H
 
+/* 本文件中crc16计算相关未在项目中使用(使用crc16.c中的实现)
+* 主要是基于 ​Slice-by-8 技术 优化的算法用于crc64的计算
+* 题外：迭代历史可查看 https://matt.sh/redis-crcspeed
+*/
+
 #include <inttypes.h>
 #include <stdio.h>
 
+/* 类型声明，内部使用均为crc64文件中的_crc64函数，使用此方法均需调用crc64_init初始化table */
 typedef uint64_t (*crcfn64)(uint64_t, const void *, const uint64_t);
 typedef uint16_t (*crcfn16)(uint16_t, const void *, const uint64_t);
 

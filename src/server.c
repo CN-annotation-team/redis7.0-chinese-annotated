@@ -6897,7 +6897,7 @@ int main(int argc, char **argv) {
     srand(time(NULL)^getpid()^tv.tv_usec);
     srandom(time(NULL)^getpid()^tv.tv_usec);
     init_genrand64(((long long) tv.tv_sec * 1000000 + tv.tv_usec) ^ getpid());
-    crc64_init();
+    crc64_init();                           // 重要，使用crc64必须前置初始化填充crc64表，后续才能计算得值
 
     /* Store umask value. Because umask(2) only offers a set-and-get API we have
      * to reset it and restore it back. We do this early to avoid a potential
