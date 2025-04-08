@@ -2,6 +2,7 @@
 
 default: all
 
+# $(MAKE) $@：递归调用子目录的 Makefile，并传递当前目标名
 .DEFAULT:
 	cd src && $(MAKE) $@
 

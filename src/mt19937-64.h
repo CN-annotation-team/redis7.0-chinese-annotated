@@ -57,31 +57,39 @@
 #define __MT19937_64_H
 
 /* initializes mt[NN] with a seed */
+/* 单种子初始化函数 */
 void init_genrand64(unsigned long long seed);
 
 /* initialize by an array with array-length */
 /* init_key is the array for initializing keys */
 /* key_length is its length */
+/* 多种子数组初始化函数 */
 void init_by_array64(unsigned long long init_key[],
                      unsigned long long key_length);
 
 /* generates a random number on [0, 2^64-1]-interval */
+/* 生成 64 位随机数函数 */
 unsigned long long genrand64_int64(void);
 
 
 /* generates a random number on [0, 2^63-1]-interval */
+/* 生成 63 位随机数函数 */
 long long genrand64_int63(void);
 
 /* generates a random number on [0,1]-real-interval */
+/* 生成 [0,1] 区间内的随机数函数 */
 double genrand64_real1(void);
 
 /* generates a random number on [0,1)-real-interval */
+/* 生成 [0,1) 区间内的随机数函数 */
 double genrand64_real2(void);
 
 /* generates a random number on (0,1)-real-interval */
+/* 生成 (0,1) 区间内的随机数函数 */
 double genrand64_real3(void);
 
 /* generates a random number on (0,1]-real-interval */
+/* 生成 (0,1] 区间内的随机数函数 （未定义） */
 double genrand64_real4(void);
 
 #endif

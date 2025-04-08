@@ -49,6 +49,8 @@
  * Note that this function does not work for dates < 1/1/1970, it is solely
  * designed to work with what time(NULL) may return, and to support Redis
  * logging of the dates, it's not really a complete implementation. */
+
+/* 判断是否为闰年 */
 static int is_leap_year(time_t year) {
     if (year % 4) return 0;         /* A year not divisible by 4 is not leap. */
     else if (year % 100) return 1;  /* If div by 4 and not 100 is surely leap. */
@@ -56,51 +58,59 @@ static int is_leap_year(time_t year) {
     else return 1;                  /* If div by 100 and 400 is leap. */
 }
 
+/* 功能：将时间戳 t 转换为本地时间，存储到 tm 结构体 tmp
+* 参数：
+*   tmp   - 输出时间结构体
+*   t     - 时间戳（自1970-01-01 UTC的秒数）
+*   tz    - 时区偏移秒数（东区为正）
+*   dst   - 夏令时标志（0=未生效，1=生效） 
+* 补充说明：此函数是 Redis 5.0.0 引入的无锁本地时间转换工具，用于替代 localtime_r，​避免多线程或 fork 场景下的死锁风险
+*/
 void nolocks_localtime(struct tm *tmp, time_t t, time_t tz, int dst) {
+    /* 定义时间单位常量（秒） */
     const time_t secs_min = 60;
     const time_t secs_hour = 3600;
-    const time_t secs_day = 3600*24;
+    const time_t secs_day = 3600 * 24;
 
-    t -= tz;                            /* Adjust for timezone. */
-    t += 3600*dst;                      /* Adjust for daylight time. */
-    time_t days = t / secs_day;         /* Days passed since epoch. */
-    time_t seconds = t % secs_day;      /* Remaining seconds. */
+    /* 调整时区和夏令时 */
+    t -= tz;                                        // 减去时区偏移（如东八区 -28800 秒）
+    t += 3600 * dst;                                // 增加夏令时带来的1小时偏移（若生效）
 
-    tmp->tm_isdst = dst;
-    tmp->tm_hour = seconds / secs_hour;
-    tmp->tm_min = (seconds % secs_hour) / secs_min;
-    tmp->tm_sec = (seconds % secs_hour) % secs_min;
+    /* 计算自纪元以来的天数和剩余秒数 */
+    time_t days = t / secs_day;                     // 总天数
+    time_t seconds = t % secs_day;                  // 当天剩余秒数
 
-    /* 1/1/1970 was a Thursday, that is, day 4 from the POV of the tm structure
-     * where sunday = 0, so to calculate the day of the week we have to add 4
-     * and take the modulo by 7. */
-    tmp->tm_wday = (days+4)%7;
+    /* 填充基本时间字段 */
+    tmp->tm_isdst = dst;                            // 夏令时标志
+    tmp->tm_hour = seconds / secs_hour;             // 小时（0-23）
+    tmp->tm_min = (seconds % secs_hour) / secs_min; // 分钟（0-59）
+    tmp->tm_sec = (seconds % secs_hour) % secs_min; // 秒（0-59）
 
-    /* Calculate the current year. */
-    tmp->tm_year = 1970;
-    while(1) {
-        /* Leap years have one day more. */
-        time_t days_this_year = 365 + is_leap_year(tmp->tm_year);
-        if (days_this_year > days) break;
-        days -= days_this_year;
-        tmp->tm_year++;
+    /* 计算星期几（1970-01-01 是星期四，故 days+4 后模7） */
+    tmp->tm_wday = (days + 4) % 7;                  // 0=周日，1=周一，... 6=周六
+
+    /* 计算年份 */
+    tmp->tm_year = 1970;                            // 起始年份
+    while (1) {
+        time_t days_this_year = 365 + is_leap_year(tmp->tm_year); // 闰年判断
+        if (days_this_year > days) break;           // 剩余天数不足一年则退出
+        days -= days_this_year;                     // 减去当前年份天数
+        tmp->tm_year++;                             // 年份递增
     }
-    tmp->tm_yday = days;  /* Number of day of the current year. */
+    tmp->tm_yday = days;                            // 一年中的第几天（0-365）
 
-    /* We need to calculate in which month and day of the month we are. To do
-     * so we need to skip days according to how many days there are in each
-     * month, and adjust for the leap year that has one more day in February. */
+    /* 计算月份和日期 */
     int mdays[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    mdays[1] += is_leap_year(tmp->tm_year);
+    mdays[1] += is_leap_year(tmp->tm_year);         // 闰年2月加1天
 
-    tmp->tm_mon = 0;
-    while(days >= mdays[tmp->tm_mon]) {
+    tmp->tm_mon = 0;                                // 月份从0（1月）开始
+    while (days >= mdays[tmp->tm_mon]) {
         days -= mdays[tmp->tm_mon];
-        tmp->tm_mon++;
+        tmp->tm_mon++;                              // 递增月份直至剩余天数不足一个月
     }
 
-    tmp->tm_mday = days+1;  /* Add 1 since our 'days' is zero-based. */
-    tmp->tm_year -= 1900;   /* Surprisingly tm_year is year-1900. */
+    tmp->tm_mday = days + 1;                        // 日期从1开始（days为0-based）
+    tmp->tm_year -= 1900;                           // tm_year存储年份-1900（兼容标准tm结构）
 }
 
 #ifdef LOCALTIME_TEST_MAIN

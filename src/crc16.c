@@ -1,4 +1,4 @@
-#include "server.h"
+#include "server.h"         // crc16声明所在头文件
 
 /*
  * Copyright 2001-2010 Georges Menie (www.menie.org)
@@ -44,6 +44,12 @@
  * Output for "123456789"     : 31C3
  */
 
+/* 该文件实现了一个 ​CRC16 校验算法，用于计算输入数据的 ​CRC16 值。
+* CRC（循环冗余校验）是一种常用的数据校验方法，用于检测数据传输或存储过程中是否发生错误。
+* 该实现基于 ​XMODEM CRC16 算法，使用预计算的 CRC 表来加速计算
+*/
+
+/* 预计算的 CRC16 表：每个值对应一个字节（0-255）的 CRC16 计算结果 */
 static const uint16_t crc16tab[256]= {
     0x0000,0x1021,0x2042,0x3063,0x4084,0x50a5,0x60c6,0x70e7,
     0x8108,0x9129,0xa14a,0xb16b,0xc18c,0xd1ad,0xe1ce,0xf1ef,
@@ -79,6 +85,14 @@ static const uint16_t crc16tab[256]= {
     0x6e17,0x7e36,0x4e55,0x5e74,0x2e93,0x3eb2,0x0ed1,0x1ef0
 };
 
+/**
+ * @brief 计算输入数据的 CRC16 值
+ *
+ * @param[in] buf       指向输入数据的缓冲区
+ * @param[in] len       输入数据的长度（字节数）
+ * 
+ * @return 返回计算得到的 16 位 CRC 值
+ */
 uint16_t crc16(const char *buf, int len) {
     int counter;
     uint16_t crc = 0;

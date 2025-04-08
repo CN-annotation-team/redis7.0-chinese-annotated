@@ -63,9 +63,18 @@ redis 仓库链接：https://github.com/redis/redis<br>
 | [geohash_helper.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/geohash_helper.c) | geo 功能  | 完成 |
 | [rax.h](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/rax.h) | Redis 压缩前缀树定义 | 完成 |
 | [rax.c](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/rax.c) | Redis 压缩前缀树实现 | 过半 |
+| [localtime.c ](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/localtime.c) | 实现一个无锁的本地时间转换函数 | 完成 |
+| [mt19937-64.h ​](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/mt19937-64.h​) | 基于64位梅森旋转算法生成高质量伪随机数获取接口声明 | 完成 |
+| [mt19937-64.c ​](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/mt19937-64.c​) | 通过64位梅森旋转算法生成高质量伪随机数实现 | 完成 |
+| [crc16.c ​](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/crc16.c​) | 生成 CRC16（2 字节）校验码实现 | 完成 |
+| [crc16_slottable.h ​](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/crc16_slottable.h​) | crc16 校验码到 Redis 集群槽位（slot）的映射关系 | 完成 |
+| [crc64.h ​](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/crc64.h​) | 生成 CRC64（8 字节）校验码，暴露接口声明 | 完成 |
+| [crc64.c ​](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/crc64.c​) | 生成 CRC64（8 字节）校验码的相关实现，5.0 版本时仍是传统的逐字节查表法（此时只有该文件，实现和 CRC16 一致），6.0 后引入 ​CRCSpeed 库，基于 ​slicing-by-8 技术 | 完成 |
+| [crcspeed.h ​](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/crcspeed.h​) | 基于 ​slicing-by-8 技术，加速计算 CRC 值，相关获取接口声明 | 完成 |
+| [crcspeed.c ​](https://github.com/CN-annotation-team/redis7.0-chinese-annotated/blob/7.0-cn-annotated/src/crcspeed.c​) | 基于 ​slicing-by-8 技术，及动态生成查表，相关接口实现 | 完成 |
 </p>
 尚未有中文注释的文件不会出现在表格中。<br>
-更新日期：2024/08/24
+更新日期：2025/03/24
 
 
 ## 关于提交 PR 的方法：

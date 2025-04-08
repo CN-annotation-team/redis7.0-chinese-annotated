@@ -26,11 +26,13 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE. */
 
+/* 该文件实现了一个 ​CRC64 校验算法，用于计算数据的 64 位循环冗余校验码（CRC） */
+ 
 #include "crc64.h"
 #include "crcspeed.h"
-static uint64_t crc64_table[8][256] = {{0}};
+static uint64_t crc64_table[8][256] = {{0}};                    // CRC 表，用于加速计算
 
-#define POLY UINT64_C(0xad93d23594c935a9)
+#define POLY UINT64_C(0xad93d23594c935a9)                       // CRC64 多项式
 /******************** BEGIN GENERATED PYCRC FUNCTIONS ********************/
 /**
  * Generated on Sun Dec 21 14:14:07 2014,
@@ -66,12 +68,20 @@ static uint64_t crc64_table[8][256] = {{0}};
  * \param data_len     The width of \a data expressed in number of bits.
  * \return             The reflected data.
  *****************************************************************************/
+/**
+ * @brief 位反射函数：将数据的位顺序反转
+ *
+ * @param[in] data              需要反转位顺序的数据
+ * @param[in] data_len          数据的位长度
+ *
+ * @return 返回反转位顺序后的数据
+ */
 static inline uint_fast64_t crc_reflect(uint_fast64_t data, size_t data_len) {
-    uint_fast64_t ret = data & 0x01;
+    uint_fast64_t ret = data & 0x01;                            // 取最低位
 
     for (size_t i = 1; i < data_len; i++) {
         data >>= 1;
-        ret = (ret << 1) | (data & 0x01);
+        ret = (ret << 1) | (data & 0x01);                       // 左移并拼接下一位
     }
 
     return ret;
@@ -85,41 +95,63 @@ static inline uint_fast64_t crc_reflect(uint_fast64_t data, size_t data_len) {
  * \param data_len Number of bytes in the \a data buffer.
  * \return         The updated crc value.
  ******************************************************************************/
+/**
+ * @brief CRC64 更新函数：根据输入数据更新 CRC 值
+ *
+ * @param[in] crc               当前的 CRC 值
+ * @param[in] in_data           指向输入数据的缓冲区
+ * @param[in] len               输入数据的字节长度
+ *
+ * @return 返回更新后的 CRC 值
+ */
 uint64_t _crc64(uint_fast64_t crc, const void *in_data, const uint64_t len) {
-    const uint8_t *data = in_data;
-    unsigned long long bit;
+    const uint8_t *data = in_data;                              // 输入数据指针
+    unsigned long long bit;                                     // 临时变量，用于存储当前位
 
-    for (uint64_t offset = 0; offset < len; offset++) {
-        uint8_t c = data[offset];
-        for (uint_fast8_t i = 0x01; i & 0xff; i <<= 1) {
-            bit = crc & 0x8000000000000000;
-            if (c & i) {
-                bit = !bit;
+    for (uint64_t offset = 0; offset < len; offset++) {         // 遍历每个字节
+        uint8_t c = data[offset];                               // 当前字节
+        for (uint_fast8_t i = 0x01; i & 0xff; i <<= 1) {        // 遍历每个位
+            bit = crc & 0x8000000000000000;                     // 取 CRC 的最高位
+            if (c & i) {                                        // 如果当前位为 1
+                bit = !bit;                                     // 反转最高位
             }
 
-            crc <<= 1;
-            if (bit) {
-                crc ^= POLY;
+            crc <<= 1;                                          // 左移 CRC
+            if (bit) {                                          // 如果最高位为 1
+                crc ^= POLY;                                    // 异或多项式
             }
         }
 
-        crc &= 0xffffffffffffffff;
+        crc &= 0xffffffffffffffff;                              // 确保 CRC 为 64 位
     }
 
-    crc = crc & 0xffffffffffffffff;
-    return crc_reflect(crc, 64) ^ 0x0000000000000000;
+    crc = crc & 0xffffffffffffffff;                             // 再次确保 CRC 为 64 位
+    return crc_reflect(crc, 64) ^ 0x0000000000000000;           // 返回最终 CRC 值
 }
 
 /******************** END GENERATED PYCRC FUNCTIONS ********************/
 
 /* Initializes the 16KB lookup tables. */
+/**
+ * @brief CRC64 表初始化函数：初始化 CRC 查找表，用于加速 CRC 计算
+ *
+ */
 void crc64_init(void) {
-    crcspeed64native_init(_crc64, crc64_table);
+    crcspeed64native_init(_crc64, crc64_table);                 // 调用 crcspeed64native_init 函数，填充 crc64_table
 }
 
 /* Compute crc64 */
+/**
+ * @brief CRC64 计算函数：计算输入数据的 CRC64 值
+ *
+ * @param[in] crc               初始的 CRC 值
+ * @param[in] s                 指向输入数据的缓冲区
+ * @param[in] l                 输入数据的字节长度
+ *
+ * @return 返回计算后的 CRC 值
+ */
 uint64_t crc64(uint64_t crc, const unsigned char *s, uint64_t l) {
-    return crcspeed64native(crc64_table, crc, (void *) s, l);
+    return crcspeed64native(crc64_table, crc, (void *) s, l);   // 调用 crcspeed64native 函数，使用预计算的 CRC 表加速计算
 }
 
 /* Test main */
