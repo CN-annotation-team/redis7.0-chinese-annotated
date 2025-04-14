@@ -2515,6 +2515,12 @@ int processMultibulkBuffer(client *c) {
  * 1. The client is reset unless there are reasons to avoid doing it.
  * 2. In the case of master clients, the replication offset is updated.
  * 3. Propagate commands we got from our master to replicas down the line. */
+/* 执行命令后执行必要的任务：
+ * 
+ * 1. 重置客户端，除非有理由避免重置客户端。
+ * 2. 对于主客户端，复制偏移量被更新。
+ * 3. 将从节点收到的命令传播到下游的副本 
+ * */
 void commandProcessed(client *c) {
     /* If client is blocked(including paused), just return avoid reset and replicate.
      *
@@ -2539,6 +2545,8 @@ void commandProcessed(client *c) {
      * applied to the master state: this quantity, and its corresponding
      * part of the replication stream, will be propagated to the
      * sub-replicas and to the replication backlog. */
+    /* 如果客户机是主机，我们需要计算处理缓冲区之前和之后应用的偏移量之间的差异，
+     * 以了解有多少复制流实际应用于主机状态：此数量及其复制流的相应部分将传播到子副本和复制积压*/
     if (c->flags & CLIENT_MASTER) {
         long long applied = c->reploff - prev_offset;
         if (applied) {

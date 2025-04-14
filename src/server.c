@@ -647,6 +647,7 @@ int isInsideYieldingLongCommand() {
 
 /* Return true if this instance has persistence completely turned off:
  * both RDB and AOF are disabled. */
+/* 如果此实例已完全关闭持久性，则返回 true，表示 RDB 和 AOF 都已禁用 */
 int allPersistenceDisabled(void) {
     return server.saveparamslen == 0 && server.aof_state == AOF_OFF;
 }
@@ -1594,6 +1595,11 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
      * We also don't send the ACKs while clients are paused, since it can
      * increment the replication backlog, they'll be sent after the pause
      * if we are still the master. */
+    /* 如果在上一次事件循环迭代期间至少有一个客户端被阻塞，则向所有从机发送ACK请求。
+     * 请注意，我们在 processUnblockedClients() 之后执行此操作，因此如果有多个流水线 WAIT ，并且刚刚解锁的 WAIT 再次被阻塞，
+     * 我们不必在没有其他事件循环事件的情况下等待服务器 cron 循环。参见#6623。
+     * 
+     * 我们也不会在客户端暂停时发送 ACK ，因为它会增加复制积压，如果我们仍然是主机，它们将在暂停后发送 */
     if (server.get_ack_from_slaves && !checkClientPauseTimeoutAndReturnIfPaused()) {
         sendGetackToReplicas();
         server.get_ack_from_slaves = 0;
@@ -1602,6 +1608,8 @@ void beforeSleep(struct aeEventLoop *eventLoop) {
     /* We may have received updates from clients about their current offset. NOTE:
      * this can't be done where the ACK is received since failover will disconnect 
      * our clients. */
+    /* 我们可能已经收到客户关于当前偏移量的更新。
+     * 注意：在收到 ACK 的情况下无法执行此操作，因为故障切换将断开我们的客户端 */
     updateFailoverStatus();
 
     /* Since we rely on current_client to send scheduled invalidation messages

@@ -3610,6 +3610,11 @@ void bgsaveCommand(client *c) {
  * pointer if the instance has a valid master client, otherwise NULL
  * is returned, and the RDB saving will not persist any replication related
  * information. */
+/* 填充 rdbSaveInfo 结构，该结构用于将复制信息保存在 RDB 文件中。
+ * 当前，该结构仅显式地包含来自主流的当前选定DB，但是，如果 rdbSave*() 系列函数接收到 NULL 的 rsi 结构，则不会保存复制 ID/偏移量。
+ * 该函数填充通常在调用程序中堆栈分配的 “rsi” ，
+ * 如果实例具有有效的主客户端，则返回填充的指针，否则返回 NULL ，并且 RDB 保存不会保留任何与复制相关的信息*/
+/* 当前方法主要会写入当前的 dbid ，分别来自于 slaveseld、master->db、cache_master->db */
 rdbSaveInfo *rdbPopulateSaveInfo(rdbSaveInfo *rsi) {
     rdbSaveInfo rsi_init = RDB_SAVE_INFO_INIT;
     *rsi = rsi_init;
