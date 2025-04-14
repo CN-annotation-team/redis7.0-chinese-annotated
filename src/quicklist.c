@@ -54,7 +54,7 @@
  * fill 默认值为 -2，即采用 8192(Bytes) 作为 listpack 节点的最大容量。
  * 为什么要强调结构是 ziplist/listpack 的节点？
  * 当快速列表节点的 container（容器） 字段为 PACKED（7.0之前是 ZIPLIST ） 时，采用 ziplist/listpack 存储元素，
- * 若为 PLAIN（7.0之前是 NONE） 时，是利用一个 char 数组来存储一个占用空间很大的元素，该节点本身即是所存储的元素。 
+ * 若为 PLAIN（7.0之前是 NONE） 时，是利用一个 char 数组来存储一个占用空间很大的元素，该节点本身即是所存储的元素。
  * 注：fill 为正数时，最大元素数量限制为64k（FILL_MAX = 2^16-1），这是为了保证 quicklistNode 中16位的 count 字段不会溢出。 */
 static const size_t optimization_level[] = {4096, 8192, 16384, 32768, 65536};
 
@@ -167,7 +167,7 @@ void _quicklistBookmarkDelete(quicklist *ql, quicklistBookmark *bm);
 /* Create a new quicklist.
  * Free with quicklistRelease(). */
 
-/* 创建一个新的 quicklist */    
+/* 创建一个新的 quicklist */
 quicklist *quicklistCreate(void) {
     struct quicklist *quicklist;
 
@@ -398,7 +398,7 @@ size_t quicklistGetLzf(const quicklistNode *node, void **data) {
 
 /* 让 quicklist 按设置的压缩深度（quicklist->compress）进行压缩。
  * 保证内部节点被压缩的唯一方法是通过迭代快速列表直到达到压缩深度，
- * 然后压缩我们找到的下一个节点。 
+ * 然后压缩我们找到的下一个节点。
  * 如果 压缩深度*2 大于整个快速列表长度，我们立即返回。
  * （压缩深度：在快速列表的两端保留未压缩的节点数量） */
 REDIS_STATIC void __quicklistCompress(const quicklist *quicklist,
@@ -453,7 +453,7 @@ REDIS_STATIC void __quicklistCompress(const quicklist *quicklist,
     /* 迭代直到达到压缩深度，
      * 注意：因为在这个函数的 *顶部* 我们已经做了长度检查，
      * 所以我们可以跳过下面的空指针检查。 */
-    
+
      /* 注释提到的压缩深度内外与常识有些不同，
      * 若压缩深度 = 3，常识上我们认为深度内会是 <= 3，
      * 而我们这里把 > 3 称为深度内，<= 3 称为深度外，
@@ -616,7 +616,7 @@ REDIS_STATIC int _quicklistNodeAllowInsert(const quicklistNode *node,
     /* 用这个入口估计有多少字节会被添加到 listpack 中。
      * 我们更加倾向于去高估，虽然糟糕的情况下会造成有几个字节
      * 会低于4k（optimization_level）的最低限制。
-     * 注意：我们无需检查下面的溢出，因为 `node->sz` 和 `sz` 
+     * 注意：我们无需检查下面的溢出，因为 `node->sz` 和 `sz`
      * 在 plain/large 元素检查之后都会小于 1GB。 */
     size_t new_sz = node->sz + sz + SIZE_ESTIMATE_OVERHEAD;
     if (likely(_quicklistNodeSizeMeetsOptimizationRequirement(new_sz, fill)))
@@ -746,7 +746,7 @@ int quicklistPushTail(quicklist *quicklist, void *value, size_t sz) {
 /* Create new node consisting of a pre-formed listpack.
  * Used for loading RDBs where entire listpacks have been stored
  * to be retrieved later. */
-/* 使用一个已经预先形成的 listpack 创建新的快速列表节点。 
+/* 使用一个已经预先形成的 listpack 创建新的快速列表节点。
  * 用于从存储了整个 listpack 的 RDB 文件中进行快速列表节点的恢复。 */
 void quicklistAppendListpack(quicklist *quicklist, unsigned char *zl) {
     quicklistNode *node = quicklistCreateNode();
@@ -1230,7 +1230,7 @@ REDIS_STATIC void _quicklistInsert(quicklistIter *iter, quicklistEntry *entry,
 
     /* In any case, we reset iterator to forbid use of iterator after insert.
      * Notice: iter->current has been compressed in _quicklistInsert(). */
-    resetIterator(iter); 
+    resetIterator(iter);
 }
 
 void quicklistInsertBefore(quicklistIter *iter, quicklistEntry *entry,
@@ -1337,6 +1337,9 @@ int quicklistDelRange(quicklist *quicklist, const long start,
 }
 
 /* compare between a two entries */
+/*这段代码的作用是在一个数据结构中比较给定的值 p2 和 entry 中存储的值是否相等。
+它首先检查 entry 所指向的节点是否是一个普通节点，如果是，则直接比较节点值的长度和数据内容是否与给定的值 p2 匹配；
+如果不是普通节点，则调用 lpCompare 函数进行比较。*/
 int quicklistCompare(quicklistEntry* entry, unsigned char *p2, const size_t p2_len) {
     if (unlikely(QL_NODE_IS_PLAIN(entry->node))) {
         return ((entry->sz == p2_len) && (memcmp(entry->value, p2, p2_len) == 0));
@@ -2873,7 +2876,7 @@ int quicklistTest(int argc, char *argv[], int flags) {
             if (iter)
                 ERR("Index past elements: %lld", entry.longval);
             ql_release_iterator(iter);
-            
+
             iter = quicklistGetIteratorEntryAtIdx(ql, -1, &entry);
             if (entry.longval != 4444)
                 ERR("Not 4444 (reverse), %lld", entry.longval);
@@ -2888,12 +2891,12 @@ int quicklistTest(int argc, char *argv[], int flags) {
             if (entry.longval != 2222)
                 ERR("Not 2222 (reverse), %lld", entry.longval);
             ql_release_iterator(iter);
-            
+
             iter = quicklistGetIteratorEntryAtIdx(ql, -4, &entry);
             if (entry.longval != 1111)
                 ERR("Not 1111 (reverse), %lld", entry.longval);
             ql_release_iterator(iter);
-            
+
             iter = quicklistGetIteratorEntryAtIdx(ql, -5, &entry);
             if (iter)
                 ERR("Index past elements (reverse), %lld", entry.longval);
@@ -3344,7 +3347,7 @@ int quicklistTest(int argc, char *argv[], int flags) {
              * it disables the passing of quicklist head or tail node. */
             node->prev = quicklistCreateNode();
             node->next = quicklistCreateNode();
-            
+
             /* Create a rand string */
             size_t sz = (1 << 25); /* 32MB per one entry */
             unsigned char *s = zmalloc(sz);
